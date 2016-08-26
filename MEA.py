@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.0.0
+ME Analyzer v1.6.1.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.0'
+title = 'ME Analyzer v1.6.1'
 
 import sys
 import re
@@ -1550,6 +1550,41 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl() # Retreive SKU & Rev from DB
 				
+				# FIT FOR EACH 11.x MINOR MAY BE MERGED ONCE WE KNOW MORE
+				
+				# Kernel Analysis for all 11.x
+				ker_sku = reading[ker_start + 0x700:ker_start + 0x900] # Actual range is 0x780 - 0x840
+						
+				match_1_h = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x15')).search(ker_sku)
+				match_1_lp = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x11')).search(ker_sku)
+						
+				match_2_h = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x50')).search(ker_sku)
+				match_2_lp = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x11')).search(ker_sku)
+						
+				match_3_h = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x0A')).search(ker_sku)
+				match_3_lp = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x08')).search(ker_sku)
+						
+				match_4_h = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\xA8')).search(ker_sku)
+				match_4_lp = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\x88')).search(ker_sku)
+					
+				match_5_h = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x54')).search(ker_sku)
+				match_5_lp = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x44')).search(ker_sku)
+					
+				match_6_h = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\x42')).search(ker_sku)
+				#match_6_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\xXX')).search(ker_sku)
+
+				#match_7_h = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x84\xXX')).search(ker_sku)
+				match_7_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x84\x46')).search(ker_sku)
+					
+				match_8_h = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x2A')).search(ker_sku)
+				#match_8_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\xXX')).search(ker_sku)
+						
+				#match_9_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xXX')).search(ker_sku)
+				match_9_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
+							
+				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h)) : pos_sku_ker = "H"
+				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_9_lp)) : pos_sku_ker = "LP"
+				
 				# 11.0 : Skylake , Sunrise Point
 				if minor == 0 :
 					
@@ -1581,36 +1616,6 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if (release == "Production" and rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95") :
 						release = "Pre-Production"
 						rel_db = "PRE"
-
-					# Kernel Analysis for 11.0
-					ker_sku = reading[ker_start + 0x700:ker_start + 0x900] # Actual range is 0x780 - 0x840
-						
-					match_1_h = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x15')).search(ker_sku)
-					match_1_lp = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x11')).search(ker_sku)
-						
-					match_2_h = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x50')).search(ker_sku)
-					#match_2_lp = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\xXX')).search(ker_sku)
-						
-					match_3_h = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x0A')).search(ker_sku)
-					match_3_lp = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x08')).search(ker_sku)
-						
-					match_4_h = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\xA8')).search(ker_sku)
-					match_4_lp = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\x88')).search(ker_sku)
-						
-					match_5_h = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x54')).search(ker_sku)
-					match_5_lp = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x44')).search(ker_sku)
-						
-					match_6_h = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\x42')).search(ker_sku)
-					#match_6_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\xXX')).search(ker_sku)
-
-					match_7_h = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x2A')).search(ker_sku)
-					#match_7_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\xXX')).search(ker_sku)
-						
-					#match_8_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xXX')).search(ker_sku)
-					match_8_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
-							
-					if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_7_h)) : pos_sku_ker = "H"
-					elif any(m is not None for m in (match_1_lp,match_3_lp,match_4_lp,match_5_lp,match_8_lp)) : pos_sku_ker = "LP"
 					
 					platform = "SKL-SPT"
 				
@@ -1638,35 +1643,31 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
 						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
-					# Kernel Analysis for 11.5 (PLACEHOLDER - FIT 11.5 NEEDED)
-					ker_sku = reading[ker_start:ker_end] # Actual range is 0x780 - 0x840
-						
-					match_1_h = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x15')).search(ker_sku)
-					match_1_lp = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x11')).search(ker_sku)
-						
-					match_2_h = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x50')).search(ker_sku)
-					#match_2_lp = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\xXX')).search(ker_sku)
-						
-					match_3_h = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x0A')).search(ker_sku)
-					match_3_lp = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x08')).search(ker_sku)
-						
-					match_4_h = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\xA8')).search(ker_sku)
-					match_4_lp = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\x88')).search(ker_sku)
-						
-					match_5_h = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x54')).search(ker_sku)
-					match_5_lp = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x44')).search(ker_sku)
-						
-					match_6_h = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\x42')).search(ker_sku)
-					#match_6_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\xXX')).search(ker_sku)
-
-					match_7_h = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x2A')).search(ker_sku)
-					#match_7_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\xXX')).search(ker_sku)
-						
-					#match_8_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xXX')).search(ker_sku)
-					match_8_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
-							
-					if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_7_h)) : pos_sku_ker = "H"
-					elif any(m is not None for m in (match_1_lp,match_3_lp,match_4_lp,match_5_lp,match_8_lp)) : pos_sku_ker = "LP"
+					platform = "KBL-UPT"
+				
+				# 11.6 : Kaby Lake , Union Point (UNKNOWN TARGET DEVICES)
+				elif minor == 6 :
+					
+					# FIT Platform SKU for 11.6 (PLACEHOLDER - FIT 11.6 NEEDED)
+					if sku_check != "NaN" :
+					
+						if ' 02 D1 02 68 ' in sku_check : fit_platform = "PCH-H Z270"
+						elif ' 02 D1 02 69 ' in sku_check : fit_platform = "PCH-H H210"
+						elif ' 02 D1 02 67 ' in sku_check : fit_platform = "PCH-H H270"
+						elif ' 02 D1 02 64 ' in sku_check : fit_platform = "PCH-H Q270"
+						elif ' 02 D1 02 65 ' in sku_check : fit_platform = "PCH-H Q250"
+						elif ' 02 D1 02 66 ' in sku_check : fit_platform = "PCH-H B250"
+						elif ' 02 D1 02 6A ' in sku_check : fit_platform = "PCH-H QM270"
+						elif ' 02 D1 02 6B ' in sku_check : fit_platform = "PCH-H HM270"
+						elif ' 02 D1 02 6D ' in sku_check : fit_platform = "PCH-H C236 ???"
+						elif ' 02 D1 02 6E ' in sku_check : fit_platform = "PCH-H CM236 ???"
+						elif ' 02 D1 02 6F ' in sku_check : fit_platform = "PCH-H C232 ???"
+						elif ' 02 D1 02 70 ' in sku_check : fit_platform = "PCH-H QMS280"
+						elif any(s in sku_check for s in (' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U"
+						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U"
+						elif any(s in sku_check for s in (' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y"
+						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
+						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
 					platform = "KBL-UPT"
 				
