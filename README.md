@@ -1,6 +1,8 @@
 # ME Analyzer
 Intel Engine Firmware Analysis Tool
 
+[Official ME Analyzer forum thread](http://www.win-raid.com/t840f39-ME-Analyzer-Intel-Engine-Firmware-Analysis-Tool.html#msg14803)
+
 ##**A. About ME Analyzer**
 
 ME Analyzer is a tool that can show various details about Intel Engine Firmware (Management Engine, Trusted Execution Engine, Service Platform Services) images. It can be used to identify whether the firmware is updated, what Release, Type, SKU it is etc. 
@@ -73,6 +75,4 @@ During operation, ME Analyzer may encounter some issues related to rare firmware
 
 ##**C. Download ME Analyzer**
 
-ME Analyzer is developed and tested under Windows and currently Windows XP - Windows 10 operating systems are supported. Since the Engine Firmware Repository Database is updated more frequently compared to the main program, a separate DB release is provided.
-
-Pre-built binaries can be downloaded from the [official ME Analyzer forum thread](http://www.win-raid.com/t840f39-ME-Analyzer-Intel-Engine-Firmware-Analysis-Tool.html#msg14803).
+ME Analyzer is developed and tested under Windows and currently Windows XP - Windows 10 operating systems are supported. Linux and macOS support is planned for the future. Since the Engine Firmware Repository Database is updated more frequently compared to the main program, a separate DB release is provided.

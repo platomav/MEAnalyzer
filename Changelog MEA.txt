@@ -1,3 +1,10 @@
+v1.6.2
+
+Added robust ME6 Ignition Type detection (RGN/EXTR)
+Fixed issue that caused ME6 IGN UPD images to be reported
+Fixed error shown at ME 11.x Partial Update images
+Updated Intel Engine Firmware Repository Database to r64
+
 v1.6.1
 
 Added ME 11.6 KBL firmware detection

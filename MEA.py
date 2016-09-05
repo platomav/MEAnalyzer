@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.1.0
+ME Analyzer v1.6.2.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.1'
+title = 'ME Analyzer v1.6.2'
 
 import sys
 import re
@@ -822,16 +822,18 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			(start_man_match, end_man_match) = man_match.span()
 			
 			# Adjust Manifest Header to the Recovery section
-			pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]).decode('utf-8', 'ignore') # FTPR (ME>10,TXE>2,SPS>3)
-			pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # FTPR (5<ME<11,TXE<3,SPS<4)
-			pr_man_3 = (reading[end_man_match + 0x28C:end_man_match + 0x290]).decode('utf-8', 'ignore') # BRIN (ME<6)
-			pr_man_4 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E0]).decode('utf-8', 'ignore') # EpsR (SPS1)
+			pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]).decode('utf-8', 'ignore') # FTPR (ME >= 11, TXE >= 3, SPS >= 4)
+			pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # FTPR (6 <= ME <= 10, TXE <= 2, SPS <= 3)
+			pr_man_3 = (reading[end_man_match + 0x28C:end_man_match + 0x290]).decode('utf-8', 'ignore') # BRIN (ME <= 5)
+			pr_man_4 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E0]).decode('utf-8', 'ignore') # EpsR (SPS 1)
+			pr_man_5 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # IGRT (ME 6 IGN)
 			
-			if ("FTPR" not in [pr_man_1,pr_man_2]) and ("BRIN" not in pr_man_3) and ("EpsR" not in pr_man_4) :
+			if ("FTPR" not in [pr_man_1,pr_man_2]) and ("BRIN" not in pr_man_3) and ("EpsR" not in pr_man_4) and ("IGRT" not in pr_man_5) :
 				# Initial Manifest Header was not from Recovery section
 				man_count = man_pat.findall(reading)
 				if len(man_count) > 1 : # Extra searches only if multiple manifest exist
 					pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x274] + FTPR
+					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x49\x47\x52\x54', re.DOTALL)).search(reading) # .$MN2 + [0x264] + IGRT
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x264] + FTPR
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{652}\x42\x52\x49\x4E', re.DOTALL)).search(reading) # .$MAN + [0x28C] + BRIN
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73\x52', re.DOTALL)).search(reading) # .$MAN + [0x2DC] + EpsR
@@ -1531,7 +1533,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku = col_red + "Error" + col_end + ", unknown ME 10.x Minor version!" + col_red + " *" + col_end
 					err_rep = True
 					err_stor.append(sku)
-					
+			
 			if major == 11 :
 				
 				me11_sku_init_match = (re.compile(br'\x4C\x4F\x43\x4C\x6D\x65\x62\x78')).search(reading) # LOCLmebx detection
@@ -1550,7 +1552,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl() # Retreive SKU & Rev from DB
 				
-				# FIT FOR EACH 11.x MINOR MAY BE MERGED ONCE WE KNOW MORE
+				# Some early firmware are reported as PRD even though they are PRE
+				if release == "Production" and rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95" :
+					release = "Pre-Production"
+					rel_db = "PRE"
 				
 				# Kernel Analysis for all 11.x
 				ker_sku = reading[ker_start + 0x700:ker_start + 0x900] # Actual range is 0x780 - 0x840
@@ -1612,14 +1617,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					# Ignore: 11.0.0.7101
 					if hotfix == 0 and build == 7101 : upd_found = True
 					
-					# Some early firmware are reported as PRD even though they are PRE
-					if (release == "Production" and rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95") :
-						release = "Pre-Production"
-						rel_db = "PRE"
-					
 					platform = "SKL-SPT"
 				
-				# 11.5 : Kaby Lake , Union Point
+				# 11.5 : Kaby Lake , Union Point (UNKNOWN TARGET DEVICES)
 				elif minor == 5 :
 					
 					# FIT Platform SKU for 11.5 (PLACEHOLDER - FIT 11.5 NEEDED)
@@ -2025,13 +2025,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							or (0x10 * 'FF') not in me3_type_fix2b : fw_type = "Region, Extracted"
 							else : fw_type = "Region, Stock"
 						elif major == 6 and sku == "Ignition" : # ME6 Ignition does not work with KRND
-							ign_pat = (re.compile(br'\x24\x4D\x49\x4E\x49\x46\x41\x44')).search(reading)
-							if ign_pat is not None :
-								(start_ign_match, end_ign_match) = ign_pat.span()
-								ign_extr  = reading[end_ign_match + 0x40:end_ign_match + 0x50]
-								ign_extr = binascii.b2a_hex(ign_extr).decode('utf-8').upper()
-								if ign_extr == "00000000000000000000000000000000" : fw_type = "Region, Stock"
-								else : fw_type = "Region, Extracted"
+							ign_pat = (re.compile(br'\x00{12}\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
+							if len(ign_pat) < 2 : fw_type = "Region, Extracted" # 2 before NFTP & IGRT
+							else : fw_type = "Region, Stock"
 						else :
 							fw_type = "Region, Stock"
 			elif (variant == "ME" and major >=8) or (variant == "TXE") or (variant == "SPS" and major > 3) :
@@ -2057,18 +2053,16 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				wcod_found = True
 				fw_type = "Partial Update"
 				sku = "Corporate" # Partial Update is Corporate only
-				if len(err_stor) == 2 : # Do not display "Unknown SKU" & "Kernel Analysis" messages
-					del err_stor[:]
-					err_rep = False
+				del err_stor[:]
+				err_rep = False
 		elif (variant == "ME") and (major < 11) and (sku_match is None) : # Partial Updates do not have $SKU
 			wcod_match = (re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44')).search(reading) # $MMEWCOD detection (found at 5MB & Partial Update firmware)
 			if wcod_match is not None :
 				wcod_found = True
 				fw_type = "Partial Update"
 				sku = "5MB" # Partial Update is 5MB only
-				if len(err_stor) == 2 : # Do not display "Unknown SKU" & "Unknown PV bit" messages
-					del err_stor[:]
-					err_rep = False
+				del err_stor[:]
+				err_rep = False
 		
 		# ME Firmware non Partial Update without $SKU
 		if sku_match is None and fw_type != "Partial Update" and not me_rec_ffs :
@@ -2198,7 +2192,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		# Rename input file based on the DB structured name
 		if param.give_db_name :
 			file_name = file_in
-			new_dir_name = os.path.join(os.path.dirname(file_in), name_db + '.bin')
+			new_dir_name = os.path.join(os.path.dirname(file_in), name_db_hash + '.bin')
 			f.close()
 			if not os.path.exists(new_dir_name) : os.rename(file_name, new_dir_name)
 			continue # Next input file
