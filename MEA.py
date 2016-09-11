@@ -1,20 +1,21 @@
 """
-ME Analyzer v1.6.2.0
+ME Analyzer v1.6.3.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.2'
+title = 'ME Analyzer v1.6.3'
 
 import sys
 import re
 import os
+import io
 import binascii
 import hashlib
+import tempfile
 import subprocess
 import traceback
 import fileinput
 import inspect
-import codecs
 import colorama
 import win32console
 
@@ -494,6 +495,12 @@ def msg_rep() :
 	if (err_stor or warn_stor or note_stor) and not param.alt_msg_echo : print("") # Rule 1
 	elif not param.alt_msg_echo and param.hid_find : print("") # Rule 1, -hid without any other messages
 
+# Force string to be printed as ASCII, ignore errors
+def ascii(string) :
+	# Input string is bare and only for printing (no open(), no Colorama etc)
+	ascii_str = (str((string).encode('ascii', 'ignore'))).strip("b'")
+	return ascii_str
+	
 def mass_scan(f_path) :
 	mass_files = []
 	for root, dirs, files in os.walk(f_path, topdown=False):
@@ -502,7 +509,7 @@ def mass_scan(f_path) :
 			
 	input('\nFound %s file(s)\n\nPress enter to start' % len(mass_files))
 	return mass_files
-			
+	
 # Get script location
 mea_dir = get_script_dir()
 
@@ -522,19 +529,37 @@ else : uf_path = mea_dir + "\\" + "UEFIFind.exe"
 if not param.skip_intro :
 	mea_hdr()
 
-	print("\nWelcome to Intel Engine Firmware Analysis Tool\n\nPress Enter to skip or input -? to list options\n")
-
-	if arg_num == 2 : print("\nFile:       " + col_green + "%s" % os.path.basename(sys.argv[1]) + col_end)
-	elif arg_num > 2 : print("\nFiles:       " + col_yellow + "Multiple" + col_end)
-	else : print("\nFile:       " + col_magenta + "None" + col_end)
+	print("\nWelcome to Intel Engine Firmware Analysis Tool\n")
+	
+	if arg_num == 2 :
+		print("Press Enter to skip or input -? to list options\n")
+		print("\nFile:       " + col_green + "%s" % ascii(os.path.basename(sys.argv[1])) + col_end)
+	elif arg_num > 2 :
+		print("Press Enter to skip or input -? to list options\n")
+		print("\nFiles:       " + col_yellow + "Multiple" + col_end)
+	else :
+		print('Input a filename or "filepath" or press Enter to list options\n')
+		print("\nFile:       " + col_magenta + "None" + col_end)
 
 	input_var = input('\nOption(s):  ')
 	
+	# Anything quoted ("") is taken as one (file paths etc)
+	input_var = re.split(''' (?=(?:[^'"]|'[^']*'|"[^"]*")*$)''', input_var.strip())
+	
 	# Get MEA Parameters based on given Options
-	param = MEA_Param(input_var.strip().split())
+	param = MEA_Param(input_var)
+	
+	# Non valid parameters are treated as files
+	if input_var[0] != "" :
+		for i in input_var:
+			if i not in param.all :
+				(sys.argv).append(i.strip('"'))
+	
+	# Re-enumerate parameter input
+	arg_num = len(sys.argv)
 	
 	os.system('cls')
-
+	
 	mea_hdr()
 
 if param.db_print_clean : db_print()
@@ -546,8 +571,9 @@ if (arg_num < 2 and not param.help_scr and not param.db_print_clean and not para
 # http://www.macfreek.nl/memory/Encoding_of_Python_stdout
 if param.unicode_fix :
 	def write(line): print(line.encode('utf-8'))
-	if sys.stdout.encoding != 'UTF-8': sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-	if sys.stderr.encoding != 'UTF-8': sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+	if sys.stdin.encoding != 'UTF-8': sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding='utf-8')
+	if sys.stdout.encoding != 'UTF-8': sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+	if sys.stderr.encoding != 'UTF-8': sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # Pause after any unexpected python exception
 if param.exc_pause : sys.excepthook = show_exception_and_exit
@@ -560,7 +586,7 @@ if param.mass_scan :
 	in_path = input('\nType the full folder path : ')
 	source = mass_scan(in_path)
 else :
-	source = sys.argv[1:]
+	source = sys.argv[1:] # Skip script/executable
 
 # Check if dependencies exist
 depend_db = os.path.isfile(db_path)
@@ -644,24 +670,29 @@ for file_in in source :
 	me11_ker_anl = False
 	me11_ker_msg = False
 	apl_warn = False
-
+	uf_error = False
+	
 	if not os.path.isfile(file_in) :
 		if any(p in file_in for p in param.all) : continue # Next input file
-		print(col_red + "Error" + col_end + ", file %s was not found!" % file_in)
-		mea_exit(0)
+		
+		print(col_red + "\nError" + col_end + ", file %s was not found!" % file_in)
+		
+		if not param.mass_scan : mea_exit(0)
+		else : continue
+	
 	f = open(file_in, 'rb')
 	reading = f.read()
-
+	
 	# Show file name & extension
 	if not param.ubu_mea and not param.ubu_mea_pre and not param.extr_mea and not param.print_msg :
-		print("\nFile:     %s" % os.path.basename(file_in))
+		print("\nFile:     %s" % ascii(os.path.basename(file_in)))
 		print("")
 	elif param.ubu_mea :
 		print(col_magenta + "\nMEA shows the Intel Engine firmware of the BIOS/SPI\n\
 image that you opened with UBU. It does NOT show the\n\
 current Intel Engine firmware running on your system!\n" + col_end)
 
-	# UEFIFind Targeted Engine GUID Detection
+	# UEFIFind Engine GUID Detection
 	if not param.disable_uf : # UEFI Strip is expected to call MEA without UEFIFind
 		
 		uefi_pat = "\
@@ -676,25 +707,25 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						header count 0C111D82A3D0F74CAEF3E28088491704 {0}\n\
 					".format(file_in).replace('	', '')
 		
-		with open(mea_dir + "\\" + "uf_pat.txt", "w", encoding='utf-8') as pat_file : pat_file.write(uefi_pat)
-		
 		try :
-			uf_subp = subprocess.check_output([uf_path, "file", mea_dir + "\\" + 'uf_pat.txt', file_in])
+			with tempfile.NamedTemporaryFile(mode='w',delete=False) as temp_ufpat : temp_ufpat.write(uefi_pat)
+			
+			uf_subp = subprocess.check_output([uf_path, "file", temp_ufpat.name, file_in])
 			uf_subp = uf_subp.replace(b'\x0D\x0D\x0A', b'\x0D\x0A').replace(b'\x0D\x0A\x0D\x0A', b'\x0D\x0A').decode('utf-8')
-
-			with open(mea_dir + "\\" + "uf_out.txt", "w") as out_file : out_file.write(uf_subp)
-
-			with open(mea_dir + "\\" + "uf_out.txt", "r+") as out_file :	
+			
+			with tempfile.NamedTemporaryFile(mode='w',delete=False) as temp_ufout : temp_ufout.write(uf_subp)
+			
+			with open(temp_ufout.name, "r+") as out_file :
 				lines = out_file.readlines()
 				for i in range(2, len(lines), 4) : # Start from 3rd line with a 4 line step until eof
 					if 'nothing found' not in lines[i] :
 						rslt = lines[i-2].strip().split()
 						found_guid = switch_GUID(rslt[2], "HEX2GUID")
-		except :
-			pass
-			
-		if os.path.isfile(mea_dir + "\\" + 'uf_pat.txt') : os.remove(mea_dir + "\\" + 'uf_pat.txt')
-		if os.path.isfile(mea_dir + "\\" + 'uf_out.txt') : os.remove(mea_dir + "\\" + 'uf_out.txt')
+						
+			os.remove(temp_ufpat.name)
+			os.remove(temp_ufout.name)
+		except subprocess.CalledProcessError : pass
+		except : uf_error = True
 		
 	# Detect if file is ME, TXE or SPS firmware
 	man_pat = re.compile(br'\x00\x24\x4D(\x4E\x32|\x41\x4E)') # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
@@ -1619,7 +1650,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					
 					platform = "SKL-SPT"
 				
-				# 11.5 : Kaby Lake , Union Point (UNKNOWN TARGET DEVICES)
+				# 11.5 : Kabylake , Sunrise Point
 				elif minor == 5 :
 					
 					# FIT Platform SKU for 11.5 (PLACEHOLDER - FIT 11.5 NEEDED)
@@ -1643,9 +1674,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
 						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
-					platform = "KBL-UPT"
+					platform = "KBL-SPT"
 				
-				# 11.6 : Kaby Lake , Union Point (UNKNOWN TARGET DEVICES)
+				# 11.6 : Kabylake , Union Point
 				elif minor == 6 :
 					
 					# FIT Platform SKU for 11.6 (PLACEHOLDER - FIT 11.6 NEEDED)
@@ -1669,7 +1700,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
 						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
-					platform = "KBL-UPT"
+					platform = "KBL-KBP"
 				
 				# 11.x : Unknown
 				else :
@@ -2343,6 +2374,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				err_stor.append(col_red + "Error, Intel Apollo Lake (TXE 3.x) is not currently supported!" + col_end)
 			else :
 				err_stor.append(col_red + "\nError, Intel Apollo Lake (TXE 3.x) is not currently supported!" + col_end)
+				
+		if uf_error :
+			
+			if not param.print_msg :
+				print("")
+				print(col_red + "Error, UEFIFind Engine GUID detection failed!" + col_end)
+			
+			if (not err_stor) and (not warn_stor) and (not note_stor) :			
+				err_stor.append(col_red + "Error, UEFIFind Engine GUID detection failed!" + col_end)
+			else :
+				err_stor.append(col_red + "\nError, UEFIFind Engine GUID detection failed!" + col_end)
 		
 		if err_rep :
 			if not param.print_msg :

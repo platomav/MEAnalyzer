@@ -1,3 +1,10 @@
+v1.6.3
+
+Added ability to type input filename or filepath at Intro
+Improved error handling of UEFIFind Engine GUID detection
+Improved handling of non-standard filename characters
+Improved handling of file errors during Mass scan
+
 v1.6.2
 
 Added robust ME6 Ignition Type detection (RGN/EXTR)
