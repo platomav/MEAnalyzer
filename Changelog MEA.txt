@@ -1,3 +1,9 @@
+v1.6.4
+
+Improved ME 11.x SKU detection based on Kernel
+Improved UEFIFind Engine GUID detection
+Updated Intel Engine Firmware Repository Database to r65
+
 v1.6.3
 
 Added ability to type input filename or filepath at Intro

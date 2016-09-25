@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.3.0
+ME Analyzer v1.6.4.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.3'
+title = 'ME Analyzer v1.6.4'
 
 import sys
 import re
@@ -705,15 +705,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						header count 9BD5B898BAE8EE4898DDC295392F1EDB {0}\n\
 						header count 390716B36513A748AECB038652E2B528 {0}\n\
 						header count 0C111D82A3D0F74CAEF3E28088491704 {0}\n\
+						header count 6E1F582C87B1AA4696E72081098D6413 {0}\n\
+						header count 8226C7591C5C22479F25B26F4275BFEF {0}\n\
 					".format(file_in).replace('	', '')
 		
 		try :
-			with tempfile.NamedTemporaryFile(mode='w',delete=False) as temp_ufpat : temp_ufpat.write(uefi_pat)
+			with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8', delete=False) as temp_ufpat : temp_ufpat.write(uefi_pat)
 			
 			uf_subp = subprocess.check_output([uf_path, "file", temp_ufpat.name, file_in])
 			uf_subp = uf_subp.replace(b'\x0D\x0D\x0A', b'\x0D\x0A').replace(b'\x0D\x0A\x0D\x0A', b'\x0D\x0A').decode('utf-8')
 			
-			with tempfile.NamedTemporaryFile(mode='w',delete=False) as temp_ufout : temp_ufout.write(uf_subp)
+			with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8', delete=False) as temp_ufout : temp_ufout.write(uf_subp)
 			
 			with open(temp_ufout.name, "r+") as out_file :
 				lines = out_file.readlines()
@@ -1615,10 +1617,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				match_8_h = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x2A')).search(ker_sku)
 				#match_8_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\xXX')).search(ker_sku)
 						
-				#match_9_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xXX')).search(ker_sku)
+				match_9_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xA1')).search(ker_sku)
 				match_9_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
 							
-				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h)) : pos_sku_ker = "H"
+				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h,match_9_h)) : pos_sku_ker = "H"
 				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_9_lp)) : pos_sku_ker = "LP"
 				
 				# 11.0 : Skylake , Sunrise Point
@@ -1648,7 +1650,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					# Ignore: 11.0.0.7101
 					if hotfix == 0 and build == 7101 : upd_found = True
 					
-					platform = "SKL-SPT"
+					platform = "SPT"
 				
 				# 11.5 : Kabylake , Sunrise Point
 				elif minor == 5 :
@@ -1674,7 +1676,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
 						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
-					platform = "KBL-SPT"
+					platform = "SPT/KBP"
 				
 				# 11.6 : Kabylake , Union Point
 				elif minor == 6 :
@@ -1700,7 +1702,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
 						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
-					platform = "KBL-KBP"
+					# Ignore: 11.6.0.7069
+					if hotfix == 0 and build == 7069 : upd_found = True
+					
+					platform = "SPT/KBP"
 				
 				# 11.x : Unknown
 				else :
