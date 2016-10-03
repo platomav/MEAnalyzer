@@ -1,3 +1,8 @@
+v1.6.5
+
+Major performance improvement, up to 80% faster
+Updated Intel Engine Firmware Repository Database to r66
+
 v1.6.4
 
 Improved ME 11.x SKU detection based on Kernel

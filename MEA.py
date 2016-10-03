@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.4.0
+ME Analyzer v1.6.5.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.4'
+title = 'ME Analyzer v1.6.5'
 
 import sys
 import re
@@ -32,7 +32,9 @@ class MEA_Param :
 	def __init__(self,source) :
 	
 		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-adir','-hid','-aecho','-eker',\
-					'-dker','-prsa','-pdb','-disuf','-rbume','-dbname','-utf8','-exc','-mass']
+					'-dker','-prsa','-pdb','-enuf','-rbume','-dbname','-utf8','-exc','-mass','-disuf']
+		
+		# -disuf is removed, temporarily ignored via param.all until UEFIStrip & UBU adjust
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -48,7 +50,7 @@ class MEA_Param :
 		self.me11_ker_disp = False
 		self.print_rsa_hash = False
 		self.db_print_clean = False
-		self.disable_uf = False
+		self.enable_uf = False
 		self.rbu_me_extr = False
 		self.give_db_name = False
 		self.unicode_fix = False
@@ -70,7 +72,7 @@ class MEA_Param :
 			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print post-SKL Kernel/FIT SKU analysis even when firmware is hash-known.
 			if i == '-prsa' : self.print_rsa_hash = True # Prints the SHA-1 hash of FTPR's RSA Signature.
 			if i == '-pdb' : self.db_print_clean = True # Prints the whole DB without SHA1 hashes for the Repository forum thread.
-			if i == '-disuf' : self.disable_uf = True # Disables UEFIFind Engine GUID Detection.
+			if i == '-enuf' : self.enable_uf = True # Enables UEFIFind Engine GUID Detection.
 			if i == '-rbume' : self.rbu_me_extr = True # Extraction of Dell HDR RBU ImagME Regions.
 			if i == '-dbname' : self.give_db_name = True # Rename input file based on DB structured name.
 			if i == '-utf8' : self.unicode_fix = True # Encode all output to Unicode for strange characters.
@@ -80,7 +82,7 @@ class MEA_Param :
 		if self.ubu_mea_pre or self.ubu_mea or self.extr_mea or self.print_msg or self.mass_scan : self.skip_intro = True
 
 # MEA Version Header
-def mea_hdr() :
+def mea_hdr_init() :
 	if not param.extr_mea and not param.print_msg :
 		db_rev = "None"
 		try :
@@ -92,9 +94,12 @@ def mea_hdr() :
 			fw_db.close()
 		except :
 			pass
-		
-		print("\n-------[ %s ]-------" % title)
-		print("            Database %s" % db_rev)
+			
+		return db_rev
+
+def mea_hdr(db_rev) :	
+	print("\n-------[ %s ]-------" % title)
+	print("            Database %s" % db_rev)
 		
 def mea_help() :
 	print("\n\
@@ -111,7 +116,7 @@ Usage: MEA.exe [FilePath] {Options}\n\n\
 	-msg : Prints only messages without headers\n\
 	-hid : Displays all firmware even without messages (-msg)\n\
 	-aecho : Alternative display of empty lines (-msg, -hid)\n\
-	-disuf : Disables UEFIFind Engine GUID detection\n\
+	-enuf : Enables UEFIFind Engine GUID detection\n\
 	-dbname : Renames input file based on DB name\n\
 	-rbume : Extracts Dell HDR RBU ImagME regions\n\
 	-pdb : Prints the DB without SHA1 hashes to file\n\
@@ -206,7 +211,7 @@ def check_upd(key) :
 	if upd_key_found : return (vlp[0],vlp[1],vlp[2],vlp[3])
 	else : return (0,0,0,0)
 		
-def str_reverse_as_bytes (input_var) :
+def str_reverse_as_bytes(input_var) :
 	# Splits the string into pairs, reverses them and then merge it back together (ABCD --> AB CD --> CD AB --> CDAB)
 	return "".join(reversed([input_var[i:i+2] for i in range(0, len(input_var), 2)]))
 		
@@ -215,58 +220,46 @@ def gen_msg(msg, value) :
 	if msg == "uefifind_guid" :
 		if not param.print_msg : 
 			print("")
-			print(col_yellow + "Note: Detected GUID %s!" % (value) + col_end)
+			print(col_yellow + "Note: Detected Engine GUID %s!" % (value) + col_end)
 			
 		if (not err_stor) and (not warn_stor) and (not note_stor) :
-			note_stor.append(col_yellow + "Note: Detected GUID %s!" % (value) + col_end)
+			note_stor.append(col_yellow + "Note: Detected Engine GUID %s!" % (value) + col_end)
 		else :
-			note_stor.append(col_yellow + "\nNote: Detected GUID %s!" % (value) + col_end)	
-		
-# Detect SPI Image w/ Flash Descriptor
-# Must be called after Reading, Major, Variant
-def spi_fd(input) :
-	fd_pat = re.compile(br'\xFF{16}\x5A\xA5\xF0\x0F') # 16xFF + Z¥π. detection (Intel Flash Descriptor)
-	fd_match = fd_pat.search(reading)
-	if fd_match is not None :
-		global start_fd_match
-		global me_start
-		(start_fd_match, end_fd_match) = fd_match.span()
+			note_stor.append(col_yellow + "\nNote: Detected Engine GUID %s!" % (value) + col_end)	
 
-		if input == "unlocked" :
-			# 0xh FF FF = 0b 1111 1111 1111 1111 --> All 8 (0-7) regions Read/Write unlocked by CPU/BIOS
-			if ((variant == "ME" and major <= 10) or variant == "TXE") : # CPU/BIOS, ME, GBE check
-				fd_bytes = reading[start_fd_match + 0x62:start_fd_match + 0x64] + reading[start_fd_match + 0x66:start_fd_match + 0x68] + reading[start_fd_match + 0x6A:start_fd_match + 0x6C]
-				fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper() # Hex value with Little Endianess
-				if fd_bytes == "FFFFFFFFFFFF" : return True # Unlocked FD
-				else : return False # Locked FD
-			elif (variant == "ME" and major > 10) : # CPU/BIOS, ME, GBE check (EC excluded)
-				fd_bytes = reading[start_fd_match + 0x81:start_fd_match + 0x84] + reading[start_fd_match + 0x85:start_fd_match + 0x88] + reading[start_fd_match + 0x89:start_fd_match + 0x8C]
-				fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper() # Hex value with Little Endianess
-				if fd_bytes == "FFFFFFFFFFFFFFFFFF" : return True # Unlocked FD
-				else : return False # Locked FD
-		elif input == "region" :
-			me_base = int.from_bytes(reading[start_fd_match + 0x48:start_fd_match + 0x4A], 'little')
-			me_limit = int.from_bytes(reading[start_fd_match + 0x4A:start_fd_match + 0x4C], 'little')
-			if me_limit != 0 :
-				me_start = me_base * 0x1000 + start_fd_match # fd_match required in case FD is not at the start of image
-				#me_size = hex((me_limit + 1 - me_base) * 0x1000) # The +1 is required to include last Region byte
-				return True # FD found, ME Region exists
-			else :
-				return False # FD found, ME Region missing
-		elif input == "exist" :
-			return True # FD found
-		# Warning, problematic method, to be replaced if ever needed
-		elif input == "rev" :
-			# No official Intel FD Revision dinstiction. The Read Clock Frequency at pre-SKL FD is 20MHz whereas at post-SKL is 17MHz.
-			# FD FCBA section is at 0x30 with a size of 32-bits or 4-bytes. Read Clock Frequency is found at bits 18-19.
-			fd_fcba = binascii.b2a_hex(reading[start_fd_match + 0x30:start_fd_match + 0x34]).decode('utf-8').upper()
-			fd_fcba = "{0:032b}".format(int(fd_fcba, 16)) # Hex to 32-bit length Binary
-			rd_clk_freq = fd_fcba[17:19]
-			if rd_clk_freq == "00" : return 1 # FD Rev 1 (pre-SKL)
-			elif rd_clk_freq == "10" : return 2 # FD Rev 2 (post-SKL)
-			else : return 0 # Error, unknown Read Clock Frequency
+# Detect SPI with Intel Flash Descriptor
+def spi_fd_init() :
+	fd_match = (re.compile(br'\xFF\xFF\xFF\xFF\x5A\xA5\xF0\x0F')).search(reading) # 16xFF + Z¥π. detection (Intel Flash Descriptor)
+	
+	if fd_match is not None :
+		(start_fd_match, end_fd_match) = fd_match.span()
+		return (True,start_fd_match - 0xC,end_fd_match)
 	else :
-		pass # FD not found, nothing returned (True or False are not allowed here)
+		return (False,0,0)
+
+# Analyze Intel FD after Reading, Major, Variant
+def spi_fd(input,start_fd_match,end_fd_match) :
+	if input == 'unlocked' :
+		# 0xh FF FF = 0b 1111 1111 1111 1111 --> All 8 (0-7) regions Read/Write unlocked by CPU/BIOS
+		if ((variant == "ME" and major <= 10) or variant == "TXE") : # CPU/BIOS, ME, GBE check
+			fd_bytes = reading[start_fd_match + 0x62:start_fd_match + 0x64] + reading[start_fd_match + 0x66:start_fd_match + 0x68] + reading[start_fd_match + 0x6A:start_fd_match + 0x6C]
+			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper() # Hex value with Little Endianess
+			if fd_bytes == "FFFFFFFFFFFF" : return True # Unlocked FD
+			else : return False # Locked FD
+		elif (variant == "ME" and major > 10) : # CPU/BIOS, ME, GBE check (EC excluded)
+			fd_bytes = reading[start_fd_match + 0x81:start_fd_match + 0x84] + reading[start_fd_match + 0x85:start_fd_match + 0x88] + reading[start_fd_match + 0x89:start_fd_match + 0x8C]
+			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper() # Hex value with Little Endianess
+			if fd_bytes == "FFFFFFFFFFFFFFFFFF" : return True # Unlocked FD
+			else : return False # Locked FD
+	elif input == 'region' :
+		me_base = int.from_bytes(reading[start_fd_match + 0x48:start_fd_match + 0x4A], 'little')
+		me_limit = int.from_bytes(reading[start_fd_match + 0x4A:start_fd_match + 0x4C], 'little')
+		if me_limit != 0 :
+			me_start = me_base * 0x1000 + start_fd_match # fd_match required in case FD is not at the start of image
+			#me_size = hex((me_limit + 1 - me_base) * 0x1000) # The +1 is required to include last Region byte
+			return (True,me_start) # FD found, ME Region exists
+		else :
+			return (False,0) # FD found, ME Region missing
 		
 def fw_ver() :
 	if variant == "SPS" :
@@ -303,8 +296,8 @@ def switch_GUID (GUID, transform) :
 	
 # Check if Fixed Offset Variables (FOVD/NVKR) section is dirty
 def fovd_clean (type) :
-	if type == "new" : fovd_match = (re.compile(br'\x46\x4F\x56\x44\x4B\x52\x49\x44', re.DOTALL)).search(reading) # FOVDKRID detection
-	elif type == "old" : fovd_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44', re.DOTALL)).search(reading) # NVKRKRID detection
+	if type == "new" : fovd_match = (re.compile(br'\x46\x4F\x56\x44\x4B\x52\x49\x44')).search(reading) # FOVDKRID detection
+	elif type == "old" : fovd_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44')).search(reading) # NVKRKRID detection
 	if fovd_match is not None :
 		(start_fovd_match, end_fovd_match) = fovd_match.span()
 		fovd_start = int.from_bytes(reading[end_fovd_match:end_fovd_match + 0x4], 'little')
@@ -343,7 +336,7 @@ def vcn_skl() :
 		return vcn
 
 def ker_anl(type) :
-	ftpr_match = (re.compile(br'\x24\x43\x50\x44.{8}\x46\x54\x50\x52', re.DOTALL)).search(reading) # "$CPD [0x8] FTPR" detection
+	ftpr_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading) # "$CPD [0x8] FTPR" detection
 	
 	ker_start = 0x0
 	ker_end = 0x0
@@ -441,6 +434,22 @@ def db_skl() :
 	fw_db.close()
 
 	return (db_sku_chk,sku,sku_stp,sku_pdm)
+	
+def db_pkey() :
+	fw_db = db_open()
+
+	pkey_var = "NaN"
+	
+	for line in fw_db :
+		if len(line) < 2 or line[:3] == "***" :
+			continue # Skip empty lines or comments
+		elif rsa_pkey in line :
+			line_parts = line.strip().split('_')
+			pkey_var = line_parts[1] # Store the Variant
+			break # Break loop at 1st rsa_pkey match
+	fw_db.close()
+
+	return pkey_var
 
 def intel_id() :
 	intel_id = reading[start_man_match - 0xB:start_man_match - 0x9]
@@ -527,7 +536,8 @@ if param.alt_dir :
 else : uf_path = mea_dir + "\\" + "UEFIFind.exe"
 
 if not param.skip_intro :
-	mea_hdr()
+	db_rev = mea_hdr_init()
+	mea_hdr(db_rev)
 
 	print("\nWelcome to Intel Engine Firmware Analysis Tool\n")
 	
@@ -560,7 +570,7 @@ if not param.skip_intro :
 	
 	os.system('cls')
 	
-	mea_hdr()
+	mea_hdr(db_rev)
 
 if param.db_print_clean : db_print()
 	
@@ -592,11 +602,12 @@ else :
 depend_db = os.path.isfile(db_path)
 depend_uf = os.path.isfile(uf_path)
 
-if not depend_db or not depend_uf :
-	if not param.print_msg :
-		if not depend_db and not depend_uf : print(col_red + "\nError, MEA.dat & UEFIFind.exe files are missing!" + col_end)
-		elif not depend_db : print(col_red + "\nError, MEA.dat file is missing!" + col_end)
-		elif not depend_uf : print(col_red + "\nError, UEFIFind.exe file is missing!" + col_end)
+if not depend_db:
+	if not param.print_msg : print(col_red + "\nError, MEA.dat file is missing!" + col_end)
+	mea_exit(1)
+	
+if param.enable_uf and not depend_uf :
+	if not param.print_msg : print(col_red + "\nError, UEFIFind.exe file is missing!" + col_end)
 	mea_exit(1)
 	
 for file_in in source :
@@ -612,7 +623,6 @@ for file_in in source :
 	me2_type_fix = ""
 	me2_type_exp = ""
 	no_man_text = "NaN"
-	fitc_plt = "NaN"
 	sku_db = "NaN"
 	sub_sku = "NaN"
 	rel_db = "NaN"
@@ -622,18 +632,15 @@ for file_in in source :
 	text_ubu_pre = "NaN"
 	sku_init = "NaN"
 	sku_stp = "NaN"
-	sub_sku = "NaN"
 	sps_serv = "NaN"
 	opr_mode = "NaN"
 	txe_sub = "NaN"
 	txe_sub_db = "NaN"
-	variant = "ME"
 	fw_in_db_found = "No"
 	pos_sku_ker = "Unknown"
 	pos_sku_fit = "Unknown"
 	me11_vcn_match = None
 	byp_match = None
-	byp_no_match = None
 	err_sps_sku = ""
 	fuj_version = "NaN"
 	fuj_rgn_exist = False
@@ -657,11 +664,9 @@ for file_in in source :
 	vcn = -1
 	svn = -1
 	pvbit = -1
-	man_ranges = []
 	me11_vcn_ranges = []
 	me11_sku_ranges = []
 	err_stor_ker = []
-	aptio_ranges = []
 	fitc_ver_found = False
 	rgn_over_extr_found = False
 	me7_blist_1_exist = True
@@ -671,6 +676,8 @@ for file_in in source :
 	me11_ker_msg = False
 	apl_warn = False
 	uf_error = False
+	fd_rgn_exist = False
+	fd_lock_state = None
 	
 	if not os.path.isfile(file_in) :
 		if any(p in file_in for p in param.all) : continue # Next input file
@@ -691,9 +698,9 @@ for file_in in source :
 		print(col_magenta + "\nMEA shows the Intel Engine firmware of the BIOS/SPI\n\
 image that you opened with UBU. It does NOT show the\n\
 current Intel Engine firmware running on your system!\n" + col_end)
-
+		
 	# UEFIFind Engine GUID Detection
-	if not param.disable_uf : # UEFI Strip is expected to call MEA without UEFIFind
+	if param.enable_uf : # UEFI Strip is expected to call MEA without UEFIFind
 		
 		uefi_pat = "\
 						header count 533A14F1EBCB3348A4DC0826E063EC08 {0}\n\
@@ -728,40 +735,43 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			os.remove(temp_ufout.name)
 		except subprocess.CalledProcessError : pass
 		except : uf_error = True
-		
-	# Detect if file is ME, TXE or SPS firmware
-	man_pat = re.compile(br'\x00\x24\x4D(\x4E\x32|\x41\x4E)') # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
+	
+	# Detect if file is Engine firmware
+	man_pat = re.compile(br'\x00\x24\x4D((\x4E\x32)|(\x41\x4E))') # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
 	man_match = man_pat.search(reading)
 	me1_match = (re.compile(br'\x54\x65\x6B\x6F\x61\x41\x70\x70')).search(reading) # TekoaApp detection, AMT 1.x only
 	if me1_match is not None : man_match = (re.compile(br'\x50\x72\x6F\x76\x69\x73\x69\x6F\x6E\x53\x65\x72\x76\x65\x72')).search(reading) # ProvisionServer detection
-		
+	
 	if man_match is None :
 
 		# Engine Region exists at FD but cannot be identified (corrupted, compressed etc)
-		if spi_fd("region") :
-			param.multi = False # Disable param.multi to keep such compressed ME Regions
-			fuj_version = fuj_umem_ver(me_start) # Check if ME Region is Fujitsu UMEM compressed (me_start from spi_fd function)
+		fd_exist,start_fd_match,end_fd_match = spi_fd_init()
+		if fd_exist :
+			fd_rgn_exist,me_start = spi_fd('region',start_fd_match,end_fd_match)
+			if fd_rgn_exist :
+				param.multi = False # Disable param.multi to keep such compressed ME Regions
+				fuj_version = fuj_umem_ver(me_start) # Check if ME Region is Fujitsu UMEM compressed (me_start from spi_fd function)
 			
-			# ME Region is Fujitsu UMEM compressed
-			if fuj_version != "NaN" :
-				no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s\n\n" % fuj_version) + col_red + \
-				"Unknown compression. Please report this issue!" + col_end
-				text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
+				# ME Region is Fujitsu UMEM compressed
+				if fuj_version != "NaN" :
+					no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s\n\n" % fuj_version) + col_red + \
+					"Unknown compression. Please report this issue!" + col_end
+					text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
 				
-				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
+					if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
-			# ME Region is Unknown
-			else :
-				no_man_text = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware\n\n" + col_red + "Please report this issue!" + col_end
-				text_ubu_pre = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware"
+				# ME Region is Unknown
+				else :
+					no_man_text = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware\n\n" + col_red + "Please report this issue!" + col_end
+					text_ubu_pre = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware"
 				
-				if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
+					if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
 		
 		# Engine Region does not exist	
 		else :
 			me_rec_guid = binascii.b2a_hex(reading[:0x10]).decode('utf-8').upper()
 			fuj_version = fuj_umem_ver(0) # Check if ME Region is Fujitsu UMEM compressed (me_start is 0x0, no SPI FD)
-			fw_start_match = (re.compile(br'\x00{3}(\x00|\x38)(\x00{3}|\xFF{3})(\x00|\x7F)\x24\x46\x50\x54')).search(reading) # $FPT detection (starts at 0x8), 0x7F --> SPS1
+			fw_start_match = (re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).search(reading) # $FPT detection
 			
 			# Image is a ME Recovery Module of GUID 821D110C
 			if me_rec_guid == "0C111D82A3D0F74CAEF3E28088491704" :
@@ -792,7 +802,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			elif fw_start_match is not None :
 				param.multi = False # Disable param.multi to keep such compressed Engine Regions
 				(start_fw_start_match, end_fw_start_match) = fw_start_match.span()
-				fpt_start = start_fw_start_match - 0x8 # Starting offset of firmware image
+				fpt_start = start_fw_start_match - 0x10 # Starting offset of firmware image
 				fitc_exist = binascii.b2a_hex(reading[fpt_start + 0x28 : fpt_start + 0x30]).decode('utf-8').upper()
 				
 				if fitc_exist != "0000000000000000" and fitc_exist != "FFFFFFFFFFFFFFFF" :
@@ -864,6 +874,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if ("FTPR" not in [pr_man_1,pr_man_2]) and ("BRIN" not in pr_man_3) and ("EpsR" not in pr_man_4) and ("IGRT" not in pr_man_5) :
 				# Initial Manifest Header was not from Recovery section
 				man_count = man_pat.findall(reading)
+				
 				if len(man_count) > 1 : # Extra searches only if multiple manifest exist
 					pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x274] + FTPR
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x49\x47\x52\x54', re.DOTALL)).search(reading) # .$MN2 + [0x264] + IGRT
@@ -884,9 +895,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					# Only one (initial) Manifest found, check Intel ID 8086 validity
 					if intel_id() == 'continue' : continue # Next input file
 			
+			# Detect RSA Signature and Public Key
+			rsa_hash,rsa_pkey = rsa_anl()
+			
 			# Show the SHA-1 hash of FTPR's RSA SIG when requested
 			if param.print_rsa_hash :
-				rsa_hash,rsa_pkey = rsa_anl()
 				print("SHA-1 hash of FTPR's RSA Signature:\n\n%s" % rsa_hash)
 				continue # Next input file
 			
@@ -899,22 +912,26 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			date = binascii.b2a_hex( (reading[start_man_match - 0x7:start_man_match - 0x3]) [::-1]).decode('utf-8')
 			date_print = "%s/%s/%s" % (date[-2:], date[4:6], date[:4]) # format is dd/mm/yyyy
 			
-			# Detect Firmare Variant (ME, TXE or SPS)
-			# ME2-5/SPS1 --> $MME = 0x50, ME6-10 & SPS2-3 --> $MME = 0x60, TXE1-2 --> $MME = 0x80
+			# Detect Firmware Variant (ME, TXE or SPS)
+			variant = db_pkey()
 			
-			txe3_match = (re.compile(br'\x52\x42\x45\x50\x72\x62\x65\x00{5}')).search(reading) # RBEPrbe.....
-			txe1_match = reading[end_man_match + 0x270 + 0x80:end_man_match + 0x270 + 0x84].decode('utf-8', 'ignore') # Go to 2nd $MME module
-			if txe3_match is not None or txe1_match == '$MME' : variant = "TXE"
-			
-			sps_match = (re.compile(br'\x24\x43\x50\x44.{8}\x4F\x50\x52\x00')).search(reading) # $CPD + [0x8] + OPR. detection for SPS 4 Region, Operational (OPRx)
-			if sps_match is None : sps_match = (re.compile(br'\x62\x75\x70\x5F\x72\x63\x76\x2E\x6D\x65\x74')).search(reading) # bup_rcv.met detection for SPS 4 Recovery (FTPR)
-			if sps_match is None : sps_match = (re.compile(br'\x46\x54\x50\x52\x4F\x50\x52\x31')).search(reading) # FTPROPR1 detection for SPS 2,3
-			if sps_match is None : sps_match = (re.compile(br'\x24\x4D\x4D\x45\x49\x43\x43\x4D\x4F\x44')).search(reading) # $MMEICCMOD detection for some SPS 2,3
-			if sps_match is None : sps_match = (re.compile(br'\xE0\x57\x44\x46\x4C\x54')).search(reading) # ΰWDFLT detection for SPS 1
-			if sps_match is not None : variant = "SPS"
+			if variant == "NaN" : # Variant detection by RSA Public Key in DB failed
+				# 5FB2D04BC4D8B4E90AECB5C708458F95 = RSA PKEY used at both ME & TXE PRE-BYP
+				
+				# ME2-5/SPS1 --> $MME = 0x50, ME6-10 & SPS2-3 --> $MME = 0x60, TXE1-2 --> $MME = 0x80
+				txe3_match = (re.compile(br'\x52\x42\x45\x50\x72\x62\x65\x00\x00\x00\x00\x00')).search(reading) # RBEPrbe.....
+				txe1_match = reading[end_man_match + 0x270 + 0x80:end_man_match + 0x270 + 0x84].decode('utf-8', 'ignore') # Go to 2nd $MME module
+				if txe3_match is not None or txe1_match == '$MME' : variant = "TXE"
+				else :
+					sps_match = (re.compile(br'\x24\x43\x50\x44........\x4F\x50\x52\x00', re.DOTALL)).search(reading) # $CPD + [0x8] + OPR. detection for SPS 4 OPR
+					if sps_match is None : sps_match = (re.compile(br'\x62\x75\x70\x5F\x72\x63\x76\x2E\x6D\x65\x74')).search(reading) # bup_rcv.met detection for SPS 4 REC
+					if sps_match is None : sps_match = (re.compile(br'\x24\x53\x4B\x55\x03\x00\x00\x00\x2F\xE4\x01\x00')).search(reading) # $SKU of SPS 2 & 3
+					if sps_match is None : sps_match = (re.compile(br'\x24\x53\x4B\x55\x03\x00\x00\x00\x08\x00\x00\x00')).search(reading) # $SKU of SPS 1
+					if sps_match is not None : variant = "SPS"
+					else : variant = "ME" # Default, no TXE/SPS detected
 			
 			# Detect Firmware Starting Offset
-			fw_start_pat = re.compile(br'\x00{3}(\x00|\x38)(\x00{3}|\xFF{3})(\x00|\x7F)\x24\x46\x50\x54') # ........$FPT detection (starts at 0x8), 0x7F --> SPS1
+			fw_start_pat = re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)
 			
 			fpt_count = len(fw_start_pat.findall(reading)) # Detect multiple Engine Regions
 			if fpt_count > 1 : multi_rgn = True
@@ -923,16 +940,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if fw_start_match is not None :
 				rgn_exist = True # Region detected, depends on Variant and thus must be executed afterwards
 				(start_fw_start_match, end_fw_start_match) = fw_start_match.span()
-				fpt_start = start_fw_start_match - 0x8 # Starting offset of firmware image
+				if variant == "ME" and major == 2 : fpt_start = start_fw_start_match
+				else : fpt_start = start_fw_start_match - 0x10
 				fpt_end = fpt_start + 0x1000 # 4KB size
 				
 				# Additional $FPT header at SPS 1.x firmware at DFLT section 
-				if variant == "SPS" and major == 1 :
+				if variant == "SPS" and (major == 1 or major == 4) :
 					if fpt_count == 2 : multi_rgn = False
 					fpt_count -= 1
 				
 				# Double $FPT header detection (Clevo MERecovery, 2nd $FPT = 1st $FPT + 0x110)
-				for i in range(5) : # Two is enough, 5 is for assurance
+				while True :
 					next_is_fpt = reading[fpt_start + 0x110:fpt_start + 0x110 + 4].decode('utf-8', 'ignore') # Check (offset + 0x110) -> (offset + 0x114) content
 					if next_is_fpt == "$FPT" : # Check if there is more than one $FPT headers
 						fpt_start = fpt_start + 0x100 # Adjust offset to the latter found $FPT header
@@ -941,10 +959,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							if fpt_count <= 1 : multi_rgn = False # Only when 2 $FPT exist (Clevo MERecovery + Normal)
 					else :
 						break
-			else : fw_type = "Update" # No Region detected, Update
+			else :
+				fw_type = "Update" # No Region detected, Update
+			
+			# Detect Intel Flash Descriptor
+			fd_exist,start_fd_match,end_fd_match = spi_fd_init()
+			if fd_exist :
+				fd_rgn_exist,me_start = spi_fd('region',start_fd_match,end_fd_match)
+				fd_lock_state = spi_fd('unlocked',start_fd_match,end_fd_match)
 			
 			# Check for Fujitsu UMEM ME Region (RGN/$FPT or UPD/$MN2)
-			if spi_fd("region") :
+			if fd_rgn_exist :
 				fuj_umem_spi = reading[me_start:me_start + 0x4]
 				fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
 				if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True # Futjitsu ME Region (RGN or UPD) with header UMEM
@@ -980,16 +1005,13 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				err_stor.append(release)
 			
 			# Detect Firmware SKU (Variant, Major & Minor dependant)
-			sku_pat = re.compile(br'\x24\x53\x4B\x55(\x03|\x04)\x00{3}') # $SKU detection, (03|04) reduces false positives
+			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, (03|04) reduces false positives
 			sku_match = sku_pat.search(reading) # sku_pat needs to exist as well for other usage
 			if sku_match is not None : (start_sku_match, end_sku_match) = sku_match.span()
 			
-			# Detect RSA Signature and Public Key
-			rsa_hash,rsa_pkey = rsa_anl()
-			
 			# Detect PV/PC bit (0 or 1)
 			if (variant == "ME" and major > 7) or variant == "TXE" :
-				pvbit_match = (re.compile(br'\x24\x44\x41\x54.{20}\x49\x46\x52\x50')).search(reading) # $DAT + [0x14] + IFRP detection
+				pvbit_match = (re.compile(br'\x24\x44\x41\x54....................\x49\x46\x52\x50', re.DOTALL)).search(reading) # $DAT + [0x14] + IFRP detection
 				if pvbit_match is not None :
 					(start_pvbit_match, end_pvbit_match) = pvbit_match.span()
 					pvbit = int(binascii.b2a_hex( (reading[start_pvbit_match + 0x10:start_pvbit_match + 0x11]) ), 16)
@@ -1083,16 +1105,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku = col_red + "Error" + col_end + ", unknown ME 2 SKU!" + col_red + " *" + col_end
 					err_rep = True
 					err_stor.append(sku)
-			
-				# ME2-Only Fix 1: Detect Region (RGN) image correctly, Update (UPD) is set at initial .$FPT detection correctly
-				rgn2_pat = re.compile(br'\x24\x46\x50\x54(\x08|\x03)\x00') # $FPT.. detection, the "dots" (0x08_AMT or 0x03_QST, 0x00) add ME2 RGN support
-				rgn2_match = rgn2_pat.search(reading)
-				if rgn2_match is not None :
-					rgn_exist = True # Region detection depends on Variant and thus must be executed afterwards
-					(start_fw_start_match, end_fw_start_match) = rgn2_match.span()
-					fpt_start = start_fw_start_match # Starting offset of ME2 firmware image
 				
-				# ME2-Only Fix 2 : The usual method to detect EXTR vs RGN does not work for ME2
+				# ME2-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME2
 				if sku == "QST" or (sku == "AMT" and minor >= 5) :
 					nvkr_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44')).search(reading) # NVKRKRID detection
 					if nvkr_match is not None :
@@ -1131,7 +1145,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							me2_type_fix = (binascii.b2a_hex(reading[netip_start:netip_end])).decode('utf-8').upper()
 							me2_type_exp = (binascii.b2a_hex(b'\x00' * (netip_size - 0x1))).decode('utf-8').upper()
 				
-				# ME2-Only Fix 3 : Identify ICH Revision B0 firmware SKUs
+				# ME2-Only Fix 2 : Identify ICH Revision B0 firmware SKUs
 				me2_sku_fix = ['1C3FA8F0B5B9738E717F74F1F01D023D58085298','AB5B010215DFBEA511C12F350522E672AD8C3345','92983C962AC0FD2636B5B958A28CFA42FB430529']
 				if rsa_hash in me2_sku_fix :
 					sku = "AMT B0"
@@ -1166,7 +1180,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				me3_type_fix2a = 0x10 * 'FF'
 				me3_type_fix2b = 0x10 * 'FF'
 				me3_type_fix3 = 0x10 * 'FF'
-				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44', re.DOTALL)).search(reading) # EFFSOSID detection
+				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
 				if effs_match is not None :
 					(start_effs_match, end_effs_match) = effs_match.span()
 					effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
@@ -1227,7 +1241,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku_db = "ALL"
 				
 				# ME4-Only Fix 3 : The usual method to detect EXTR vs RGN does not work for ME4
-				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44', re.DOTALL)).search(reading) # EFFSOSID detection
+				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
 				if effs_match is not None :
 					(start_effs_match, end_effs_match) = effs_match.span()
 					effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
@@ -1236,7 +1250,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					
 					me4_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46')).findall(effs_data) # ME_CFG_DEF detection (RGN have 2-4)
 					me4_type_fix2 = (re.compile(br'\x47\x50\x49\x4F\x31\x30\x4F\x77\x6E\x65\x72')).search(effs_data) # GPIO10Owner detection
-					me4_type_fix3 = (re.compile(br'\x41\x70\x70\x52\x75\x6C\x65\x2E\x30\x33\x2E\x30{6}')).search(effs_data) # AppRule.03.000000 detection
+					me4_type_fix3 = (re.compile(br'\x41\x70\x70\x52\x75\x6C\x65\x2E\x30\x33\x2E\x30\x30\x30\x30\x30\x30')).search(effs_data) # AppRule.03.000000 detection
 				
 				# Placed here in order to comply with Fix 2 above in case it is triggered
 				if sku_db == "ALL" :
@@ -1962,10 +1976,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				sku_sps = reading[start_sku_match + 8:start_sku_match + 0xC]
 				sku_sps = binascii.b2a_hex(sku_sps).decode('utf-8').upper() # Hex value with Little Endianess
 			
-			opr2_pat = re.compile(br'\x4F\x50\x52\x32\xFF{4}') # OPR2 detection for SPS2,3,4 (the 4xFF force FPT area only)
+			opr2_pat = re.compile(br'\x4F\x50\x52\x32\xFF\xFF\xFF\xFF') # OPR2 detection for SPS2,3,4 (the 4xFF force FPT area only)
 			opr2_match = opr2_pat.search(reading)
 			
-			cod2_pat = re.compile(br'\x43\x4F\x44\x32\xFF{4}') # COD2 detection for SPS1 (the 4xFF force FPT area only)
+			cod2_pat = re.compile(br'\x43\x4F\x44\x32\xFF\xFF\xFF\xFF') # COD2 detection for SPS1 (the 4xFF force FPT area only)
 			cod2_match = cod2_pat.search(reading)
 			
 			if not rgn_exist :
@@ -1981,10 +1995,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if len(mme_match) == 1 : fw_type = "Recovery" # SPSRecovery , FTPR for SPS2,3 (only $MMEBUP section)
 					elif len(mme_match) > 1 : fw_type = "Operational" # SPSOperational , OPR1/OPR2 for SPS2,3 or COD1/COD2 for SPS1 regions
 				else :
-					norgn_sps_match = (re.compile(br'\x24\x43\x50\x44.{8}\x46\x54\x50\x52')).search(reading) # SPSRecovery, $CPD + [0x8] + FTPR
+					norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading) # SPSRecovery, $CPD + [0x8] + FTPR
 					if norgn_sps_match is not None : fw_type = "Recovery"
 					else :
-						norgn_sps_match = (re.compile(br'\x24\x43\x50\x44.{8}\x4F\x50\x52\x00')).search(reading) # SPSOperational, $CPD + [0x8] + OPR.
+						norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x4F\x50\x52\x00', re.DOTALL)).search(reading) # SPSOperational, $CPD + [0x8] + OPR.
 						if norgn_sps_match is not None : fw_type = "Operational"
 			else :
 				if opr2_match is not None or cod2_match is not None :
@@ -2053,7 +2067,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						else :
 							fw_type = "Region, Extracted"
 					else :
-						if major == 2 : # ME2-Only Fix 2
+						if major == 2 : # ME2-Only Fix 1
 							if me2_type_fix != me2_type_exp : fw_type = "Region, Extracted"
 							else : fw_type = "Region, Stock"
 						elif major == 3 : # ME3-Only Fix 1
@@ -2061,7 +2075,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							or (0x10 * 'FF') not in me3_type_fix2b : fw_type = "Region, Extracted"
 							else : fw_type = "Region, Stock"
 						elif major == 6 and sku == "Ignition" : # ME6 Ignition does not work with KRND
-							ign_pat = (re.compile(br'\x00{12}\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
+							ign_pat = (re.compile(br'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
 							if len(ign_pat) < 2 : fw_type = "Region, Extracted" # 2 before NFTP & IGRT
 							else : fw_type = "Region, Stock"
 						else :
@@ -2083,7 +2097,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					fitc_build = int(binascii.b2a_hex( (reading[fpt_start + 0x2E:fpt_start + 0x30]) [::-1]), 16)
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
-		locl_start = (re.compile(br'\x24\x43\x50\x44.{8}\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
+		locl_start = (re.compile(br'\x24\x43\x50\x44........\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
 		if (variant == "ME") and (major == 11) and (locl_start is not None) :
 			if locl_start.start() == 0 : # Partial Update has "$CPD + [0x8] + LOCL" at first 0x10
 				wcod_found = True
@@ -2108,14 +2122,14 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		
 		# OEM FWUpdate UUID Detection, RGN & EXTR only
 		if fw_type != "Update" and ((variant == "ME" and major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4)) : # post-SKL have their own checks
-			uuid_pat_1 = re.compile(br'\x6F\x6E\x65\x4C\x6F\x76\x00{2}') # Lenovo OEM UUID 1 in Little Endian (4C656E6F766F --> Lenovo)
+			uuid_pat_1 = re.compile(br'\x6F\x6E\x65\x4C\x6F\x76\x00\x00') # Lenovo OEM UUID 1 (4C656E6F766F --> Lenovo)
 			uuid_match_1 = uuid_pat_1.search(reading)
-			uuid_pat_3 = re.compile(br'\x22\x36\x85\x68\xD3\xEE') # Dell OEM UUID
-			uuid_match_3 = uuid_pat_3.search(reading)
-			#uuid_pat_2 = re.compile(br'(\x06|x05)\x04\x00{6}') # Lenovo OEM UUID 2 in Little Endian --> Disabled due to false positives (either way, it's rare)
-			#uuid_match_2 = uuid_pat_2.search(reading)
+			uuid_pat_2 = re.compile(br'\x22\x36\x85\x68\xD3\xEE') # Dell OEM UUID
+			uuid_match_2 = uuid_pat_2.search(reading)
+			#uuid_pat_3 = re.compile(br'(\x06|x05)\x04\x00\x00\x00\x00\x00\x00') # Lenovo OEM UUID 2 --> Disabled due to false positives
+			#uuid_match_3 = uuid_pat_3.search(reading)
 			if uuid_match_1 is not None : uuid_found = "Lenovo"
-			elif uuid_match_3 is not None : uuid_found = "Dell"
+			elif uuid_match_2 is not None : uuid_found = "Dell"
 		
 		# Check database for unknown firmware, all firmware filenames have this stucture: Major.Minor.Hotfix.Build_SKU_Release_Type.bin
 		if release == "Production" : rel_db = "PRD"
@@ -2153,7 +2167,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		# The only thing that differs is the MFS region and its hashes at FTPR
 		# There are some MFS settings which are hardcoded for each PCH stepping
 		'''
-		mfs_match = (re.compile(br'\x4D\x46\x53\x00\x00\x00\x00\x00', re.DOTALL)).search(reading) # MFS detection
+		mfs_match = (re.compile(br'\x4D\x46\x53\x00\x00\x00\x00\x00')).search(reading) # MFS detection
 		if mfs_match is not None :
 			(start_mfs_match, end_mfs_match) = mfs_match.span()
 			mfs_start = int.from_bytes(reading[end_mfs_match:end_mfs_match + 0x4], 'little')
@@ -2281,11 +2295,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				print("Type:     %s" % (fw_type))
 				
-				fd_lock_state = spi_fd("unlocked") # Result not always boolean
 				if fd_lock_state == True : print("FD:       Unlocked")
 				elif fd_lock_state == False : print("FD:       Locked")
-			
-				if fitc_plt != "NaN" and variant == "TXE": print("SoC:      %s" % (fitc_plt))
+				
 				print("SKU:      %s" % (sku))
 
 				if sku_stp != "NaN" : print("Rev:      %s" % sku_stp)
@@ -2315,14 +2327,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				# Display ME7 Blacklist
 				if major == 7 :
 					print("")
-					if me7_blist_1_exist :
-						print("Blist 1:  <= %s.%s.%s.%s" % (7, me7_blist_1_minor, me7_blist_1_hotfix, me7_blist_1_build))
-					else :
-						print("Blist 1:  Empty")
-					if me7_blist_2_exist :
-						print("Blist 2:  <= %s.%s.%s.%s" % (7, me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build))
-					else :
-						print("Blist 2:  Empty")
+					if me7_blist_1_exist : print("Blist 1:  <= %s.%s.%s.%s" % (7, me7_blist_1_minor, me7_blist_1_hotfix, me7_blist_1_build))
+					else : print("Blist 1:  Empty")
+					if me7_blist_2_exist : print("Blist 2:  <= %s.%s.%s.%s" % (7, me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build))
+					else : print("Blist 2:  Empty")
 			elif me_rec_ffs :
 				err_rep = False
 				print("Date:     %s" % (date_print))
@@ -2465,7 +2473,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		if param.multi : multi_drop()
 		
 		f.close()
-
+		
 	if param.db_print_clean or param.help_scr : mea_exit(0) # Only once for -?,-pdb
-
+	
 mea_exit(0)
