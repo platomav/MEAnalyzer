@@ -59,7 +59,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -msg : Prints only messages without headers
 * -hid : Displays all firmware even without messages (-msg)
 * -aecho : Alternative display of empty lines (-msg, -hid)
-* -disuf : Disables UEFIFind Engine GUID detection
+* -enuf : Enables UEFIFind Engine GUID detection
 * -dbname : Renames input file based on DB name
 * -rbume : Extracts Dell HDR RBU ImagME regions
 * -pdb : Prints the DB without SHA1 hashes to file
@@ -75,4 +75,4 @@ During operation, ME Analyzer may encounter some issues related to rare firmware
 
 ##**C. Download ME Analyzer**
 
-ME Analyzer is developed and tested under Windows and currently Windows XP - Windows 10 operating systems are supported. Linux and macOS support is planned for the future. Since the Engine Firmware Repository Database is updated more frequently compared to the main program, a separate DB release is provided.
+ME Analyzer is developed and tested under Windows and currently Windows XP - Windows 10 operating systems are supported. Since the Engine Firmware Repository Database is updated more frequently compared to the main program, a separate DB release is provided.
