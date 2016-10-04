@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.5.0
+ME Analyzer v1.6.6.1
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.5'
+title = 'ME Analyzer v1.6.6 Dev 1'
 
 import sys
 import re
@@ -34,7 +34,7 @@ class MEA_Param :
 		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-adir','-hid','-aecho','-eker',\
 					'-dker','-prsa','-pdb','-enuf','-rbume','-dbname','-utf8','-exc','-mass','-disuf']
 		
-		# -disuf is removed, temporarily ignored via param.all until UEFIStrip & UBU adjust
+		# -disuf is removed, temporarily ignored via param.all until UEFIStrip adjusts
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -730,11 +730,14 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if 'nothing found' not in lines[i] :
 						rslt = lines[i-2].strip().split()
 						found_guid = switch_GUID(rslt[2], "HEX2GUID")
-						
-			os.remove(temp_ufpat.name)
-			os.remove(temp_ufout.name)
+			
 		except subprocess.CalledProcessError : pass
 		except : uf_error = True
+		
+		try :
+			os.remove(temp_ufpat.name)
+			os.remove(temp_ufout.name)
+		except : pass
 	
 	# Detect if file is Engine firmware
 	man_pat = re.compile(br'\x00\x24\x4D((\x4E\x32)|(\x41\x4E))') # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
