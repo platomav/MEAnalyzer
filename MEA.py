@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.5.0
+ME Analyzer v1.6.7.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.5'
+title = 'ME Analyzer v1.6.7'
 
 import sys
 import re
@@ -32,9 +32,9 @@ class MEA_Param :
 	def __init__(self,source) :
 	
 		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-adir','-hid','-aecho','-eker',\
-					'-dker','-prsa','-pdb','-enuf','-rbume','-dbname','-utf8','-exc','-mass','-disuf']
+					'-dker','-pwdb','-pdb','-enuf','-rbume','-dbname','-utf8','-exc','-mass','-disuf']
 		
-		# -disuf is removed, temporarily ignored via param.all until UEFIStrip & UBU adjust
+		# -disuf is removed, temporarily ignored via param.all until UEFIStrip adjusts
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -48,8 +48,8 @@ class MEA_Param :
 		self.alt_msg_echo = False
 		self.me11_ker_extr = False
 		self.me11_ker_disp = False
-		self.print_rsa_hash = False
 		self.db_print_clean = False
+		self.db_print_new = False
 		self.enable_uf = False
 		self.rbu_me_extr = False
 		self.give_db_name = False
@@ -70,8 +70,8 @@ class MEA_Param :
 			if i == '-aecho' : self.alt_msg_echo = True # Enables an alternative display of empty lines. Works with -msg and -hid.
 			if i == '-eker' : self.me11_ker_extr = True # Extraction of post-SKL FTPR > Kernel region.
 			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print post-SKL Kernel/FIT SKU analysis even when firmware is hash-known.
-			if i == '-prsa' : self.print_rsa_hash = True # Prints the SHA-1 hash of FTPR's RSA Signature.
-			if i == '-pdb' : self.db_print_clean = True # Prints the whole DB without SHA1 hashes for the Repository forum thread.
+			if i == '-pwdb' : self.db_print_clean = True # Prints the whole DB without SHA1 hashes.
+			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
 			if i == '-enuf' : self.enable_uf = True # Enables UEFIFind Engine GUID Detection.
 			if i == '-rbume' : self.rbu_me_extr = True # Extraction of Dell HDR RBU ImagME Regions.
 			if i == '-dbname' : self.give_db_name = True # Rename input file based on DB structured name.
@@ -79,7 +79,8 @@ class MEA_Param :
 			if i == '-exc' : self.exc_pause = True # Pauses after any unexpected python exception, for debugging.
 			if i == '-mass' : self.mass_scan = True # Scans all files of a given directory, no limit.
 			
-		if self.ubu_mea_pre or self.ubu_mea or self.extr_mea or self.print_msg or self.mass_scan : self.skip_intro = True
+		if self.ubu_mea_pre or self.ubu_mea or self.extr_mea or self.print_msg or self.mass_scan \
+		or self.db_print_clean or self.db_print_new : self.skip_intro = True
 
 # MEA Version Header
 def mea_hdr_init() :
@@ -119,8 +120,8 @@ Usage: MEA.exe [FilePath] {Options}\n\n\
 	-enuf : Enables UEFIFind Engine GUID detection\n\
 	-dbname : Renames input file based on DB name\n\
 	-rbume : Extracts Dell HDR RBU ImagME regions\n\
-	-pdb : Prints the DB without SHA1 hashes to file\n\
-	-prsa : Prints the firmware's SHA-1 hash for DB entry\n\
+	-pwdb : Prints the DB without SHA1 hashes to file\n\
+	-pdb : Writes input firmware's DB entries to file\n\
 	-dker : Prints Kernel/FIT analysis for post-SKL firmware\n\
 	-eker : Extracts post-SKL FTPR > Kernel region (research)\n\
 	-exc : Pauses after unexpected python exceptions (debugging)\n\
@@ -730,11 +731,14 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if 'nothing found' not in lines[i] :
 						rslt = lines[i-2].strip().split()
 						found_guid = switch_GUID(rslt[2], "HEX2GUID")
-						
-			os.remove(temp_ufpat.name)
-			os.remove(temp_ufout.name)
+			
 		except subprocess.CalledProcessError : pass
 		except : uf_error = True
+		
+		try :
+			os.remove(temp_ufpat.name)
+			os.remove(temp_ufout.name)
+		except : pass
 	
 	# Detect if file is Engine firmware
 	man_pat = re.compile(br'\x00\x24\x4D((\x4E\x32)|(\x41\x4E))') # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
@@ -743,29 +747,29 @@ current Intel Engine firmware running on your system!\n" + col_end)
 	if me1_match is not None : man_match = (re.compile(br'\x50\x72\x6F\x76\x69\x73\x69\x6F\x6E\x53\x65\x72\x76\x65\x72')).search(reading) # ProvisionServer detection
 	
 	if man_match is None :
-
-		# Engine Region exists at FD but cannot be identified (corrupted, compressed etc)
+	
+		# Determine if FD exists and if Engine Region is present
 		fd_exist,start_fd_match,end_fd_match = spi_fd_init()
-		if fd_exist :
-			fd_rgn_exist,me_start = spi_fd('region',start_fd_match,end_fd_match)
-			if fd_rgn_exist :
-				param.multi = False # Disable param.multi to keep such compressed ME Regions
-				fuj_version = fuj_umem_ver(me_start) # Check if ME Region is Fujitsu UMEM compressed (me_start from spi_fd function)
+		if fd_exist : fd_rgn_exist,me_start = spi_fd('region',start_fd_match,end_fd_match)
+		
+		# Engine Region exists but cannot be identified
+		if fd_rgn_exist :
+			param.multi = False # Disable param.multi to keep such compressed ME Regions
+			fuj_version = fuj_umem_ver(me_start) # Check if ME Region is Fujitsu UMEM compressed (me_start from spi_fd function)
 			
-				# ME Region is Fujitsu UMEM compressed
-				if fuj_version != "NaN" :
-					no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s\n\n" % fuj_version) + col_red + \
-					"Unknown compression. Please report this issue!" + col_end
-					text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
+			# ME Region is Fujitsu UMEM compressed
+			if fuj_version != "NaN" :
+				no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
+				text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
 				
-					if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
+				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
-				# ME Region is Unknown
-				else :
-					no_man_text = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware\n\n" + col_red + "Please report this issue!" + col_end
-					text_ubu_pre = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware"
+			# ME Region is Unknown
+			else :
+				no_man_text = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware\n\n" + col_red + "Please report this issue!" + col_end
+				text_ubu_pre = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware"
 				
-					if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
+				if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
 		
 		# Engine Region does not exist	
 		else :
@@ -792,8 +796,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			# Image is ME Fujitsu UMEM compressed
 			elif fuj_version != "NaN" :
 				param.multi = False # Disable param.multi to keep such compressed Engine Regions
-				no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s\n\n" % fuj_version) + col_red + \
-				"Unknown compression. Please report this issue!" + col_end
+				no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
 				text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
@@ -898,11 +901,6 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			# Detect RSA Signature and Public Key
 			rsa_hash,rsa_pkey = rsa_anl()
 			
-			# Show the SHA-1 hash of FTPR's RSA SIG when requested
-			if param.print_rsa_hash :
-				print("SHA-1 hash of FTPR's RSA Signature:\n\n%s" % rsa_hash)
-				continue # Next input file
-			
 			major = int(binascii.b2a_hex( (reading[start_man_match + 0x9:start_man_match + 0xB]) [::-1]), 16)
 			minor = int(binascii.b2a_hex( (reading[start_man_match + 0xB:start_man_match + 0xD]) [::-1]), 16)
 			hotfix = int(binascii.b2a_hex( (reading[start_man_match + 0xD:start_man_match + 0xF]) [::-1]), 16)
@@ -1004,10 +1002,13 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				err_rep = True
 				err_stor.append(release)
 			
-			# Detect Firmware SKU (Variant, Major & Minor dependant)
-			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, (03|04) reduces false positives
-			sku_match = sku_pat.search(reading) # sku_pat needs to exist as well for other usage
-			if sku_match is not None : (start_sku_match, end_sku_match) = sku_match.span()
+			# Detect Firmware $SKU (Variant, Major & Minor dependant)
+			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, pattern used later as well
+			sku_match = sku_pat.search(reading[start_man_match:]) # Search $SKU after proper $MAN/$MN2 Manifest
+			if sku_match is not None :
+				(start_sku_match, end_sku_match) = sku_match.span()
+				start_sku_match += start_man_match
+				end_sku_match += start_man_match
 			
 			# Detect PV/PC bit (0 or 1)
 			if (variant == "ME" and major > 7) or variant == "TXE" :
@@ -1037,26 +1038,16 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if me1_match is None and sku_match is not None : # Found $SKU entry
 			
 				# Number of $SKU entries per firmware generation :
-				# ME2 --> 2 x QST RGN , 3 x QST UPD , 2 x AMT RGN , 3 x AMT UPD
-				# ME3 --> 1 x QST RGN , 2 x QST UPD , 2 x AMT or ASF RGN , 3 x AMT or ASF UPD
-				# ME4 --> 2 x RGN , 3 x UPD
-				# ME5 - ME6 --> 2 x RGN , 3 x UPD
-				# ME7 - ME10 --> 1 x all
+				# ME3 --> 1 x QST RGN , 2 x QST UPD , 2 x AMT/ASF RGN , 3 x AMT/ASF UPD
+				# ME2,4,5,6 --> 2 x RGN , 3 x UPD
+				# ME7 - ME10 --> 1 x RGN/UPD
 			
 				if major > 1 and major < 7 :
-					if fw_type == "Update" :
-						if major == 4 and build == 1035 and hotfix == 0 and minor == 0 : # 4.0.0.1035 has different $SKU at UPDATE $MN2
-							pass # For RGN, ME 4 Fix 2 fixes SKU properly but for UPD the 1st (UPDATE) and not 2nd (CODE) $SKU is needed
-						else :
-							me26_sku_ranges = []
-							for m in sku_pat.finditer(reading) : me26_sku_ranges.append(m.span()) # Store all valid $SKU spans in array
-							if len(me26_sku_ranges) > 1 : (start_sku_match, end_sku_match) = me26_sku_ranges[1] # Bypass 1st (UPDATE) and take 2nd $SKU (CODE)
-							# If me26_sku_ranges has only one $SKU then it will automatically use the intially pre-calculated ranges
 					sku_me = reading[start_sku_match + 8:start_sku_match + 0xC]
-					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper() # Hex value with Little Endianess				
+					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper()
 				elif major > 6 and major < 11 :
 					sku_me = reading[start_sku_match + 8:start_sku_match + 0x10]
-					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper() # Hex value with Little Endianess		
+					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper()
 			
 			if major == 1 and me1_match is not None : # Desktop ICH7: Tekoa 82573E only
 				db_maj,db_min,db_hot,db_bld = check_upd('Latest_AMT_1_TEKOA')
@@ -1214,10 +1205,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		
 			if major == 4 : # Mobile ICH9M or ICH9M-E (AMT or TPM+AMT): 4.0 & 4.1 & 4.2 , xx00xx --> 4.0 , xx20xx --> 4.1 or 4.2
 				if sku_me == "AC200000" or sku_me == "AC000000" or sku_me == "04000000" : # 040000 for Pre-Alpha ROMB
-					sku = "AMT + TPM" # CA_ICH9_REL_ALL_SKUs_ (TPM + AMT/ASF)
+					sku = "AMT + TPM" # CA_ICH9_REL_ALL_SKUs_ (TPM + AMT)
 					sku_db = "ALL"
 				elif sku_me == "8C200000" or sku_me == "8C000000" or sku_me == "0C000000" : # 0C0000 for Pre-Alpha ROMB
-					sku = "AMT" # CA_ICH9_REL_IAMT_ (AMT/ASF)
+					sku = "AMT" # CA_ICH9_REL_IAMT_ (AMT)
 					sku_db = "AMT"
 				elif sku_me == "A0200000" or sku_me == "A0000000" :
 					sku = "TPM" # CA_ICH9_REL_NOAMT_ (TPM)
@@ -1226,19 +1217,31 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku = col_red + "Error" + col_end + ", unknown ME 4 SKU!" + col_red + " *" + col_end
 					err_rep = True
 					err_stor.append(sku)
-					
+				
 				# ME4-Only Fix 1 : Detect ROMB UPD image correctly
 				if fw_type == "Update" :
 					byp_pat = re.compile(br'\x52\x4F\x4D\x42') # ROMB detection (ROM-Bypass)
 					byp_match = byp_pat.search(reading)
 					if byp_match is not None : release = "ROM-Bypass"
 				
-				# ME4-Only Fix 2 : Detect AMT+TPM SKU correctly (for Pre-Alpha firmware)
-				tpm_tag_pat = re.compile(br'\x4E\x56\x54\x50\x54\x50\x49\x44') # NVTPTPID partition found at AMT+TPM (ALL) or TPM SKUs
-				tpm_tag_match = tpm_tag_pat.search(reading)
-				if tpm_tag_match is not None and sku_me == "8C000000" :
-					sku = "AMT + TPM" # CA_ICH9_REL_ALL_SKUs_ (TPM + AMT/ASF)
-					sku_db = "ALL"
+				# ME4-Only Fix 2 : Detect SKUs correctly, only for Pre-Alpha firmware
+				if minor == 0 and hotfix == 0 :
+					if fw_type == "Update" :
+						tpm_tag = (re.compile(br'\x24\x4D\x4D\x45........................\x54\x50\x4D', re.DOTALL)).search(reading) # $MME + [0x18] + TPM
+						amt_tag = (re.compile(br'\x24\x4D\x4D\x45........................\x4D\x4F\x46\x46\x4D\x31\x5F\x4F\x56\x4C', re.DOTALL)).search(reading) # $MME + [0x18] + MOFFM1_OVL
+					else :
+						tpm_tag = (re.compile(br'\x4E\x56\x54\x50\x54\x50\x49\x44')).search(reading) # NVTPTPID partition found at ALL or TPM
+						amt_tag = (re.compile(br'\x4E\x56\x43\x4D\x41\x4D\x54\x43')).search(reading) # NVCMAMTC partition found at ALL or AMT
+					
+					if tpm_tag is not None and amt_tag is not None :
+						sku = "AMT + TPM" # CA_ICH9_REL_ALL_SKUs_
+						sku_db = "ALL"
+					elif tpm_tag is not None :
+						sku = "TPM" # CA_ICH9_REL_NOAMT_
+						sku_db = "TPM"
+					else :
+						sku = "AMT" # CA_ICH9_REL_IAMT_
+						sku_db = "AMT"
 				
 				# ME4-Only Fix 3 : The usual method to detect EXTR vs RGN does not work for ME4
 				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
@@ -1403,13 +1406,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = "5MB"
 						sku_db = "5MB_ALL"
 						platform = "CPT/PBG"
-
-				# PBG was released in 11/2011 but there is a very early leaked pre-release build 7.1.20.1056 Alpha from 02/2011
-				# Firmware 7.1.20.1056 Alpha has a CPT SKU but is actually PBG and the BYP image has a unique platform "duo of bytes" (0343)
 				
-				if build == 1056 and hotfix == 20 and minor == 1 : # Hardcoded values for this special firmware
+				# Firmware 7.1.20.1056 Alpha is PBG with CPT SKU at PRD and unique SKU at BYP, hardcoded values
+				if build == 1056 and hotfix == 20 and minor == 1 :
 					sku_me7a = reading[start_sku_match + 8:start_sku_match + 0xA]
-					sku_me7a = binascii.b2a_hex(sku_me7a).decode('utf-8').upper() # Hex value with Little Endianess
+					sku_me7a = binascii.b2a_hex(sku_me7a).decode('utf-8').upper()
 					if sku_me7a == "701C" :
 						sku = "1.5MB"
 						sku_db = "1.5MB_PBG"
@@ -1742,6 +1743,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						pass # SKU retreived from manual DB entry
 				else :
 					sku = sku_init + ' ' + pos_sku_ker # SKU retreived from Kernel Analysis
+				
+				# Adjust PCH Stepping if not from DB
+				if sku_stp == 'NaN' :
+					if minor == 0 and hotfix > 0 :
+						if ' LP' in sku : sku_stp = 'C0'
+						elif ' H' in sku : sku_stp = 'D0'
 				
 				# Store SKU and check Latest version for all 11.x
 				if sku == "Consumer H" :
@@ -2163,27 +2170,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				name_db_extr = "%s.%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, rsa_hash) # The equivalent EXTR filename
 		name_db_hash = name_db + '_' + rsa_hash
 		
-		# SKL SKU Stepping can only be detected by the DATA/MFS region
-		# The only thing that differs is the MFS region and its hashes at FTPR
-		# There are some MFS settings which are hardcoded for each PCH stepping
-		'''
-		mfs_match = (re.compile(br'\x4D\x46\x53\x00\x00\x00\x00\x00')).search(reading) # MFS detection
-		if mfs_match is not None :
-			(start_mfs_match, end_mfs_match) = mfs_match.span()
-			mfs_start = int.from_bytes(reading[end_mfs_match:end_mfs_match + 0x4], 'little')
-			mfs_size = int.from_bytes(reading[end_mfs_match + 0x4:end_mfs_match + 0x8], 'little')
-			mfs_data = reading[mfs_start:mfs_start + mfs_size]
-			try :
-				with open(mea_dir + "\\" + "mfs_temp.bin", 'w+b') as ker_temp : ker_temp.write(mfs_data)
-				if os.path.isfile(mea_dir + "\\" + name_db + '.bin') : os.remove(mea_dir + "\\" + name_db + '.bin')
-				os.rename(mea_dir + "\\" + 'mfs_temp.bin', mea_dir + "\\" + name_db + '.bin')
-				print(col_yellow + "Extracted MFS from %s to %s\n" % (hex(mfs_start), hex(mfs_start + mfs_size - 0x1)) + col_end)
-			except :
-				pass
-				print(col_red + "Error, could not extract MFS from %s to %s\n" % (hex(mfs_start), hex(mfs_start + mfs_size - 0x1)) + col_end)
-				if os.path.isfile(mea_dir + "\\" + "mfs_temp.bin") : os.remove(mea_dir + "\\" + "mfs_temp.bin")
-		sys.exit()
-		'''
+		if param.db_print_new :
+			with open(mea_dir + "\\" + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
+			continue # Next input file
 		
 		# Search Engine database for firmware
 		fw_db = db_open()
@@ -2242,7 +2231,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		# Rename input file based on the DB structured name
 		if param.give_db_name :
 			file_name = file_in
-			new_dir_name = os.path.join(os.path.dirname(file_in), name_db_hash + '.bin')
+			new_dir_name = os.path.join(os.path.dirname(file_in), name_db + '.bin')
 			f.close()
 			if not os.path.exists(new_dir_name) : os.rename(file_name, new_dir_name)
 			continue # Next input file
@@ -2300,7 +2289,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				print("SKU:      %s" % (sku))
 
-				if sku_stp != "NaN" : print("Rev:      %s" % sku_stp)
+				if ((variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3)) :
+					if sku_stp != "NaN" : print("Rev:      %s" % sku_stp)
+					else : print("Rev:      Unknown")
 				
 				if ((variant == "ME" and major >= 8) or variant == "TXE") and svn > 1 : print("SVN:      %s" % (svn))
 
@@ -2474,6 +2465,6 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		
 		f.close()
 		
-	if param.db_print_clean or param.help_scr : mea_exit(0) # Only once for -?,-pdb
+	if param.db_print_clean or param.help_scr : mea_exit(0) # Only once for -?,-pwdb
 	
 mea_exit(0)

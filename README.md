@@ -62,8 +62,8 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -enuf : Enables UEFIFind Engine GUID detection
 * -dbname : Renames input file based on DB name
 * -rbume : Extracts Dell HDR RBU ImagME regions
-* -pdb : Prints the DB without SHA1 hashes to file
-* -prsa : Prints the firmware's SHA-1 hash for DB entry
+* -pwdb : Prints the DB without SHA1 hashes to file
+* -pdb : Writes input firmware's DB entries to file
 * -dker : Prints Kernel/FIT analysis for post-SKL firmware
 * -eker : Extracts post-SKL FTPR > Kernel region (research)
 * -exc : Pauses after unexpected python exceptions (debugging)

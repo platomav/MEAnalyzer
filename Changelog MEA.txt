@@ -1,3 +1,11 @@
+v1.6.7
+
+Added option -pdb to save input firmware's DB entry to file
+Fixed issue that caused wrong SKU detection for ME2 to ME6
+Fixed issue that caused wrong FD Engine region detection
+Fixed issue that caused temporary files to not be deleted
+Updated Intel Engine Firmware Repository Database to r67
+
 v1.6.5
 
 Major performance improvement, up to 80% faster
