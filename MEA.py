@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.7.0
+ME Analyzer v1.6.8.0
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.7'
+title = 'ME Analyzer v1.6.8'
 
 import sys
 import re
@@ -372,14 +372,14 @@ def krod_anl() :
 	me11_sku_match = (re.compile(br'\x4B\x52\x4F\x44')).finditer(reading) # KROD detection
 
 	uuid_found = ""
-	sku_check = "NaN"	
+	sku_check = "NaN"
+	me11_sku_ranges = []
 	
 	if me11_sku_match is not None and fw_type != "Update" :
-		for m in me11_sku_match : # Find all KROD starting offsets and spans (SKU changes history)
-			me11_sku_ranges.append(m.span()) # Store spans in array for latter use
-					
-		if len(me11_sku_ranges) >= 1 : # Two or more KROD must exist, the first is generic (non-SKU/OEMID related)
-			(start_sku_match, end_sku_match) = me11_sku_ranges[len(me11_sku_ranges)-1] # Set last KROD starting & ending offsets
+		for m in me11_sku_match : me11_sku_ranges.append(m.span()) # Find and store all KROD starting offsets and spans (SKU history)
+		
+		if me11_sku_ranges :
+			(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Set last KROD starting & ending offsets
 			
 			# OEMID: Checks only first two parts to avoid some unknown data before the other three parts
 			oemid_p1a = reading[start_sku_match + 0x1D : start_sku_match + 0x21] # 4 bytes in LE
@@ -403,14 +403,19 @@ def krod_anl() :
 			elif oemid_a == "00000405-0000" or oemid_b == "00000405-0000" : uuid_found = "Lenovo" # 00000405-0000-0000-0000-000000000000
 			elif oemid_a == "68853622-EED3" or oemid_b == "68853622-EED3" : uuid_found = "Dell" # 68853622-EED3-4E83-8A86-6CDE315F6B78
 			#elif oemid != "00000000-0000" : uuid_found = "Unknown" # 00000000-0000-0000-0000-000000000000
-					
-			# FIT SKU: Checking areas are (KROD - 0xF : KROD - 0xB) or (KROD - 0x11 : KROD - 0xD)
-			sku_check = reading[start_sku_match - 0x20 : start_sku_match]
-			sku_check = binascii.b2a_hex(sku_check).decode('utf-8').upper()
-			sku_check = ' '.join([sku_check[i:i+2] for i in range(0, len(sku_check), 2)]) # Split every 2 characters (like Bytes)
+			
+			sku_check = krod_fit_sku(start_sku_match)
+			me11_sku_ranges.pop(len(me11_sku_ranges)-1)
 
-	return (uuid_found,sku_check)
+	return (uuid_found,sku_check,me11_sku_ranges)
 
+def krod_fit_sku(start_sku_match) :
+	sku_check = reading[start_sku_match - 0x100 : start_sku_match]
+	sku_check = binascii.b2a_hex(sku_check).decode('utf-8').upper()
+	sku_check = ' '.join([sku_check[i:i+2] for i in range(0, len(sku_check), 2)]) # Split every 2 characters (like Bytes)
+	
+	return sku_check
+	
 def db_skl() :
 	fw_db = db_open()
 
@@ -1495,6 +1500,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						err_rep = True
 						err_stor.append(sku)
 					
+					# Ignore: 9.0.50.x (9.1 Alpha)
+					if hotfix == 50 : upd_found = True
+					
+					platform = "LynxPoint"
+					
 				elif minor == 1 :
 					if sku_me == "E09911D113220000" :
 						sku = "1.5MB"
@@ -1510,9 +1520,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = col_red + "Error" + col_end + ", unknown ME 9.1 SKU!" + col_red + " *" + col_end
 						err_rep = True
 						err_stor.append(sku)
-						platform = "Desktop"
+					platform = "LynxPoint"
 					
-				elif minor == 5 :
+				elif minor == 5 or minor == 6 :
 					if sku_me == "609A11B113220000" :
 						sku = "1.5MB"
 						sku_db = "1.5MB"
@@ -1532,31 +1542,18 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = col_red + "Error" + col_end + ", unknown ME 9.5 SKU!" + col_red + " *" + col_end
 						err_rep = True
 						err_stor.append(sku)
-					platform = "Mobile"
-				
-				elif minor == 6 : # ME9.6 firmware is abandoned
-					if sku_me == "609A11B113220000" : # Whole SKU identical to ME9.5 1.5MB
-						sku = "1.5MB"
-						sku_db = "1.5MB"
-						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_96_15MB')
-						if hotfix == db_hot and build < db_bld : upd_found = True
-					elif sku_me == "6FDAFFBD0A430000" : # Unknown but since 9.5/9.6 1.5MB are idential, the same should apply for 9.5/9.6 5MB
-						sku = "5MB" + col_red + " *" + col_end
-						sku_db = "5MB"
-						err_rep = True # To extract such a region if it exists
-						err_stor.append(sku)
-					else :
-						sku = col_red + "Error" + col_end + ", unknown ME 9.6 SKU!" + col_red + " *" + col_end
-						err_rep = True
-						err_stor.append(sku)
-					platform = "Mobile"
+					
+					# Ignore: 9.6.x (10.0 Alpha)
+					if minor == 6 : upd_found = True
+					
+					platform = "LynxPoint LP"
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 9.x Minor version!" + col_red + " *" + col_end
 					err_rep = True
 					err_stor.append(sku)
 				
 			if major == 10 :
-				if minor == 0 : # Broadwell Mobile
+				if minor == 0 :
 					if sku_me == "C0BA11F113220000" or sku_me == "C0BA11F114220000" : # 2nd SKU is BYP
 						sku = "1.5MB"
 						sku_db = "1.5MB"
@@ -1576,7 +1573,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = col_red + "Error" + col_end + ", unknown ME 10.0 SKU!" + col_red + " *" + col_end
 						err_rep = True
 						err_stor.append(sku)
-					platform = "Mobile"
+					platform = "Broadwell LP"
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 10.x Minor version!" + col_red + " *" + col_end
 					err_rep = True
@@ -1592,7 +1589,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku_init = "Consumer"
 					sku_init_db = "CON"
 				
-				uuid_found,sku_check = krod_anl() # Detect OEMID and FIT SKU
+				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
 				
 				vcn = vcn_skl() # Detect VCN
 				
@@ -1643,24 +1640,32 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					
 					# FIT Platform SKU for 11.0
 					if sku_check != "NaN" :
-					
-						if ' 02 D1 02 68 ' in sku_check : fit_platform = "PCH-H Z170"
-						elif ' 02 D1 02 69 ' in sku_check : fit_platform = "PCH-H H110"
-						elif ' 02 D1 02 67 ' in sku_check : fit_platform = "PCH-H H170"
-						elif ' 02 D1 02 64 ' in sku_check : fit_platform = "PCH-H Q170"
-						elif ' 02 D1 02 65 ' in sku_check : fit_platform = "PCH-H Q150"
-						elif ' 02 D1 02 66 ' in sku_check : fit_platform = "PCH-H B150"
-						elif ' 02 D1 02 6A ' in sku_check : fit_platform = "PCH-H QM170"
-						elif ' 02 D1 02 6B ' in sku_check : fit_platform = "PCH-H HM170"
-						elif ' 02 D1 02 6D ' in sku_check : fit_platform = "PCH-H C236"
-						elif ' 02 D1 02 6E ' in sku_check : fit_platform = "PCH-H CM236"
-						elif ' 02 D1 02 6F ' in sku_check : fit_platform = "PCH-H C232"
-						elif ' 02 D1 02 70 ' in sku_check : fit_platform = "PCH-H QMS180"
-						elif any(s in sku_check for s in (' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U"
-						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U"
-						elif any(s in sku_check for s in (' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y"
-						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
-						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
+						
+						while fit_platform == "NaN" :
+						
+							if any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = "PCH-H Q170"
+							elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = "PCH-H Q150"
+							elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = "PCH-H B150"
+							elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 07 D1 02 65 ')) : fit_platform = "PCH-H H170"
+							elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = "PCH-H Z170"
+							elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = "PCH-H H110"
+							elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = "PCH-H QM170"
+							elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = "PCH-H HM170"
+							elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = "PCH-H No Emulation"
+							elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = "PCH-H C236"
+							elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = "PCH-H CM236"
+							elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = "PCH-H C232"
+							elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = "PCH-H QMS180"
+							elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U"
+							elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y"
+							elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = "PCH-LP No Emulation"
+							elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U"
+							elif me11_sku_ranges :
+								(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
+								sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
+								me11_sku_ranges.pop(-1) # Remove last SKU range
+								continue # Invoke while, check fit_platform in new sku_check
+							else : break # Could not find FIT SKU at any KROD
 					
 					# Ignore: 11.0.0.7101
 					if hotfix == 0 and build == 7101 : upd_found = True
@@ -1670,52 +1675,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				# 11.5 : Kabylake , Sunrise Point
 				elif minor == 5 :
 					
-					# FIT Platform SKU for 11.5 (PLACEHOLDER - FIT 11.5 NEEDED)
-					if sku_check != "NaN" :
-					
-						if ' 02 D1 02 68 ' in sku_check : fit_platform = "PCH-H Z270"
-						elif ' 02 D1 02 69 ' in sku_check : fit_platform = "PCH-H H210"
-						elif ' 02 D1 02 67 ' in sku_check : fit_platform = "PCH-H H270"
-						elif ' 02 D1 02 64 ' in sku_check : fit_platform = "PCH-H Q270"
-						elif ' 02 D1 02 65 ' in sku_check : fit_platform = "PCH-H Q250"
-						elif ' 02 D1 02 66 ' in sku_check : fit_platform = "PCH-H B250"
-						elif ' 02 D1 02 6A ' in sku_check : fit_platform = "PCH-H QM270"
-						elif ' 02 D1 02 6B ' in sku_check : fit_platform = "PCH-H HM270"
-						elif ' 02 D1 02 6D ' in sku_check : fit_platform = "PCH-H C236 ???"
-						elif ' 02 D1 02 6E ' in sku_check : fit_platform = "PCH-H CM236 ???"
-						elif ' 02 D1 02 6F ' in sku_check : fit_platform = "PCH-H C232 ???"
-						elif ' 02 D1 02 70 ' in sku_check : fit_platform = "PCH-H QMS280"
-						elif any(s in sku_check for s in (' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U"
-						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U"
-						elif any(s in sku_check for s in (' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y"
-						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
-						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
-					
 					platform = "SPT/KBP"
 				
 				# 11.6 : Kabylake , Union Point
 				elif minor == 6 :
-					
-					# FIT Platform SKU for 11.6 (PLACEHOLDER - FIT 11.6 NEEDED)
-					if sku_check != "NaN" :
-					
-						if ' 02 D1 02 68 ' in sku_check : fit_platform = "PCH-H Z270"
-						elif ' 02 D1 02 69 ' in sku_check : fit_platform = "PCH-H H210"
-						elif ' 02 D1 02 67 ' in sku_check : fit_platform = "PCH-H H270"
-						elif ' 02 D1 02 64 ' in sku_check : fit_platform = "PCH-H Q270"
-						elif ' 02 D1 02 65 ' in sku_check : fit_platform = "PCH-H Q250"
-						elif ' 02 D1 02 66 ' in sku_check : fit_platform = "PCH-H B250"
-						elif ' 02 D1 02 6A ' in sku_check : fit_platform = "PCH-H QM270"
-						elif ' 02 D1 02 6B ' in sku_check : fit_platform = "PCH-H HM270"
-						elif ' 02 D1 02 6D ' in sku_check : fit_platform = "PCH-H C236 ???"
-						elif ' 02 D1 02 6E ' in sku_check : fit_platform = "PCH-H CM236 ???"
-						elif ' 02 D1 02 6F ' in sku_check : fit_platform = "PCH-H C232 ???"
-						elif ' 02 D1 02 70 ' in sku_check : fit_platform = "PCH-H QMS280"
-						elif any(s in sku_check for s in (' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U"
-						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U"
-						elif any(s in sku_check for s in (' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y"
-						elif ' 00 00 6C ' in sku_check : fit_platform = "PCH-H No Emulation" # 11,10,0E
-						elif ' 00 00 03 ' in sku_check : fit_platform = "PCH-LP No Emulation"
 					
 					# Ignore: 11.6.0.7069
 					if hotfix == 0 and build == 7069 : upd_found = True
@@ -1934,6 +1897,19 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = col_red + "Error" + col_end + ", unknown TXE 2.0 SKU!" + col_red + " *" + col_end
 						err_rep = True
 						err_stor.append(sku)
+				elif minor == 1 :
+					if sku_txe == "675CFF0D03430000" :
+						if 'UNK' in txe_sub : sku = "1.375MB" + txe_sub
+						else : sku = sku = "1.375MB" # No need for + txe_sub as long as there is only one platform
+						if 'UNK' in txe_sub_db : sku_db = "1.375MB" + txe_sub_db
+						else : sku_db = "1.375MB" # No need for + txe_sub_db as long as there is only one platform
+						if txe_sub_db == "_BSW-CHT" :
+							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_21_1375MB_BSWCHT')
+							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+					else :
+						sku = col_red + "Error" + col_end + ", unknown TXE 2.1 SKU!" + col_red + " *" + col_end
+						err_rep = True
+						err_stor.append(sku)
 				else :
 					sku = col_red + "Error" + col_end + ", unknown TXE 2.x Minor version!" + col_red + " *" + col_end
 					err_rep = True
@@ -1947,17 +1923,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				vcn = vcn_skl() # Detect VCN
 				
-				uuid_found,sku_check = krod_anl() # Detect OEMID and FIT SKU
+				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
 				
 				if minor == 0 :
 					
 					db_sku_chk,sku,sku_stp,sku_pdm = db_skl() # Retreive SKU & Rev from DB
 					
 					sku = "Unknown"
-					#if sku_stp == "NaN" : sku_db = "CON_XX"
-					#else : sku_db = "CON_" + sku_stp
+					#if sku_stp == "NaN" : sku_db = "UNK_XX"
+					#else : sku_db = "UNK_" + sku_stp
 					
-					#db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_30_UNK_APL')
+					#db_maj,db_min,db_hot,db_bld = check_upd('TBD')
 					#if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
 				else :
