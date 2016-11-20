@@ -1,3 +1,8 @@
+v1.7.0_1
+
+Added partial support for TXE 3.x APL
+Updated Intel Engine Firmware Repository Database to r72
+
 v1.6.8
 
 Added support for TXE 2.1 firmware

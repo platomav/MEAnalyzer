@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.6.8.0
+ME Analyzer v1.7.0.1
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.6.8'
+title = 'ME Analyzer v1.7.0_1'
 
 import sys
 import re
@@ -311,27 +311,14 @@ def fovd_clean (type) :
 		else : return False
 	else : return True
 	
-def vcn_skl() :
-	me11_vcn_pat = re.compile(br'\x00\x00\x46\x54\x50\x52\x00') # ..FTPR. detection
-	me11_vcn_match = me11_vcn_pat.search(reading)
+def vcn_skl(start_man_match, variant) :
+	me11_vcn_pat = re.compile(br'\xFF\xFF\xFF\xFF........................................\x46\x54\x50\x52') # FF*4 + [0x28] + FTPR detection
+	me11_vcn_match = me11_vcn_pat.search(reading[start_man_match:]) # After FTPR $MN2 for performance and to avoid $CPD FTPR
 	if me11_vcn_match is not None :
 		(start_vcn_match, end_vcn_match) = me11_vcn_match.span()
-				
-		ftp_check = reading[start_vcn_match - 0x1E:start_vcn_match - 0x1A]
-		ftp_check = ftp_check.decode('utf-8')
-				
-		if ftp_check == "$FPT" : # ..FTPR. found but it's false positive
-			for m in me11_vcn_pat.finditer(reading) : # Find all ..FTPR. starting offsets and spans
-				me11_vcn_ranges.append(m.span()) # Store spans in array for latter use
-						
-				if ftp_check == "$FPT" :
-					for i in range(1,len(me11_vcn_ranges)) : # Array position 0 is the first/false-positive match, so 1 and up
-						(start_vcn_match, end_vcn_match) = me11_vcn_ranges[i] # Set next ..FTPR. span
-						ftp_check = reading[start_vcn_match - 0x1E:start_vcn_match - 0x1A]
-						ftp_check = ftp_check.decode('utf-8')
-						if ftp_check != "$FPT" : break # Next ..FTPR. span is not a false positive, break to continue analysing
-			
-		vcn = reading[end_vcn_match + 0x23:end_vcn_match + 0x24] # ME11
+		
+		if variant == "TXE" : vcn = reading[start_man_match + end_vcn_match:start_man_match + end_vcn_match + 0x1] # TXE 3.x
+		else : vcn = reading[start_man_match + end_vcn_match + 0x24:start_man_match + end_vcn_match + 0x25] # ME 11.x & SPS 4.x
 		vcn = int(binascii.b2a_hex(vcn[::-1]), 16)
 		
 		return vcn
@@ -416,7 +403,7 @@ def krod_fit_sku(start_sku_match) :
 	
 	return sku_check
 	
-def db_skl() :
+def db_skl(variant) :
 	fw_db = db_open()
 
 	db_sku_chk = "NaN"
@@ -435,7 +422,7 @@ def db_skl() :
 				if line_parts[3] != "XX" : sku_stp = line_parts[3] # Cel 3 is PCH Stepping
 				if line_parts[4] in ['PDM','NOPDM','UKPDM'] : sku_pdm = line_parts[4] # Cel 4 is PDM
 			elif variant == 'TXE' :
-				if line_parts[2] != "XX" : sku_stp = line_parts[2] # Cel 2 is PCH Stepping
+				if line_parts[1] != "X" : sku_stp = line_parts[1] # Cel 1 is PCH Stepping
 			break # Break loop at 1st rsa_hash match
 	fw_db.close()
 
@@ -1591,11 +1578,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
 				
-				vcn = vcn_skl() # Detect VCN
+				vcn = vcn_skl(start_man_match, variant) # Detect VCN
 				
 				ker_start,ker_end,rel_db = ker_anl('anl') # Kernel Analysis for all 11.x
 				
-				db_sku_chk,sku,sku_stp,sku_pdm = db_skl() # Retreive SKU & Rev from DB
+				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
 				# Some early firmware are reported as PRD even though they are PRE
 				if release == "Production" and rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95" :
@@ -1891,7 +1878,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if 'UNK' in txe_sub_db : sku_db = "1.375MB" + txe_sub_db
 						else : sku_db = "1.375MB" # No need for + txe_sub_db as long as there is only one platform
 						if txe_sub_db == "_BSW-CHT" :
-							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_20_1375MB_BSWCHT')
+							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_20_1375MB')
 							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown TXE 2.0 SKU!" + col_red + " *" + col_end
@@ -1904,7 +1891,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if 'UNK' in txe_sub_db : sku_db = "1.375MB" + txe_sub_db
 						else : sku_db = "1.375MB" # No need for + txe_sub_db as long as there is only one platform
 						if txe_sub_db == "_BSW-CHT" :
-							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_21_1375MB_BSWCHT')
+							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_21_1375MB')
 							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown TXE 2.1 SKU!" + col_red + " *" + col_end
@@ -1917,24 +1904,35 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				platform = "BSW/CHT"
 				
-			if major == 3 : # Not supported yet!
+			if major == 3 : # Not fully supported yet!
 				
 				apl_warn = True
 				
-				vcn = vcn_skl() # Detect VCN
+				vcn = vcn_skl(start_man_match, variant) # Detect VCN
 				
 				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
 				
+				# Cannot detect RGN/EXTR properly, $FPT missing
+				fw_type = "Unknown"
+				rgn_exist = False
+				fd_lock_state = None
+				
 				if minor == 0 :
 					
-					db_sku_chk,sku,sku_stp,sku_pdm = db_skl() # Retreive SKU & Rev from DB
+					db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 					
-					sku = "Unknown"
-					#if sku_stp == "NaN" : sku_db = "UNK_XX"
-					#else : sku_db = "UNK_" + sku_stp
+					if sku_stp == "NaN" :
+						# Adjust SoC Stepping if not from DB
+						if hotfix < 12 :
+							if release == "Production" : sku_stp = 'B' # PRD
+							else : sku_stp = 'A' # PRE, BYP
+						else :
+							sku_db = "X" # No/Single SKU for TXE 3.x, Rev only
+					else :
+						sku_db = sku_stp
 					
-					#db_maj,db_min,db_hot,db_bld = check_upd('TBD')
-					#if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+					db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_30')
+					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
 				else :
 					sku = col_red + "Error" + col_end + ", unknown TXE 3.x Minor version!" + col_red + " *" + col_end
@@ -2019,7 +2017,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 			if major == 4 :
 				# SKU is at Kernel
-				if fw_type != "Operational" : vcn = vcn_skl() # VCN only at FTPR (REC)
+				if fw_type != "Operational" : vcn = vcn_skl(start_man_match, variant) # VCN only at FTPR (REC)
 				
 				if param.me11_ker_extr and fw_type not in ['Operational','Recovery'] :
 					ker_start,ker_end = ker_anl('anl') # Detect Kernel offsets
@@ -2122,11 +2120,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		if variant == "SPS" and (fw_type == "Region" or fw_type == "Region, Stock" or fw_type == "Region, Extracted") : # SPS --> Region (EXTR at DB)
 			fw_type = "Region"
 			type_db = "EXTR"
-		elif (fw_type == "Region, Extracted") : type_db = "EXTR"
+		elif fw_type == "Region, Extracted" : type_db = "EXTR"
 		elif fw_type == "Region, Stock" or fw_type == "Region" : type_db = "RGN"
 		elif fw_type == "Update" : type_db = "UPD"
 		elif fw_type == "Operational" : type_db = "OPR"
 		elif fw_type == "Recovery" : type_db = "REC"
+		elif fw_type == "Unknown" : type_db = "UNK"
 		
 		# Create firmware DB names
 		if variant == "ME" or variant == "TXE" :
@@ -2263,7 +2262,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if fd_lock_state == True : print("FD:       Unlocked")
 				elif fd_lock_state == False : print("FD:       Locked")
 				
-				print("SKU:      %s" % (sku))
+				if variant == "TXE" and major > 2 and 'Error' not in sku : pass
+				else : print("SKU:      %s" % (sku))
 
 				if ((variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3)) :
 					if sku_stp != "NaN" : print("Rev:      %s" % sku_stp)
@@ -2348,12 +2348,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			if not param.print_msg :
 				print("")
-				print(col_red + "Error, Intel Apollo Lake (TXE 3.x) is not currently supported!" + col_end)
+				print(col_red + "Error, Intel TXE 3 APL is not fully supported yet!" + col_end)
 			
 			if (not err_stor) and (not warn_stor) and (not note_stor) :			
-				err_stor.append(col_red + "Error, Intel Apollo Lake (TXE 3.x) is not currently supported!" + col_end)
+				err_stor.append(col_red + "Error, Intel TXE 3 APL is not fully supported yet!" + col_end)
 			else :
-				err_stor.append(col_red + "\nError, Intel Apollo Lake (TXE 3.x) is not currently supported!" + col_end)
+				err_stor.append(col_red + "\nError, Intel TXE 3 APL is not fully supported yet!" + col_end)
 				
 		if uf_error :
 			
