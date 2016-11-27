@@ -1,7 +1,10 @@
-v1.7.0_1
+v1.7.0_4
 
 Added partial support for TXE 3.x APL
-Updated Intel Engine Firmware Repository Database to r72
+Added ME 11.x FIT SKU detection (11.0 - 11.6)
+Added support for ME 6.x ROM-Bypass firmware
+Removed irrelevant info shown at Partial Update images
+Updated Intel Engine Firmware Repository Database to r73
 
 v1.6.8
 

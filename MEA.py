@@ -1,9 +1,9 @@
 """
-ME Analyzer v1.7.0.1
+ME Analyzer v1.7.0.4
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.7.0_1'
+title = 'ME Analyzer v1.7.0_4'
 
 import sys
 import re
@@ -647,10 +647,10 @@ for file_in in source :
 	upd_found = False
 	unk_major = False
 	rgn_exist = False
-	err_rep = False
 	err_stor = []
 	note_stor = []
 	warn_stor = []
+	err_rep = 0
 	fpt_count = 0
 	rel_byte = 0
 	rel_bit = 0
@@ -884,7 +884,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					else :
 						# Fallback to initial Manifest, check Intel ID 8086 validity
 						if intel_id() == 'continue' : continue # Next input file
-						err_rep = True
+						err_rep += 1
 						rec_missing = True
 				else :
 					# Only one (initial) Manifest found, check Intel ID 8086 validity
@@ -991,7 +991,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			if rel_byte not in [0,64,128,192] : # 0x00 --> 0, 0x40 --> 64, 0x80 --> 128, 0xC0 --> 192 in ASCII
 				release = col_red + "Error" + col_end + ", unknown firmware release!" + col_red + " *" + col_end
-				err_rep = True
+				err_rep += 1
 				err_stor.append(release)
 			
 			# Detect Firmware $SKU (Variant, Major & Minor dependant)
@@ -1015,7 +1015,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				elif pvbit == 1 : pvpc = "Yes"
 				else :
 					pvpc = col_red + "Error" + col_end + ", unknown PV bit!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(pvpc)
 		
 		else : # AMT 1.x
@@ -1086,7 +1086,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if minor == 0 and (hotfix < db_hot or (hotfix == db_hot and build < db_bld)) : upd_found = True
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 2 SKU!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 				
 				# ME2-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME2
@@ -1155,7 +1155,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 3 SKU!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 
 				# ME3-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME3
@@ -1207,7 +1207,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku_db = "TPM"
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 4 SKU!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 				
 				# ME4-Only Fix 1 : Detect ROMB UPD image correctly
@@ -1278,7 +1278,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if minor < db_min or (minor == db_min and hotfix == db_hot and build < db_bld) : upd_found = True
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 5 SKU!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 					
 				# ME5-Only Fix: Detect ROMB UPD image correctly
@@ -1322,9 +1322,14 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 6 SKU!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
-			
+				
+				# ME6-Only Fix: Ignore FTPR missing error at ROMB (Region present, tag missing)
+				if release == "ROM-Bypass" :
+					err_rep -= 1
+					rec_missing = False
+				
 			if major == 7 :
 			
 				# ME7.1 firmware had two SKUs (1.5MB or 5MB) for each platform: Cougar Point (6-series) or Patsburg (C600,X79)
@@ -1364,7 +1369,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku = col_red + "Error" + col_end + ", unknown ME 7 SKU!" + col_red + " *" + col_end
 					platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
 					if minor != 1 and hotfix != 20 and build != 1056 : # Exception for firmware 7.1.20.1056 Alpha (check below)
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 						err_stor.append(platform)
 				
@@ -1373,7 +1378,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = "1.5MB"
 						sku_db = "NaN"
 						platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(platform)
 					elif hotfix >= 20 and hotfix <= 41 and hotfix != 21 and build != 1056 : # CPT firmware but with PBG SKU (during the "transition" period)
 						sku = "1.5MB"
@@ -1388,7 +1393,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = "5MB"
 						sku_db = "NaN"
 						platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(platform)
 					elif hotfix >= 20 and hotfix <= 41 and hotfix != 21 and build != 1056 and build != 1165 : # CPT firmware but with PBG SKU (during the "transition" period)
 						sku = "5MB"
@@ -1414,7 +1419,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					else :
 						sku = col_red + "Error" + col_end + ", unknown ME 7 SKU!" + col_red + " *" + col_end
 						platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 						err_stor.append(platform)
 				
@@ -1447,7 +1452,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif me7_romb_upd == "6806" : release = "ROM-Bypass" # 6806 is 5MB ROM-Bypass
 						else : # Unknown ROM-Bypass $MCP entry
 							release = col_red + "Error" + col_end + ", unknown ME 7 ROM-Bypass SKU!" + col_red + " *" + col_end
-							err_rep = True
+							err_rep += 1
 							err_stor.append(release)
 			
 			if major == 8 :
@@ -1464,7 +1469,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 8 SKU!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 					
 				# ME8-Only Fix: SVN location
@@ -1484,7 +1489,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown ME 9.0 SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 					
 					# Ignore: 9.0.50.x (9.1 Alpha)
@@ -1505,7 +1510,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown ME 9.1 SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 					platform = "LynxPoint"
 					
@@ -1527,7 +1532,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True 
 					else :
 						sku = col_red + "Error" + col_end + ", unknown ME 9.5 SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 					
 					# Ignore: 9.6.x (10.0 Alpha)
@@ -1536,7 +1541,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					platform = "LynxPoint LP"
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 9.x Minor version!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 				
 			if major == 10 :
@@ -1558,12 +1563,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown ME 10.0 SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 					platform = "Broadwell LP"
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 10.x Minor version!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 			
 			if major == 11 :
@@ -1622,37 +1627,56 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h,match_9_h)) : pos_sku_ker = "H"
 				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_9_lp)) : pos_sku_ker = "LP"
 				
+				# FIT Platform SKU for all 11.x
+				if sku_check != "NaN" :
+						
+					while fit_platform == "NaN" :
+						
+						if any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = "SPT-H Q170"
+						elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = "SPT-H Q150"
+						elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = "SPT-H B150"
+						elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 02 D1 02 67 ')) : fit_platform = "SPT-H H170"
+						elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = "SPT-H Z170"
+						elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = "SPT-H H110"
+						elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = "SPT-H QM170"
+						elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = "SPT-H HM170"
+						elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = "SPT-H No Emulation"
+						elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = "SPT-H C236"
+						elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = "SPT-H CM236"
+						elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = "SPT-H C232"
+						elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = "SPT-H QMS180"
+						elif any(s in sku_check for s in (' 32 01 01 80 00 ',' 02 D1 02 32 ')) : fit_platform = "SPT-H QMU185"
+						elif any(s in sku_check for s in (' 93 01 01 80 00 ',' 02 D1 02 93 ')) : fit_platform = "SPT-H QM175"
+						elif any(s in sku_check for s in (' 94 01 01 80 00 ',' 02 D1 02 94 ')) : fit_platform = "SPT-H HM175"
+						elif any(s in sku_check for s in (' 95 01 01 80 00 ',' 02 D1 02 95 ')) : fit_platform = "SPT-H CM238"
+						elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = "PCH-C620 LBG 1G"
+						elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = "PCH-C620 LBG 2"
+						elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = "PCH-C620 LBG 4"
+						elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = "PCH-C620 LBG No Emulation"
+						elif any(s in sku_check for s in (' 31 01 03 80 00 ',' 02 D1 02 31 ')) : fit_platform = "KBP-H Z270"
+						elif any(s in sku_check for s in (' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = "KBP-H X299"
+						elif any(s in sku_check for s in (' 2D 01 03 80 00 ',' 02 D1 02 2D ')) : fit_platform = "KBP-H Q270"
+						elif any(s in sku_check for s in (' 2E 01 03 80 00 ',' 02 D1 02 2E ')) : fit_platform = "KBP-H Q250"
+						elif any(s in sku_check for s in (' 30 01 03 80 00 ',' 02 D1 02 30 ')) : fit_platform = "KBP-H H270"
+						elif any(s in sku_check for s in (' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = "KBP-H C422"
+						elif any(s in sku_check for s in (' 2F 01 03 80 00 ',' 02 D1 02 2F ')) : fit_platform = "KBP-H B250"
+						elif any(s in sku_check for s in (' 2C 01 03 80 00 ',' 02 D1 02 2C ')) : fit_platform = "KBP-H No Emulation"
+						elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "SPT-LP Premium U"
+						elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "SPT-LP Premium Y"
+						elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = "PCH-LP No Emulation"
+						elif any(s in sku_check for s in (' 04 00 00 80 00 ',' 02 B0 02 04 ',' 02 D0 02 04 ')) : fit_platform = "PCH-LP Base U KBL"
+						elif any(s in sku_check for s in (' 05 00 00 80 00 ',' 02 B0 02 05 ',' 02 D0 02 05 ')) : fit_platform = "PCH-LP Premium U KBL"
+						elif any(s in sku_check for s in (' 06 00 00 80 00 ',' 02 B0 02 06 ',' 02 D0 02 06 ')) : fit_platform = "PCH-LP Premium Y KBL"
+						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "SPT-LP Base U"
+						elif me11_sku_ranges :
+							(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
+							sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
+							me11_sku_ranges.pop(-1) # Remove last SKU range
+							continue # Invoke while, check fit_platform in new sku_check
+						else : break # Could not find FIT SKU at any KROD
+				
 				# 11.0 : Skylake , Sunrise Point
 				if minor == 0 :
-					
-					# FIT Platform SKU for 11.0
-					if sku_check != "NaN" :
-						
-						while fit_platform == "NaN" :
-						
-							if any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = "PCH-H Q170"
-							elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = "PCH-H Q150"
-							elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = "PCH-H B150"
-							elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 07 D1 02 65 ')) : fit_platform = "PCH-H H170"
-							elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = "PCH-H Z170"
-							elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = "PCH-H H110"
-							elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = "PCH-H QM170"
-							elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = "PCH-H HM170"
-							elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = "PCH-H No Emulation"
-							elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = "PCH-H C236"
-							elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = "PCH-H CM236"
-							elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = "PCH-H C232"
-							elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = "PCH-H QMS180"
-							elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U"
-							elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y"
-							elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = "PCH-LP No Emulation"
-							elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U"
-							elif me11_sku_ranges :
-								(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
-								sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
-								me11_sku_ranges.pop(-1) # Remove last SKU range
-								continue # Invoke while, check fit_platform in new sku_check
-							else : break # Could not find FIT SKU at any KROD
 					
 					# Ignore: 11.0.0.7101
 					if hotfix == 0 and build == 7101 : upd_found = True
@@ -1675,17 +1699,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				# 11.x : Unknown
 				else :
 					sku = col_red + "Error" + col_end + ", unknown ME 11.x Minor version!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 				
-				if 'PCH-H' in fit_platform : pos_sku_fit = "H"
-				elif 'PCH-LP' in fit_platform : pos_sku_fit = "LP"
+				if '-LP' in fit_platform : pos_sku_fit = "LP"
+				elif '-H' in fit_platform : pos_sku_fit = "H"
 				
 				if pos_sku_ker == "Unknown" : # SKU not retreived from Kernel Analysis
 					if sku == "NaN" : # SKU not retreived from manual DB entry
 						if pos_sku_fit == "NaN" : # SKU not retreived from FIT Platform SKU
 							sku = col_red + "Error" + col_end + ", unknown ME %s.%s %s SKU!" % (major,minor,sku_init) + col_red + " *" + col_end
-							err_rep = True
+							err_rep += 1
 							err_stor.append(sku)
 						else :
 							sku = sku_init + ' ' + pos_sku_fit # SKU retreived from FIT Platform SKU
@@ -1772,7 +1796,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if major < 1 or major > 11 :
 				unk_major = True
 				sku = col_red + "Error" + col_end + ", unknown ME SKU due to unknown Major version!" + col_red + " *" + col_end
-				err_rep = True
+				err_rep += 1
 				err_stor.append(sku)
 		
 		if variant == "TXE" : # Trusted Execution Engine (SEC)
@@ -1791,7 +1815,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				else :
 					txe_sub = col_red + " UNK" + col_end
 					txe_sub_db = "_UNK_RSAPK_" + rsa_pkey # Additionally prints the unknown RSA Public Key
-					err_rep = True
+					err_rep += 1
 				
 				if major == 0 : # Weird TXE 1.0/1.1 (3MB/1.375MB) Android-only testing firmware (Rom_8MB_Tablet_Android, Teclast X98 3G)
 					# PSI fiwi version 06 for BYT board Android_BYT_B0_Engg_IFWI_00.14 (from flash batch script)
@@ -1800,7 +1824,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku_db = "3MB" + txe_sub_db
 					else :
 						sku = col_red + "Error" + col_end + ", unknown TXE 0.x SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 				
 				if major == 1 :
@@ -1825,7 +1849,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 								if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 						else :
 							sku = col_red + "Error" + col_end + ", unknown TXE 1.0 SKU!" + col_red + " *" + col_end
-							err_rep = True
+							err_rep += 1
 							err_stor.append(sku)
 					elif minor == 1 :
 						if sku_txe == "675CFF0D03430000" : # xxxxxxxx03xxxxxx is 1.375MB for TXE v1.1 (same as 1.25MB TXE v1.0)
@@ -1839,7 +1863,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 								if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 						else :
 							sku = col_red + "Error" + col_end + ", unknown TXE 1.1 SKU!" + col_red + " *" + col_end
-							err_rep = True
+							err_rep += 1
 							err_stor.append(sku)
 					elif minor == 2 :
 						if sku_txe == "675CFF0D03430000" : # xxxxxxxx03xxxxxx is 1.375MB for TXE v1.2 (same as v1.0 1.25MB and v1.1 1.375MB)
@@ -1853,11 +1877,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 								#if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 						else :
 							sku = col_red + "Error" + col_end + ", unknown TXE 1.2 SKU!" + col_red + " *" + col_end
-							err_rep = True
+							err_rep += 1
 							err_stor.append(sku)
 					else :
 						sku = col_red + "Error" + col_end + ", unknown TXE 1.x Minor version!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 					
 					platform = "BYT"
@@ -1869,7 +1893,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				else :
 					txe_sub = col_red + " UNK" + col_end
 					txe_sub_db = "_UNK_RSAPK_" + rsa_pkey # Additionally prints the unknown RSA Public Key
-					err_rep = True
+					err_rep += 1
 				
 				if minor == 0 :
 					if sku_txe == "675CFF0D03430000" :
@@ -1882,7 +1906,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown TXE 2.0 SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 				elif minor == 1 :
 					if sku_txe == "675CFF0D03430000" :
@@ -1895,11 +1919,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_red + "Error" + col_end + ", unknown TXE 2.1 SKU!" + col_red + " *" + col_end
-						err_rep = True
+						err_rep += 1
 						err_stor.append(sku)
 				else :
 					sku = col_red + "Error" + col_end + ", unknown TXE 2.x Minor version!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 				
 				platform = "BSW/CHT"
@@ -1936,7 +1960,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				else :
 					sku = col_red + "Error" + col_end + ", unknown TXE 3.x Minor version!" + col_red + " *" + col_end
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 
 				if param.me11_ker_extr :
@@ -1948,7 +1972,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if major > 3 :
 				unk_major = True
 				sku = col_red + "Error" + col_end + ", unknown TXE SKU due to unknown Major version" + col_red + " *" + col_end
-				err_rep = True
+				err_rep += 1
 				err_stor.append(sku)
 
 		if variant == "SPS" : # Server Platform Services
@@ -1993,21 +2017,21 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if sku_sps != "08000000" : # All SPS 1 firmware have the same SKU.
 					sku = col_red + "Error" + col_end + ", unknown SPS 1 SKU!" + col_red + " *" + col_end
 					err_sps_sku = "Yes"
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 					
 			if major == 2 :
 				if sku_sps != "2FE40100" : # All SPS 2 & 3 firmware have the same SKU.
 					sku = col_red + "Error" + col_end + ", unknown SPS 2 SKU!" + col_red + " *" + col_end
 					err_sps_sku = "Yes"
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 			
 			if major == 3 :
 				if sku_sps != "2FE40100" : # All SPS 2 & 3 firmware have the same SKU.
 					sku = col_red + "Error" + col_end + ", unknown SPS 3 SKU!" + col_red + " *" + col_end
 					err_sps_sku = "Yes"
-					err_rep = True
+					err_rep += 1
 					err_stor.append(sku)
 				
 				if rgn_exist :
@@ -2026,7 +2050,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if major > 4 :
 				unk_major = True
 				sku = col_red + "Error" + col_end + ", unknown SPS SKU due to unknown Major version" + col_red + " *" + col_end
-				err_rep = True
+				err_rep += 1
 				err_stor.append(sku)
 		
 		# Region detection (Stock or Extracted)
@@ -2083,23 +2107,23 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if locl_start.start() == 0 : # Partial Update has "$CPD + [0x8] + LOCL" at first 0x10
 				wcod_found = True
 				fw_type = "Partial Update"
-				sku = "Corporate" # Partial Update is Corporate only
+				sku = "Corporate"
 				del err_stor[:]
-				err_rep = False
+				err_rep = 0
 		elif (variant == "ME") and (major < 11) and (sku_match is None) : # Partial Updates do not have $SKU
 			wcod_match = (re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44')).search(reading) # $MMEWCOD detection (found at 5MB & Partial Update firmware)
 			if wcod_match is not None :
 				wcod_found = True
 				fw_type = "Partial Update"
-				sku = "5MB" # Partial Update is 5MB only
+				sku = "5MB"
 				del err_stor[:]
-				err_rep = False
+				err_rep = 0
 		
 		# ME Firmware non Partial Update without $SKU
 		if sku_match is None and fw_type != "Partial Update" and not me_rec_ffs :
 			if (variant == "ME" and major > 1 and major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4) :
 				sku_missing = True
-				err_rep = True
+				err_rep += 1
 		
 		# OEM FWUpdate UUID Detection, RGN & EXTR only
 		if fw_type != "Update" and ((variant == "ME" and major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4)) : # post-SKL have their own checks
@@ -2172,12 +2196,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		
 		# Check if firmware is updated, Production only
 		if variant == "SPS" :
-			if release == "Production" and not err_rep and fw_type != "Operational" and fw_type != "Recovery" : # Does not display if there is any error or firmware is OPR/REC
+			if release == "Production" and err_rep == 0 and fw_type != "Operational" and fw_type != "Recovery" : # Does not display if there is any error or firmware is OPR/REC
 				if upd_found :
 					upd_rslt = "Latest:   " + col_red + "No" + col_end
 				elif not upd_found :
 					upd_rslt = "Latest:   " + col_green + "Yes" + col_end
-		elif release == "Production" and not err_rep and not wcod_found : # Does not display if there is any error or firmware is Partial Update
+		elif release == "Production" and err_rep == 0 and not wcod_found : # Does not display if there is any error or firmware is Partial Update
 			if variant == "TXE" and major == 0 : pass # Exclude TXE v0.x
 			else :
 				if upd_found : upd_rslt = "Latest:   " + col_red + "No" + col_end
@@ -2262,11 +2286,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if fd_lock_state == True : print("FD:       Unlocked")
 				elif fd_lock_state == False : print("FD:       Locked")
 				
-				if variant == "TXE" and major > 2 and 'Error' not in sku : pass
+				if (variant == "TXE" and major > 2 and 'Error' not in sku) or wcod_found : pass
 				else : print("SKU:      %s" % (sku))
 
 				if ((variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3)) :
 					if sku_stp != "NaN" : print("Rev:      %s" % sku_stp)
+					elif wcod_found : pass
 					else : print("Rev:      Unknown")
 				
 				if ((variant == "ME" and major >= 8) or variant == "TXE") and svn > 1 : print("SVN:      %s" % (svn))
@@ -2299,11 +2324,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if me7_blist_2_exist : print("Blist 2:  <= %s.%s.%s.%s" % (7, me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build))
 					else : print("Blist 2:  Empty")
 			elif me_rec_ffs :
-				err_rep = False
+				err_rep = 0
 				print("Date:     %s" % (date_print))
 				print("GUID:     821D110C-D0A3-4CF7-AEF3-E28088491704")
 			elif jhi_warn :
-				err_rep = False
+				err_rep = 0
 				print("Date:     %s" % (date_print))
 				
 		# General MEA Messages (must be Errors > Warnings > Notes)
@@ -2366,7 +2391,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			else :
 				err_stor.append(col_red + "\nError, UEFIFind Engine GUID detection failed!" + col_end)
 		
-		if err_rep :
+		if err_rep > 0 :
 			if not param.print_msg :
 				print("")
 				print(col_red + "* Please report this issue!" + col_end)
