@@ -1,10 +1,15 @@
-v1.7.0_4
+v1.7.0_9
 
 Added partial support for TXE 3.x APL
 Added ME 11.x FIT SKU detection (11.0 - 11.6)
+Added detection of $FPT Checksum validity
 Added support for ME 6.x ROM-Bypass firmware
+Added ME 11.x Flash Descriptor EC Lock detection
+Added option -fptchk to show $FPT header checksum
+Fixed lack of FD Lock detection at ME 2-5 firmware
+Fixed various code issues and errors under rare cases
 Removed irrelevant info shown at Partial Update images
-Updated Intel Engine Firmware Repository Database to r73
+Updated Engine Firmware Repository Database to r74_4
 
 v1.6.8
 
