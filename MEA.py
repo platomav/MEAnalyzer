@@ -4,7 +4,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2016 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.7.0_9'
+title = 'ME Analyzer v1.7.0_21'
 
 import sys
 import re
@@ -12,7 +12,7 @@ import os
 import io
 import binascii
 import hashlib
-import struct
+import ctypes
 import tempfile
 import subprocess
 import traceback
@@ -29,12 +29,18 @@ col_yellow = colorama.Fore.YELLOW + colorama.Style.BRIGHT
 col_magenta = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
 col_end = colorama.Fore.RESET + colorama.Style.RESET_ALL
 
+char = ctypes.c_char
+uint8_t = ctypes.c_ubyte
+uint16_t = ctypes.c_ushort
+uint32_t = ctypes.c_uint
+uint64_t = ctypes.c_uint64
+
 class MEA_Param :
 
-	def __init__(self,source) :
+	def __init__(self, source) :
 	
 		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-adir','-hid','-aecho','-eker',
-					'-dker','-pwdb','-pdb','-enuf','-rbume','-dbname','-utf8','-exc','-mass','-fptchk','-disuf']
+					'-dker','-pwdb','-pdb','-enuf','-rbume','-dbname','-utf8','-exc','-mass','-disuf']
 		
 		# -disuf is removed, temporarily ignored via param.all until UEFIStrip adjusts
 		
@@ -58,7 +64,6 @@ class MEA_Param :
 		self.unicode_fix = False
 		self.exc_pause = False
 		self.mass_scan = False
-		self.fpt_chk_print = False
 		
 		for i in source :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
@@ -81,10 +86,200 @@ class MEA_Param :
 			if i == '-utf8' : self.unicode_fix = True # Encode all output to Unicode for strange characters.
 			if i == '-exc' : self.exc_pause = True # Pauses after any unexpected python exception, for debugging.
 			if i == '-mass' : self.mass_scan = True # Scans all files of a given directory, no limit.
-			if i == '-fptchk' : self.fpt_chk_print = True # Displays detected & expected $FPT header Checksum.
 			
 		if self.ubu_mea_pre or self.ubu_mea or self.extr_mea or self.print_msg or self.mass_scan \
 		or self.db_print_clean or self.db_print_new : self.skip_intro = True
+
+class FPT_Pre_Header(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("ROMB_Addr_x86",	uint32_t),		# 0x00 (x86+)
+		("Unknown04_08",	uint32_t),		# 0x04 (SPS1)
+		("Unknown08_0C",	uint32_t),		# 0x08 (SPS1)
+		("Unknown0C_10",	uint32_t),		# 0x0C (SPS1)
+		# 0x10
+	]
+
+class FPT_Header(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				char*4),		# 0x10 (Pre+)
+		("NumPartitions",	uint32_t),		# 0x14
+		("Version",			uint8_t),		# 0x18
+		("EntryType",		uint8_t),		# 0x19
+		("Length",			uint8_t),		# 0x1A
+		("Checksum",		uint8_t),		# 0x1B
+		("FlashCycleLife",	uint16_t),		# 0x1C
+		("FlashCycleLimit",	uint16_t),		# 0x1E
+		("UMASize",			uint32_t),		# 0x20
+		("Flags",			uint32_t),		# 0x24
+		("FitMajor",		uint16_t),		# 0x28
+		("FitMinor",		uint16_t),		# 0x2A
+		("FitHotfix",		uint16_t),		# 0x2C
+		("FitBuild",		uint16_t),		# 0x2E
+		# 0x20
+	]
+
+class FPT_Entry(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*4),		# 0x30 (1st)
+		("Owner",			char*4),		# 0x34
+		("Offset",			uint32_t),		# 0x38
+		("Size",			uint32_t),		# 0x3C
+		("StartTokens",		uint32_t),		# 0x40
+		("MaxTokens",		uint32_t),		# 0x44
+		("ScratchSectors",	uint32_t),		# 0x48
+		("Flags",			uint32_t),		# 0x4C
+		# 0x20
+	]
+	
+class MN2_Manifest(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("ModuleType",		uint16_t),		# 0x00
+		("ModuleSubType",	uint16_t),		# 0x02
+		("HeaderLength",	uint32_t),		# 0x04 (*4)
+		("HeaderVersion",	uint32_t),		# 0x08
+		("Flags",			uint32_t),		# 0x0C
+		("ModuleVendor",	uint32_t),		# 0x10
+		("Day",				uint8_t),		# 0x14
+		("Month",			uint8_t),		# 0x15
+		("Year",			uint16_t),		# 0x16
+		("Size",			uint32_t),		# 0x18 (*4)
+		("Tag",				char * 4),		# 0x1C
+		("NumModules",		uint32_t),		# 0x20
+		("Major",			uint16_t),		# 0x24
+		("Minor",			uint16_t),		# 0x26
+		("Hotfix",			uint16_t),		# 0x28
+		("Build",			uint16_t),		# 0x2A
+		("SVN_9",			uint8_t),		# 0x2C
+		("Unk2D_30",		uint8_t * 3),	# 0x2D
+		("SVN_8",			uint8_t),		# 0x30
+		("Unk31_34",		uint8_t * 3),	# 0x31
+		("VCN",				uint8_t),		# 0x34
+		("Unk35_78",		uint8_t * 16),	# 0x35
+		("KeySize",			uint32_t),		# 0x78
+		("ScratchSize",		uint32_t),		# 0x7C
+		("RsaPubKey",		uint32_t * 64),	# 0x80
+		("RsaPubExp",		uint32_t),		# 0x180
+		("RsaSig",			uint32_t * 64),	# 0x184
+		("PartitionName",	char * 12),		# 0x284
+		# 0x290
+	]
+
+class MN2_Manifest_CPD_Cont(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Unknown00_04",	uint32_t),		# 0x00 Size?
+		("HeaderSize",		uint32_t),		# 0x04 (from Unknown00_04)
+		("PartitionName",	uint32_t),		# 0x08
+		("PartitionSize",	uint32_t),		# 0x0C
+		("Hash",			uint8_t*32),	# 0x10
+		("Unknown30_34",	uint32_t),		# 0x30
+		("Unknown34_38",	uint32_t),  	# 0x34
+		("Unknown38_3C", 	uint32_t),  	# 0x38
+		("Unknown3C_40", 	uint32_t),  	# 0x3C
+		("Unknown40_44", 	uint32_t),  	# 0x40
+		# 0x44
+	]
+	
+class MME_Header_Old(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				char*4),		# 0x00
+		("Guid",			uint8_t*16),	# 0x04
+		("MajorVersion",	uint16_t),		# 0x14
+		("MinorVersion",	uint16_t),		# 0x16
+		("HotfixVersion",	uint16_t),		# 0x18
+		("BuildVersion",	uint16_t),		# 0x1A
+		("Name",			char*16),		# 0x1C
+		("Hash",			uint8_t*20),	# 0x2C
+		("Size",			uint32_t),		# 0x40
+		("Flags",			uint32_t),		# 0x44
+		("Unk48_4C",		uint32_t),		# 0x48
+		("Unk4C_50",		uint32_t),		# 0x4C
+		# 0x50
+	]
+	
+class MME_Header_New(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				char*4),		# 0x00
+		("Name",			char*16),		# 0x04
+		("Hash",			uint8_t*32),	# 0x14
+		("ModBase",			uint32_t),		# 0x34
+		("Offset_MN2",		uint32_t),		# 0x38 (from $MN2)
+		("SizeUncomp",		uint32_t),		# 0x3C
+		("SizeComp",		uint32_t),		# 0x40
+		("MemorySize",		uint32_t),		# 0x44
+		("PreUmaSize",		uint32_t),		# 0x48
+		("EntryPoint",		uint32_t),		# 0x4C
+		("Flags",			uint32_t),		# 0x50
+		("Unk54",			uint32_t),		# 0x54
+		("Unk58",			uint32_t),		# 0x58
+		("Unk5C",			uint32_t),		# 0x5C
+		# 0x60
+	]
+	
+class MCP_Header(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				char*4),		# 0x00
+		("HeaderSize",		uint32_t),		# 0x04 (*4)
+		("CodeSize",		uint32_t),		# 0x08
+		("Offset_MN2",		uint32_t),		# 0x0C (from $MN2)
+		("Unknown10_14",	uint32_t),  	# 0x10
+		("Hash",			uint8_t*32),	# 0x14
+		("Unknown34_38", 	uint32_t),  	# 0x34
+		("Unknown38_3C", 	uint32_t),  	# 0x38
+		("Unknown3C_40", 	uint32_t),  	# 0x3C
+		("Unknown40_44", 	uint32_t),  	# 0x40
+		# 0x44
+	]
+	
+class CPD_Header(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				char*4),		# 0x00
+		("NumModules",		uint32_t),		# 0x04
+		("Flags",			uint32_t),		# 0x08
+		("PartitionName",	uint32_t),		# 0x0C
+		# 0x10
+	]
+
+class CPD_Entry(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*12),		# 0x00
+		("Offset_CPD",		uint32_t),		# 0x0C (from $CPD)
+		("Size",			uint32_t),		# 0x10
+		("Flags",			uint32_t),		# 0x14
+		# 0x18
+	]
+	
+class CPD_Entry_Details(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*12),		# 0x00
+		("Unknown04_08",	uint32_t),		# 0x0C
+		("Unknown08_0C",	uint32_t),		# 0x10
+		("Hash",			uint8_t*32),	# 0x14
+		# 0x34
+	]
+
+def get_struct(str_, off, struct):
+	my_struct = struct()
+	struct_len = ctypes.sizeof(my_struct)
+	str_data = str_[off:off + struct_len]
+	fit_len = min(len(str_data), struct_len)
+	
+	if fit_len < struct_len:
+		raise Exception(col_red + "\nError, cannot read struct: %d bytes available but %d required!\n" % (fit_len, struct_len) + col_end)
+	
+	ctypes.memmove(ctypes.addressof(my_struct), str_data, fit_len)
+	
+	return my_struct
 
 # MEA Version Header
 def mea_hdr_init() :
@@ -128,7 +323,6 @@ Usage: MEA.exe [FilePath] {Options}\n\n\
 	-pdb : Writes input firmware's DB entries to file\n\
 	-dker : Prints Kernel/FIT analysis for post-SKL firmware\n\
 	-eker : Extracts post-SKL FTPR > Kernel region (research)\n\
-    -fptchk : Displays detected & expected $FPT header Checksum\n\
 	-exc : Pauses after unexpected python exceptions (debugging)\n\
 	-utf8 : Encodes output to Unicode (only in case of crash)\
 	")
@@ -236,16 +430,18 @@ def gen_msg(msg, value) :
 
 # Detect SPI with Intel Flash Descriptor
 def spi_fd_init() :
-	fd_match = (re.compile(br'\xFF\xFF\xFF\xFF\x5A\xA5\xF0\x0F')).search(reading) # 16xFF + Z¥π. detection (Intel Flash Descriptor)
+	fd_match = (re.compile(br'\xFF\xFF\xFF\xFF\x5A\xA5\xF0\x0F')).search(reading) # 16xFF + Z¥π. detection (PCH)
 	if fd_match is None :
-		fd_match = (re.compile(br'\x5A\xA5\xF0\x0F')).search(reading) # Z¥π. only fallback (ICH, Pre-PCH)
+		fd_match = (re.compile(br'\x5A\xA5\xF0\x0F.{172}\xFF{16}', re.DOTALL)).search(reading) # Z¥π. + [0xAC] + 16xFF fallback (ICH)
 		start_substruct = 0x0
+		end_substruct = 0xBC
 	else :
 		start_substruct = 0xC
-	
+		end_substruct = 0x0
+
 	if fd_match is not None :
 		(start_fd_match, end_fd_match) = fd_match.span()
-		return True, start_fd_match - start_substruct, end_fd_match
+		return True, start_fd_match - start_substruct, end_fd_match - end_substruct
 	else :
 		return False, 0, 0
 
@@ -676,6 +872,8 @@ for file_in in source :
 	me11_vcn_ranges = []
 	me11_sku_ranges = []
 	err_stor_ker = []
+	fpt_ranges = []
+	fpt_matches = []
 	fitc_ver_found = False
 	rgn_over_extr_found = False
 	multi_rgn = False
@@ -813,15 +1011,10 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			elif fw_start_match is not None :
 				param.multi = False # Disable param.multi to keep such compressed Engine Regions
 				(start_fw_start_match, end_fw_start_match) = fw_start_match.span()
-				fpt_start = start_fw_start_match - 0x10 # Starting offset of firmware image
-				fitc_exist = binascii.b2a_hex(reading[fpt_start + 0x28 : fpt_start + 0x30]).decode('utf-8').upper()
+				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
 				
-				if fitc_exist != "0000000000000000" and fitc_exist != "FFFFFFFFFFFFFFFF" :
-					fitc_major  = int(binascii.b2a_hex( (reading[fpt_start + 0x28:fpt_start + 0x2A]) [::-1]), 16)
-					fitc_minor  = int(binascii.b2a_hex( (reading[fpt_start + 0x2A:fpt_start + 0x2C]) [::-1]), 16)
-					fitc_hotfix = int(binascii.b2a_hex( (reading[fpt_start + 0x2C:fpt_start + 0x2E]) [::-1]), 16)
-					fitc_build  = int(binascii.b2a_hex( (reading[fpt_start + 0x2E:fpt_start + 0x30]) [::-1]), 16)
-					fitc_ver = "%s.%s.%s.%s" % (fitc_major, fitc_minor, fitc_hotfix, fitc_build)
+				if fpt_hdr.FitBuild != 0 and fpt_hdr.FitBuild != 65535 :
+					fitc_ver = "%s.%s.%s.%s" % (fpt_hdr.FitMajor, fpt_hdr.FitMinor, fpt_hdr.FitHotfix, fpt_hdr.FitBuild)
 					no_man_text = "Found" + col_yellow + " Unknown " + col_end + ("Intel Engine Flash Partition Table v%s\n\n" % fitc_ver) + col_red + \
 					"Please report this issue!" + col_end
 					text_ubu_pre = "Found" + col_yellow + " Unknown " + col_end + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
@@ -909,14 +1102,19 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			# Detect RSA Signature and Public Key
 			rsa_hash,rsa_pkey = rsa_anl()
 			
-			major = int(binascii.b2a_hex( (reading[start_man_match + 0x9:start_man_match + 0xB]) [::-1]), 16)
-			minor = int(binascii.b2a_hex( (reading[start_man_match + 0xB:start_man_match + 0xD]) [::-1]), 16)
-			hotfix = int(binascii.b2a_hex( (reading[start_man_match + 0xD:start_man_match + 0xF]) [::-1]), 16)
-			build = int(binascii.b2a_hex( (reading[start_man_match + 0xF:start_man_match + 0x11]) [::-1]), 16)
-			svn = int(binascii.b2a_hex( (reading[start_man_match + 0x11:start_man_match + 0x12]) [::-1]), 16)
-			vcn = int(binascii.b2a_hex( (reading[start_man_match + 0x19:start_man_match + 0x1A]) [::-1]), 16)
-			date = binascii.b2a_hex( (reading[start_man_match - 0x7:start_man_match - 0x3]) [::-1]).decode('utf-8')
-			date_print = "%s/%s/%s" % (date[-2:], date[4:6], date[:4]) # format is dd/mm/yyyy
+			# Scan $MAN/$MN2 manifest
+			mn2_ftpr_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
+			
+			major = mn2_ftpr_hdr.Major
+			minor = mn2_ftpr_hdr.Minor
+			hotfix = mn2_ftpr_hdr.Hotfix
+			build = mn2_ftpr_hdr.Build
+			svn = mn2_ftpr_hdr.SVN_9
+			vcn = mn2_ftpr_hdr.VCN
+			day = '%0.2X' % mn2_ftpr_hdr.Day
+			month = '%0.2X' % mn2_ftpr_hdr.Month
+			year = '%0.4X' % mn2_ftpr_hdr.Year
+			date = "%s/%s/%s" % (day, month, year)
 			
 			# Detect Firmware Variant (ME, TXE or SPS)
 			variant = db_pkey()
@@ -937,49 +1135,194 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					else : variant = "ME" # Default, no TXE/SPS detected
 			
 			# Detect Firmware Starting Offset
-			fw_start_pat = re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)
+			fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
 			
-			fpt_count = len(fw_start_pat.findall(reading)) # Detect multiple Engine Regions
-			if fpt_count > 1 : multi_rgn = True
-			
-			fw_start_match = fw_start_pat.search(reading)
-			if fw_start_match is not None :
-				rgn_exist = True # Region detected, depends on Variant and thus must be executed afterwards
-				(start_fw_start_match, end_fw_start_match) = fw_start_match.span()
+			if len(fpt_matches) :
+				rgn_exist = True # Set Engine/$FPT detection boolean
+				
+				for r in fpt_matches :
+					fpt_ranges.append(r.span()) # Store all $FPT ranges
+					fpt_count += 1 # Count $FPT ranges
+				
+				# Store ranges and start from 1st $FPT by default
+				(start_fw_start_match, end_fw_start_match) = fpt_ranges[0]
+				
+				# Multiple MERecovery 0x100 $FPT header bypass (example: Clevo)
+				while reading[start_fw_start_match + 0x100:start_fw_start_match + 0x104] == b'$FPT' : # next $FPT = previous + 0x100
+					start_fw_start_match += 0x100 # Adjust $FPT offset to the next header
+					fpt_count -= 1 # Clevo MERecovery $FPT is ignored when reporting multiple firmware (multi_rgn boolean)
+					
+				# Multiple Backup $FPT header bypass at SPS1/SPS4 (DFLT/FPTB)
+				if variant == "SPS" and fpt_count == 2 and (major == 4 or major == 1) : fpt_count -= 1
+				
+				# Trigger multiple $FPT message after MERecovery/SPS corrections
+				if fpt_count > 1 : multi_rgn = True
+				
 				if variant == "ME" and major == 2 :
 					fpt_start = start_fw_start_match
 					fpt_chk_byte = 0xB
 					fpt_chk_size = 0x20
+					fpt_pre_hdr = None
 				else :
 					fpt_start = start_fw_start_match - 0x10
 					fpt_chk_byte = 0x1B
 					fpt_chk_size = 0x30
+					fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
 				fpt_end = fpt_start + 0x1000 # 4KB size
-
-				# Check $FPT Checksum validity
-				fpt_chk_file = struct.pack("B", reading[fpt_start + fpt_chk_byte])
-				fpt_chk_calc = struct.pack("B", (0x100 - (sum(reading[fpt_start:fpt_start+fpt_chk_size]) - reading[fpt_start + fpt_chk_byte]) & 0xFF) & 0xFF)
-				if param.fpt_chk_print :
-					print("Detected $FPT Checksum: 0x%0.2X" % struct.unpack("b" , fpt_chk_file))
-					print("Expected $FPT Checksum: 0x%0.2X" % struct.unpack("b" , fpt_chk_calc))
-					continue
-				if fpt_chk_calc != fpt_chk_file : fpt_chk_fail = True
-
-				# Additional $FPT header at SPS 1.x firmware at DFLT section
-				if variant == "SPS" and (major == 1 or major == 4) :
-					if fpt_count == 2 : multi_rgn = False
-					fpt_count -= 1
 				
-				# Double $FPT header detection (Clevo MERecovery, 2nd $FPT = 1st $FPT + 0x110)
-				while True :
-					next_is_fpt = reading[fpt_start + 0x110:fpt_start + 0x110 + 4].decode('utf-8', 'ignore') # Check (offset + 0x110) -> (offset + 0x114) content
-					if next_is_fpt == "$FPT" : # Check if there is more than one $FPT headers
-						fpt_start += 0x100  # Adjust offset to the latter found $FPT header
-						if fpt_count > 1 :
-							fpt_count -= 1 # Clevo MERecovery $FPT is ignored when reporting multiple firmware (multi_rgn boolean)
-							if fpt_count <= 1 : multi_rgn = False # Only when 2 $FPT exist (Clevo MERecovery + Normal)
-					else :
-						break
+				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
+				
+				# Check $FPT Checksum validity
+				fpt_chk_file = '0x%0.2X' % fpt_hdr.Checksum
+				fpt_chk_calc = '0x%0.2X' % ((0x100 - (sum(reading[fpt_start:fpt_start+fpt_chk_size]) - reading[fpt_start + fpt_chk_byte]) & 0xFF) & 0xFF)
+				if fpt_chk_calc != fpt_chk_file : fpt_chk_fail = True
+				
+				# Analyze $FPT header
+				fpt_step = start_fw_start_match + 0x20
+				p_max_size = 0xFFFFFFFF
+				p_offset_last = 0x0
+				eng_fw_end, mod_end = (0xFFFFFFFF,)*2 # If not definied later due to bug
+				fpt_part_num = int('%d' % fpt_hdr.NumPartitions)
+
+				for i in range(0, fpt_part_num) :
+					fpt_entry = get_struct(reading, fpt_step, FPT_Entry)
+					
+					p_name = fpt_entry.Name
+					p_owner = fpt_entry.Owner
+					p_offset = fpt_entry.Offset
+					p_size = fpt_entry.Size
+					if p_name in [b'\xE0\x15',b'\xFF\xFF\xFF\xFF',b''] : p_name = '----' # ME8 (E0150020)
+					else : p_name = p_name.decode('utf-8', 'ignore')
+					if p_owner in [b'\xFF\xFF\xFF\xFF',b''] : p_owner = '----' # Missing
+					else : p_owner = p_owner.decode('utf-8', 'ignore')
+					
+					if p_offset in [4294967295,0] : p_offset_print = '----------'
+					else : p_offset_print = '0x%0.8X' % p_offset
+					if p_size in [4294967295,0] : p_size_print = '----------'
+					else : p_size_print = '0x%0.8X' % p_size
+					#print('Name: %-4s Owner: %-4s Offset: %s Size: %s' % (p_name,p_owner,p_offset_print,p_size_print))
+					#if i == fpt_part_num - 1 : print('')
+					
+					if 0 < p_offset < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset + p_size
+					else : eng_fw_end = p_max_size
+					
+					# Store previous partition end before last
+					if p_offset_last < p_offset < p_max_size :
+						p_offset_last = p_offset
+						p_size_last = p_size
+						p_end_last = eng_fw_end
+					
+					fpt_step += 0x20
+				
+				# Last/Uncharted parition scanning code inspired by Lordkag's UEFIStrip
+				# ME2-ME6 don't have size for last partition, scan its submodules
+				if p_end_last == p_max_size :
+					p_offset_last += fpt_start
+					mn2_hdr = get_struct(reading, p_offset_last, MN2_Manifest)
+					man_tag = mn2_hdr.Tag
+					man_num = mn2_hdr.NumModules
+					man_len = mn2_hdr.HeaderLength * 4
+					mod_start = p_offset_last + man_len + 0xC
+					mod_end_max = 0
+					mod_size_all = 0
+					mod_size = 0
+					
+					# ME6
+					if man_tag == b'$MN2' :
+
+						for _ in range(0, man_num) :
+							mme_mod = get_struct(reading, mod_start, MME_Header_New)
+							
+							mod_code_start = mme_mod.Offset_MN2
+							mod_size_comp = mme_mod.SizeComp
+							mod_size_uncomp = mme_mod.SizeUncomp
+							
+							if mod_size_comp > 0 : mod_size = mod_size_comp
+							elif mod_size_comp == 0 : mod_size = mod_size_uncomp
+							
+							mod_end = p_offset_last + mod_code_start + mod_size
+							
+							if mod_end > mod_end_max : mod_end_max = mod_end # In case modules are not offset sorted
+							
+							mod_start += 0x60
+					
+					# ME2-5
+					elif man_tag == b'$MAN' :
+						
+						for _ in range(0, man_num) :
+							mme_mod = get_struct(reading, mod_start, MME_Header_Old)
+							
+							mod_size_all += mme_mod.Size # Append all $MOD ($MME Code) sizes
+							mod_end_max = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU + all $MOD sizes
+							mod_end = mod_end_max
+							
+							mod_start += 0x50
+					
+					# For Engine alignment & size, remove fpt_start (included in mod_end_max < mod_end < p_offset_last)
+					mod_align = (mod_end_max - fpt_start) % 0x1000 # 4K alignment on Engine size only
+					
+					if mod_align > 0 : eng_fw_end = mod_end + 0x1000 - mod_align - fpt_start
+					else : eng_fw_end = mod_end
+				
+				# Last $FPT entry has size, scan for uncharted partitions
+				else :
+					
+					# ME8+ WCOD/LOCL not in $FPT, ME7 & TXE1-2 & SPS1-3 end at last $FPT entry
+					while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MN2' :
+						
+						mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
+						man_num = mn2_hdr.NumModules
+						man_len = mn2_hdr.HeaderLength * 4
+						mod_start = p_end_last + man_len + 0xC
+						mcp_start = mod_start + man_num * 0x60 + 0x60 # (ME7+ $MME = 0x60, 0x60 padding after last $MME)
+						
+						mcp_mod = get_struct(reading, mcp_start, MCP_Header) # $MCP holds total partition size
+						
+						if mcp_mod.Tag == b'$MCP' : p_end_last += mcp_mod.Offset_MN2 + mcp_mod.CodeSize
+					
+					# ME11+ WCOD/LOCL not in $FPT, TXE3+ end at last $FPT entry
+					while reading[p_end_last:p_end_last + 0x4] == b'$CPD' :
+						
+						cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
+						cpd_num = cpd_hdr.NumModules
+						mn2_start = p_end_last + 0x10 + cpd_num * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
+						
+						mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
+						
+						if mn2_hdr.Tag == b'$MN2' :
+							man_len = mn2_hdr.HeaderLength * 4
+							mn2_hdr_cont = get_struct(reading, mn2_start + man_len, MN2_Manifest_CPD_Cont)
+							
+							if mn2_hdr_cont.PartitionName == cpd_hdr.PartitionName : p_end_last += mn2_hdr_cont.PartitionSize
+					
+					# For Engine alignment & size, no removal of fpt_start (not included in p_end_last)
+					mod_align = p_end_last % 0x1000  # 4K alignment on Engine size only
+					
+					if mod_align > 0 : eng_fw_end = p_end_last + 0x1000 - mod_align
+					else : eng_fw_end = p_end_last
+				
+				eng_size_text = ''
+				file_end = f.seek(0,2)
+				padd_size = file_end - eng_fw_end
+				
+				# Bare Engine Region
+				if fpt_start == 0 :
+					
+					if eng_fw_end > file_end : eng_size_text = col_magenta + 'Warning: Firmware size exceeds file, possible data loss!' + col_end
+					elif eng_fw_end < file_end :
+						if reading[eng_fw_end:eng_fw_end + padd_size] == padd_size * b'\xFF' :
+							# Extra padding is clear
+							eng_size_text = col_magenta + 'Warning: File size exceeds firmware, unneeded padding!' + col_end
+						else :
+							# Extra padding has data
+							eng_size_text = col_magenta + 'Warning: File size exceeds firmware, dirty padding!' + col_end
+				
+				#if file_end != eng_fw_end : print(col_red + 'Debug --> Wrong region size!\n' + col_end) # Region only
+				
+				#print('Debug --> Engine start = 0x%0.8X' % fpt_start)
+				#print('Debug --> Engine size  = 0x%0.8X' % eng_fw_end)
+				#print('Debug --> Engine end   = 0x%0.8X\n' % (eng_fw_end + fpt_start))
+				
 			else :
 				fw_type = "Update" # No Region detected, Update
 			
@@ -1000,11 +1343,13 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True
 			
 			# Detect Firmware Release (Production, Pre-Production, ROM-Bypass, Other)
-			rel_byte = ord(chr(int((binascii.b2a_hex(reading[start_man_match - 0xC:start_man_match - 0xB])), 16))) # MSB of Release Byte
-			rel_bit = rel_byte & 0x80 # Int from only the same bits between two bytes (C0 = 1100 0000, 80 = 1000 0000 ==> 80 = 1000 0000 ==> PRE/BYP)
+			rel_signed = ["Production", "Debug"][(mn2_ftpr_hdr.Flags >> 31) & 1] # MSB result as list slice
+			rel_flag = ["Production", "Pre-Production"][(mn2_ftpr_hdr.Flags >> 30) & 1]
+			
 			if rgn_exist : # Check for ROM-Bypass entry at $FPT
-				if (variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3) or (variant == "SPS" and major >= 4) :
-					byp_match = binascii.b2a_hex(reading[fpt_start:fpt_start + 0x4]).decode('utf-8').upper() # 0x0 - 0x4 = ROMB Address
+				if fpt_pre_hdr is not None and ((variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3) or (variant == "SPS" and major >= 4)) :
+					# noinspection PyUnboundLocalVariable
+					byp_match = '%0.8X' % fpt_pre_hdr.ROMB_Addr_x86
 				else :
 					# noinspection PyUnboundLocalVariable
 					byp_match = (re.compile(br'\x52\x4F\x4D\x42')).search(reading[fpt_start:fpt_end]) # ROMB detection
@@ -1018,10 +1363,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if me_rec_ffs : release = "ME Recovery Module"
 			elif jhi_warn : release = "IPT-DAL Applet Module"
 			elif byp_match not in [None,'00000000'] : release = "ROM-Bypass"
-			elif rel_bit == 0 : release = "Production"
-			elif rel_bit != 0 : release = "Pre-Production"
-			
-			if rel_byte not in [0,64,128,192] : # 0x00 --> 0, 0x40 --> 64, 0x80 --> 128, 0xC0 --> 192 in ASCII
+			elif rel_signed == "Production" : release = "Production"
+			elif rel_signed == "Debug" : release = "Pre-Production"
+			else :
 				release = col_red + "Error" + col_end + ", unknown firmware release!" + col_red + " *" + col_end
 				err_rep += 1
 				err_stor.append(release)
@@ -1503,7 +1847,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					err_stor.append(sku)
 					
 				# ME8-Only Fix: SVN location
-				svn = int(binascii.b2a_hex( (reading[start_man_match + 0x15:start_man_match + 0x16]) [::-1]), 16)
+				# noinspection PyUnboundLocalVariable
+				svn = mn2_ftpr_hdr.SVN_8
+				#svn = int(binascii.b2a_hex( (reading[start_man_match + 0x15:start_man_match + 0x16]) [::-1]), 16)
 			
 			if major == 9 :
 				if minor == 0 :
@@ -1750,7 +2096,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				# Adjust PCH Stepping if not from DB
 				if sku_stp == 'NaN' :
-					if minor == 0 and hotfix > 0 :
+					if (minor == 0 or minor == 5 or minor == 6) and hotfix > 0 :
 						if ' LP' in sku : sku_stp = 'C0'
 						elif ' H' in sku : sku_stp = 'D0'
 				
@@ -2083,7 +2429,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				err_rep += 1
 				err_stor.append(sku)
 		
-		# Region detection (Stock or Extracted)
+		# Region Type detection (Stock or Extracted)
 		if rgn_exist : # SPS 1-3 have their own Firmware Types
 			if variant == "SPS" and major < 4 :
 				fw_type = "Region" # SPS is built manually so EXTR
@@ -2118,20 +2464,22 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						else :
 							fw_type = "Region, Stock"
 			elif (variant == "ME" and major >=8) or (variant == "TXE") or (variant == "SPS" and major > 3) :
-				fitc_exist = reading[fpt_start + 0x28:fpt_start + 0x30]
-				fitc_exist = binascii.b2a_hex(fitc_exist).decode('utf-8').upper() # Hex value with Little Endianess
 				# Check 1, FITC Version
-				if fitc_exist == "0000000000000000" or fitc_exist == "FFFFFFFFFFFFFFFF" : # 00/FF --> clean ME/TXE
+				# noinspection PyUnboundLocalVariable
+				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
+				
+				if fpt_hdr.FitBuild == 0 or fpt_hdr.FitBuild == 65535 : # 0000/FFFF --> clean ME/TXE
 					fw_type = "Region, Stock"
 					# Check 2, FOVD section
 					if not fovd_clean("new") : fw_type = "Region, Extracted"
 				else :
+					# Get FIT/FITC version used to build the image
 					fitc_ver_found = True
-					fw_type = "Region, Extracted" # Exact version of FITC used to create the image can be found
-					fitc_major = int(binascii.b2a_hex( (reading[fpt_start + 0x28:fpt_start + 0x2A]) [::-1]), 16)
-					fitc_minor = int(binascii.b2a_hex( (reading[fpt_start + 0x2A:fpt_start + 0x2C]) [::-1]), 16)
-					fitc_hotfix = int(binascii.b2a_hex( (reading[fpt_start + 0x2C:fpt_start + 0x2E]) [::-1]), 16)
-					fitc_build = int(binascii.b2a_hex( (reading[fpt_start + 0x2E:fpt_start + 0x30]) [::-1]), 16)
+					fw_type = "Region, Extracted"
+					fitc_major = fpt_hdr.FitMajor
+					fitc_minor = fpt_hdr.FitMinor
+					fitc_hotfix = fpt_hdr.FitHotfix
+					fitc_build = fpt_hdr.FitBuild
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
 		locl_start = (re.compile(br'\x24\x43\x50\x44........\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
@@ -2286,8 +2634,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					name_db = "%s_%s_%s_%s_%s" % (fw_ver(), sku_db, rel_db, type_db, rsa_hash)
 				
 			if fuj_rgn_exist : name_db = "%s_UMEM" % name_db
-			
-			date_extr = ("%s-%s-%s" % (date[-2:], date[4:6], date[:4])) # format is dd-mm-yyyy
+	
+			date_extr = date.replace('/','-')
 			
 			if me_rec_ffs : print("%s %s_NaN_REC %s NaN %s" % (variant, fw_ver(), fw_ver(), date_extr))
 			elif jhi_warn : print("%s %s_NaN_IPT %s NaN %s" % (variant, fw_ver(), fw_ver(), date_extr))
@@ -2306,8 +2654,9 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if opr_mode != "NaN" : print("Mode:     %s" % opr_mode)
 			if err_sps_sku != "" : print("SKU:      %s" % sku) # only if SKU is not "standard"
 			if major == 4 and vcn > 0 : print("VCN:      %s" % vcn) # Only for SPS4 (new format-based)
-			print("Date:     %s" % date_print)
+			print("Date:     %s" % date)
 			if fitc_ver_found : print("FIT Ver:  %s.%s.%s.%s" % ("{0:02d}".format(fitc_major), "{0:02d}".format(fitc_minor), "{0:02d}".format(fitc_hotfix), "{0:03d}".format(fitc_build)))
+			if rgn_exist : print('Size:     0x%X' % eng_fw_end)
 			#if upd_rslt != "" : print(upd_rslt)
 		elif not param.print_msg :
 			print("Firmware: Intel %s" % variant)
@@ -2339,7 +2688,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 
 				if pvpc != "NaN" and wcod_found is False : print("PV:       %s" % pvpc)
 				
-				print("Date:     %s" % date_print)
+				print("Date:     %s" % date)
 				
 				if ((variant == "ME" and major <= 10) or variant == "TXE") and fitc_ver_found:
 					print("FITC Ver: %s.%s.%s.%s" % (fitc_major, fitc_minor, fitc_hotfix, fitc_build))
@@ -2348,6 +2697,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				if fit_platform != "NaN" :
 					if variant == "ME" and major == 11 : print("FIT SKU:  %s" % fit_platform)
+				
+				if rgn_exist : print('Size:     0x%X' % eng_fw_end)
 				
 				if platform != "NaN" : print("Platform: %s" % platform)
 				
@@ -2368,11 +2719,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						print("Blist 2:  Empty")
 			elif me_rec_ffs :
 				err_rep = 0
-				print("Date:     %s" % date_print)
+				print("Date:     %s" % date)
 				print("GUID:     821D110C-D0A3-4CF7-AEF3-E28088491704")
 			elif jhi_warn :
 				err_rep = 0
-				print("Date:     %s" % date_print)
+				print("Date:     %s" % date)
 				
 		# General MEA Messages (must be Errors > Warnings > Notes)
 		if unk_major :
@@ -2441,16 +2792,26 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			err_stor.append(col_red + "\n* Please report this issue!" + col_end)
 
+		if eng_size_text != '' :
+			if not param.print_msg:
+				print("")
+				print(eng_size_text)
+			
+			if (not err_stor) and (not warn_stor) and (not note_stor):
+				note_stor.append(eng_size_text)
+			else:
+				note_stor.append('\n%s' % eng_size_text)
+
 		if fpt_chk_fail :
 
 			if not param.print_msg:
 				print("")
-				print(col_magenta + "Warning: Corrupted $FPT header, wrong checksum!" + col_end)
+				print(col_magenta + "Warning: Wrong $FPT checksum %s, expected %s!" % (fpt_chk_file,fpt_chk_calc) + col_end)
 
 			if (not err_stor) and (not warn_stor) and (not note_stor):
-				note_stor.append(col_magenta + "Warning: Corrupted $FPT header, wrong checksum!" + col_end)
+				note_stor.append(col_magenta + "Warning: Wrong $FPT checksum %s, expected %s!" % (fpt_chk_file,fpt_chk_calc) + col_end)
 			else:
-				note_stor.append(col_magenta + "\nWarning: Corrupted $FPT header, wrong checksum!" + col_end)
+				note_stor.append(col_magenta + "\nWarning: Wrong $FPT checksum %s, expected %s!" % (fpt_chk_file,fpt_chk_calc) + col_end)
 
 		if fuj_rgn_exist :
 
