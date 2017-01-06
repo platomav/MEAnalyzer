@@ -1,3 +1,31 @@
+v1.8.0
+
+Added Engine firmware size validation and display
+Added ME 11.x FIT SKU detection (11.0 - 11.6)
+Added $FPT header checksum validation check
+Added $FPT Entry Counter validation check
+Added Manifest detection from $FPT directly
+Added parameter to display $FPT header details
+Added early support for TXE 3.x APL firmware
+Added ME 11.x Flash Descriptor EC lock detection
+Added info to fix FWUpdate-buggy ME 11.x images
+Added SPS 3.x $FPT checksum validation check
+Added support for ME2-ME6 SPI Flash Descriptor
+Added support for ME 6.x ROM-Bypass firmware
+Improved detection & analysis of $FPT header
+Improved VCN detection of post-SKL ME,TXE firmware
+Improved Engine Release detection (PRD/PRE/BYP)
+Fixed wrong Engine $FPT selection when multiple exist
+Fixed wrong error messages at special TXE 1.x images
+Fixed various code issues and errors under rare cases
+Removed irrelevant info shown at Partial Update images
+Removed option to extract Dell HDR RBU ImagME Regions
+Removed option to print whole DB without SHA1 hashes
+Removed option to encode all textual output to Unicode
+MEA now pauses automatically at unexpected exceptions
+Various code optimizations and performance improvements
+Updated Engine Firmware Repository Database to r75
+
 v1.6.8
 
 Added support for TXE 2.1 firmware
@@ -213,20 +241,12 @@ Updated Engine Firmware Repository Database to r35
 v1.3.13
 
 Fixed issue that caused Multi Drop to rename wrong files
-Adjusted latest ME 11.0 CON H SKU to 11.0.0.1194
-Adjusted latest ME 11.0 CON LP SKU to 11.0.0.1191
-Adjusted latest ME 11.0 COR H SKU to 11.0.0.1191
-Adjusted latest ME 10.0 5MB SKU to 10.0.47.1006
-Adjusted latest ME 9.5 1.5MB SKU to 9.5.55.1948
-Adjusted latest ME 9.1 1.5MB SKU to 9.1.37.1002
 Updated pre-fixed detection of ME 11.0 Firmware SKUs
 Updated Engine Firmware Repository Database to r34
 
 v1.3.12
 
 Added Fujitsu non-Compressed UMEM RGN/UPD detection
-Adjusted latest ME 11.0 CON H SKU to 11.0.0.1191
-Adjusted latest SPS 4 Sub-SKU 0 to 04.00.03.075.0
 Updated pre-fixed detection of ME 11.0 Firmware SKUs
 Updated Engine Firmware Repository Database to r33
 
@@ -235,8 +255,6 @@ v1.3.11
 Merged MEA & MEInfo into MEA (-info to view it)
 Fixed issue that triggered -h parameter by accident
 Fixed issue that caused -extr to report images as UMEM
-Adjusted latest ME 11.0 CON LP SKU to 11.0.0.1180
-Adjusted latest SPS 4 Sub-SKU 0 to 04.00.03.061.0
 Updated pre-fixed detection of ME 11.0 Firmware SKUs
 Updated Engine Firmware Repository Database to r32
 
@@ -247,20 +265,12 @@ Added SPS 1 OPR/REC firmware detection & support
 Added MEA Help/Usage Screen (-? or -h to view it)
 Improved Fujitsu Compressed UMEM SPI/RGN detection
 SPS 1-4 OPR/REC images won't be reported as new if EXTR exists
-Adjusted latest ME 11.0 COR LP SKU to 11.0.0.1180
-Adjusted latest ME 11.0 CON LP SKU to 11.0.0.1173
-Adjusted latest SPS 4 Sub-SKU 0 to 04.00.03.036.0
-Adjusted latest SPS 3 Sub-SKU 1 to 03.00.07.168.1
 Updated pre-fixed detection of ME 11.0 Firmware SKUs
 Updated Engine Firmware Repository Database to r31
 
 v1.3.8
 
 ME 6.0 IGN UPD images won't be reported as new if RGN/EXTR exists
-Adjusted latest ME 11.0 CON/COR H SKU to 11.0.0.1180
-Adjusted latest ME 11.0 COR LP SKU to 11.0.0.1173
-Adjusted latest ME 9.5 1.5MB/5MB SKU to 9.5.52.1940
-Adjusted latest ME 6 1.5MB UPD firmware to 6.1.31.1075
 Updated pre-fixed detection of ME 11.0 Firmware SKUs
 Updated Engine Firmware Repository Database to r30
 
@@ -269,20 +279,12 @@ v1.3.7
 The Updated entry is now shown for all Production images
 MEA Info v0.4 is now a standalone executable window
 Removed MEA Menu mode (use Drop or ME Info instead)
-Adjusted latest ME 11.0 CON H SKU to 11.0.0.1178
-Adjusted latest ME 11.0 COR H SKU to 11.0.0.1178
-Adjusted latest ME 10.0 1.5MB SKU to 10.0.47.1006
-Adjusted latest TXE 1.2 1.375MB BYT-T SKU to 1.2.1.1153
 Updated Engine Firmware Repository Database to r28
 
 v1.3.6
 
 Added support for ME 10.0 1.5MB Apple MAC firmware SKU
 Improved ME 11.0 PCH-H/LP No Emulation FIT SKU detection
-Adjusted latest ME 11.0 CON H SKU to 11.0.0.1173
-Adjusted latest ME 10.0 1.5MB Apple MAC SKU to 10.0.35.1012
-Adjusted latest ME 9.5 1.5MB Apple MAC SKU to 9.5.4.1856
-Adjusted latest TXE 2.0 1.375MB SKU to 2.0.1.2084
 Updated pre-fixed detection of ME 11.0 CON/COR H/LP SKUs
 Updated pre-fixed detection of TXE 2.x BSW & CHT platforms
 Updated Engine Firmware Repository Database to r27
@@ -293,8 +295,6 @@ Added proper FWUpdate OEM ID detection for Skylake
 Added display of ME 11.0 Skylake Stepping/Revision (table-based)
 Fixed "UEFIFind.exe file not found" error at UBU & Extractor
 ME7 PRE/BYP UPD images won't be reported as new if RGN/EXTR exists
-Adjusted latest ME 11.0 CON LP SKU to 11.0.0.1171
-Adjusted latest ME 11.0 COR LP SKU to 11.0.0.1169
 Updated pre-fixed detection of ME 11.0 CON/COR H/LP SKUs
 Updated Engine Firmware Repository Database to r26
 
@@ -302,10 +302,6 @@ v1.3.4
 
 Added ME 11.0 Skylake firmware detection at GUID DE90FFA8
 Added Dell Firmware Update OEM ID detection
-Adjusted latest ME 11.0 COR H SKU to 11.0.0.1171
-Adjusted latest ME 11.0 CON LP SKU to 11.0.0.1168
-Adjusted latest ME 11.0 COR LP SKU to 11.0.0.1166
-Adjusted latest ME 10.0 1.5MB SKU to 10.0.46.1002
 Updated pre-fixed detection of ME 11.0 CON/COR H/LP SKUs
 UEFIFind v0.3.4 by CodeRush is now included at MEA for Skylake
 Updated Engine Firmware Repository Database to r25
@@ -330,21 +326,6 @@ Improved Multi Drop functionality to not delete but rename known files
 Improved SPI Flash Descriptor Access Region detection
 Improved User Interface & Messages for easier understanding
 Improved MEA Info v0.3 with better Error Handling & Messages
-Adjusted latest ME 11.0 CON H SKU to 11.0.0.1171
-Adjusted latest ME 11.0 CON LP SKU to 11.0.0.1160
-Adjusted latest ME 11.0 COR H SKU to 11.0.0.1168
-Adjusted latest ME 11.0 COR LP SKU to 11.0.0.1122
-Adjusted latest ME 10.0 1.5MB SKU to 10.0.45.1024
-Adjusted latest ME 10.0 5MB SKU to 10.0.46.1002
-Adjusted latest ME 9.1 1.5MB SKU to 9.1.32.1002
-Adjusted latest ME 9.1 5MB SKU to 9.1.32.1002
-Adjusted latest ME 8 1.5MB SKU to 8.1.65.1586
-Adjusted latest ME 8 5MB SKU to 8.1.65.1586
-Adjusted latest ME 7 1.5MB SKU to 7.1.80.1214
-Adjusted latest TXE 2.0 1.375MB SKU to 2.0.0.2077
-Adjusted latest TXE 1.2 1.375MB BYT-MD SKU to 1.2.0.1149
-Adjusted latest TXE 1.1 1.375MB BYT-MD SKU to 1.1.4.1145
-Adjusted latest SPS 3 Sub-SKU 0 to 03.00.07.173.0
 Updated pre-fixed detection of TXE 2.x BSW & CHT platforms
 Updated pre-fixed detection of TXE 1.x BYT-M/D & BYT-I platforms
 Updated Engine Firmware Repository Database to r24
@@ -352,12 +333,6 @@ Updated Engine Firmware Repository Database to r24
 v1.2.5
 
 ME >= 8 and TXE UPD images won't be reported as new if RGN/EXTR exists
-Adjusted latest ME 10.0 1.5MB SKU to 10.0.45.1022
-Adjusted latest ME 9.1 1.5MB SKU to 9.1.30.1008
-Adjusted latest ME 9.1 5MB SKU to 9.1.30.1008
-Adjusted latest TXE 1.1 1.375MB BYT-MD SKU to 1.1.3.1133
-Adjusted latest TXE 1.0 3MB BYT-I SKU to 1.0.7.1133
-Adjusted latest SPS 3 Sub-SKU 0 to 03.00.07.171.0
 Updated pre-fixed detection of TXE 1.x BYT-M/D & BYT-I platforms
 Updated Engine Firmware Repository Database to r21
 
@@ -365,12 +340,10 @@ v1.2.2
 
 Improved Multi-Drop to not delete valid images with errors
 Added ME 4 Rom-Bypass SKU & UPD firmware support
-Adjusted latest SPS 2 Sub-SKU 0 to 02.03.00.398.0
 Updated Engine Firmware Repository Database to r18
 
 v1.2.1
 
-Adjusted latest TXE 1.0 1.25MB BYT-I SKU to 1.0.2.1067
 Updated pre-fixed detection of TXE 1.x BYT-M/D & BYT-I platforms
 Added ME 7.1.22.1165 firmware SKU support as Patsburg (PBG)
 Updated Engine Firmware Repository Database to r17
@@ -386,14 +359,6 @@ Added proper $MN2/$MAN detection based on Intel DEV_ID
 Added detection for all the latest BYT-M/D & BYT-I TXE 1.x firmware
 Added pre-fixed detection of TXE 1.x BYT-M/D & BYT-I platforms
 Added pre-fixed detection of TXE 2.0 Braswell & CHT platforms
-Adjusted latest ME 11 Consumer (1.5MB) SKU to 11.0.0.1131
-Adjusted latest ME 9.1 5MB SKU to 9.1.26.1006
-Adjusted latest TXE 1.1 1.375MB BYT-M/D SKU to 1.1.2.1120
-Adjusted latest TXE 1.1 1.375MB BYT-I SKU to 1.1.1.1130
-Adjusted latest TXE 1.0 1.25MB BYT-M/D SKU to 1.0.5.1120
-Adjusted latest TXE 1.0 3MB BYT-M/D SKU to 1.0.5.1120
-Adjusted latest TXE 1.0 3MB BYT-I SKU to 1.0.6.1120
-Adjusted latest SPS 2 Sub-SKU 0 to 02.03.00.251.0
 Removed all ME/AMT PCH/ICH detection completely
 Fixed TXE 2.0 (Braswell/Cherry Trail) SoC detection
 Fixed non-detection of newer SPS 1 - 3 firmware versions
@@ -418,12 +383,6 @@ v1.1.0
 Added detection & support for TXE 2.0 (Braswell/Cherry Trail) 1.375MB firmware
 Added early detection & support for ME 1.x firmware
 Added detection without support for an unknown ME5 SKU
-Adjusted latest ME 9.1 1.5MB firmware to 9.1.26.1006
-Adjusted latest ME 6 1.5MB UPD firmware to 6.0.40.1215
-Adjusted latest ME 1.x firmware to 1.4.3
-Adjusted latest TXE 2.0 1.375MB firmware to 2.0.0.2060
-Adjusted latest SPS 2 Sub-SKU 1 firmware to 02.03.00.398.1
-Adjusted latest SPS 2 Sub-SKU 0 firmware to 02.02.00.049.0
 Fixed wrong firmware SVN detection for ME 9.x and up
 Fixed wrong firmware release detection (Rom-Bypass) on some SPI images
 Fixed wrong firmware type detection (SPS) on some SPI images
