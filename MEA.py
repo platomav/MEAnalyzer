@@ -4,7 +4,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.8.0'
+title = 'ME Analyzer v1.8.1'
 
 import os
 import re
@@ -39,9 +39,7 @@ class MEA_Param :
 	def __init__(self, source) :
 	
 		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-adir','-hid','-aecho','-eker',
-					'-dker','-pdb','-enuf','-dbname','-mass','-dfpt','-disuf']
-		
-		# -disuf is removed, temporarily ignored via param.all until UEFIStrip adjusts
+					'-dker','-pdb','-enuf','-dbname','-mass','-dfpt']
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -87,7 +85,7 @@ class MEA_Param :
 class FPT_Pre_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
-		("ROMB_Addr_x86",	uint32_t),		# 0x00 (x86+)
+		("ROMB_Instr_0",	uint32_t),		# 0x00 (SPS1, x86 ROMB Instruction 0)
 		("Unknown04_08",	uint32_t),		# 0x04 (SPS1)
 		("Unknown08_0C",	uint32_t),		# 0x08 (SPS1)
 		("Unknown0C_10",	uint32_t),		# 0x0C (SPS1)
@@ -381,10 +379,10 @@ def check_upd(key) :
 	fw_db.close()
 	if upd_key_found : return vlp[0],vlp[1],vlp[2],vlp[3]
 	else : return 0,0,0,0
-		
-def str_reverse_as_bytes(input_var) :
-	# Splits the string into pairs, reverses them and then merge it back together (ABCD --> AB CD --> CD AB --> CDAB)
-	return "".join(reversed([input_var[i:i+2] for i in range(0, len(input_var), 2)]))
+
+# Split & space bytes at every 2 characters
+def str_split_as_bytes(input_bytes) :
+	return ' '.join([input_bytes[i:i + 2] for i in range(0, len(input_bytes), 2)])
 
 # General MEA Messages
 def gen_msg(msg_type,msg,command) :
@@ -549,21 +547,35 @@ def krod_anl() :
 		if me11_sku_ranges :
 			(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Set last KROD starting & ending offsets
 			
-			# OEMID: Checks only first two parts to avoid some unknown data before the other three parts
-			oemid_p1a = reading[start_sku_match + 0x1D : start_sku_match + 0x21] # 4 bytes in LE
-			oemid_p1b = reading[start_sku_match + 0x15 : start_sku_match + 0x19] # 4 bytes in LE
-			oemid_p2a = reading[start_sku_match + 0x21 : start_sku_match + 0x23] # 2 bytes in LE
-			oemid_p2b = reading[start_sku_match + 0x19 : start_sku_match + 0x1B] # 2 bytes in LE
-			oemid_p1a = str_reverse_as_bytes(binascii.b2a_hex(oemid_p1a).decode('utf-8').upper())
-			oemid_p1b = str_reverse_as_bytes(binascii.b2a_hex(oemid_p1b).decode('utf-8').upper())
-			oemid_p2a = str_reverse_as_bytes(binascii.b2a_hex(oemid_p2a).decode('utf-8').upper())
-			oemid_p2b = str_reverse_as_bytes(binascii.b2a_hex(oemid_p2b).decode('utf-8').upper())
-			oemid_a = "%s-%s" % (oemid_p1a, oemid_p2a)
-			oemid_b = "%s-%s" % (oemid_p1b, oemid_p2b)
-			if oemid_a == "4C656E6F-766F" or oemid_b == "4C656E6F-766F" : uuid_found = "Lenovo" # 4C656E6F-766F-0000-0000-000000000000
-			elif oemid_a == "00000406-0000" or oemid_b == "00000406-0000" : uuid_found = "Lenovo" # 00000406-0000-0000-0000-000000000000
-			elif oemid_a == "00000405-0000" or oemid_b == "00000405-0000" : uuid_found = "Lenovo" # 00000405-0000-0000-0000-000000000000
-			elif oemid_a == "68853622-EED3" or oemid_b == "68853622-EED3" : uuid_found = "Dell" # 68853622-EED3-4E83-8A86-6CDE315F6B78
+			# ChipsetInitBinary example: Skylake_SPT_H_ChipsetInit_Dx_V49 --> 147.49 (?)
+			# PCH H Bx is signified by 128/129.xx versions (128.07, 129.24)
+			# PCH H Cx is signified by 145.xx versions (145.24, 145.56, 145.62)
+			# PCH H Dx is signified by 147/176.xx versions (147.41, 147.49, 147.52, 176.11 --> 11.6.0.1126 & up)
+			# PCH LP Bx is signified by 128/129.xx versions (128.26, 129.03, 129.24, 129.62)
+			# PCH LP Cx is signified by 130.xx versions (130.49, 130.52)
+			'''
+			pch_init_pat = (re.compile(br'\x28\xA9')).search(reading[start_sku_match:]) # (© detection (very bad pattern)
+			if pch_init_pat is not None:
+				(start_pch_init, end_pch_init) = pch_init_pat.span()
+				pch_init_off = end_pch_init + start_sku_match
+				pch_init_major = int(binascii.b2a_hex(reading[pch_init_off - 0x23:pch_init_off - 0x22]), 16)
+				pch_init_minor = int(binascii.b2a_hex(reading[pch_init_off - 0x24:pch_init_off - 0x23]), 16)
+				pch_init_ver = "%s.%s" % (pch_init_major, pch_init_minor)
+				print(pch_init_ver)
+			'''
+			
+			# FWUpdate OEMID is close to KROD
+			oemid_check = reading[end_sku_match : end_sku_match + 0x30]
+			oemid_check = binascii.b2a_hex(oemid_check).decode('utf-8').upper()
+			oemid_check = str_split_as_bytes(oemid_check)
+			
+			# Checks only first two OEMID parts to avoid possible EFFS 0x40 checksum before the other three
+			if any(id in oemid_check for id in (' 6F 6E 65 4C 6F 76 ', ' 05 04 00 00 00 00 ', ' 06 04 00 00 00 00 ')) :
+				# 4C656E6F-766F-0000-0000-000000000000, 00000405-0000-0000-0000-000000000000, 00000406-0000-0000-0000-000000000000
+				uuid_found = "Lenovo"
+			elif ' 22 36 85 68 D3 EE ' in oemid_check :
+				# 68853622-EED3-4E83-8A86-6CDE315F6B78
+				uuid_found = "Dell"
 			
 			sku_check = krod_fit_sku(start_sku_match)
 			me11_sku_ranges.pop(len(me11_sku_ranges)-1)
@@ -573,7 +585,7 @@ def krod_anl() :
 def krod_fit_sku(start_sku_match) :
 	sku_check = reading[start_sku_match - 0x100 : start_sku_match]
 	sku_check = binascii.b2a_hex(sku_check).decode('utf-8').upper()
-	sku_check = ' '.join([sku_check[i:i+2] for i in range(0, len(sku_check), 2)]) # Split every 2 characters (like Bytes)
+	sku_check = str_split_as_bytes(sku_check)
 	
 	return sku_check
 	
@@ -596,7 +608,7 @@ def db_skl(variant) :
 				if line_parts[3] != "XX" : sku_stp = line_parts[3] # Cel 3 is PCH Stepping
 				if line_parts[4] in ['PDM','NOPDM','UKPDM'] : sku_pdm = line_parts[4] # Cel 4 is PDM
 			elif variant == 'TXE' :
-				if line_parts[1] != "X" : sku_stp = line_parts[1] # Cel 1 is PCH Stepping
+				if line_parts[1] != "XX" : sku_stp = line_parts[1] # Cel 1 is PCH Stepping
 			break # Break loop at 1st rsa_hash match
 	fw_db.close()
 
@@ -619,6 +631,8 @@ def db_pkey() :
 	return pkey_var
 
 def intel_id() :
+	# DEV_ID is not always 8086, will fix when TXE3 support is added
+	# Engine x86 ISHC module can have OEM Signature & DEV_ID at $MN2
 	intel_id = reading[start_man_match - 0xB:start_man_match - 0x9]
 	intel_id = binascii.b2a_hex(intel_id[::-1]).decode('utf-8')
 	if intel_id != "8086" : # Initial Manifest is a false positive
@@ -820,6 +834,8 @@ for file_in in source :
 	fpt_num_fail = False
 	sps3_chk_fail = False
 	fuj_rgn_exist = False
+	fpt_romb_used = False
+	fpt_romb_found = False
 	fitc_ver_found = False
 	fwupd_ishc_bug = False
 	rgn_over_extr_found = False
@@ -1107,15 +1123,19 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if i == fpt_part_num - 1 : print('')
 					
 					# Adjust Manifest Header to Recovery section based on $FPT
-					p_names_store.append(p_name)  # For ME2 CODE after RCVY
+					p_names_store.append(p_name) # For ME2 CODE after RCVY
 					if (p_name == 'CODE' and 'RCVY' not in p_names_store) or p_name in ['RCVY', 'FTPR', 'IGRT'] :
 						rec_rgn_start = start_fw_start_match + p_offset
 						# Only if offset exists at file (counter-example: MERecovery, sole $FPT etc)
 						if rec_rgn_start < file_end : man_match = man_pat.search(reading[rec_rgn_start:])
 						else : rec_rgn_start = 0
 					
-					# Check for FWUpdate ISHC bug compatibility
+					# Check for FWUpdate ISHC bug compatibility (fixed at 11.6.10.1196)
 					if p_name == 'ISHC' and p_offset == 0 and p_size == 0 : fwupd_ishc_bug = True
+					
+					if p_name == 'ROMB' :
+						fpt_romb_found = True
+						if p_offset != 0 and p_size != 0 : fpt_romb_used = True
 					
 					if 0 < p_offset < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset + p_size
 					else : eng_fw_end = p_max_size
@@ -1458,13 +1478,15 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			rel_signed = ["Production", "Debug"][(mn2_ftpr_hdr.Flags >> 31) & 1] # MSB result as list slice
 			rel_flag = ["Production", "Pre-Production"][(mn2_ftpr_hdr.Flags >> 30) & 1]
 			
-			if rgn_exist : # Check for ROM-Bypass entry at $FPT
+			# Check for ROM-Bypass entry at $FPT
+			if rgn_exist and fpt_romb_found :
+				# Pre x86 Engine have ROMB entry at $FPT only when required, covered by fpt_romb_found
+				
 				if fpt_pre_hdr is not None and ((variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3) or (variant == "SPS" and major >= 4)) :
 					# noinspection PyUnboundLocalVariable
-					byp_match = '%0.8X' % fpt_pre_hdr.ROMB_Addr_x86
-				else :
-					# noinspection PyUnboundLocalVariable
-					byp_match = (re.compile(br'\x52\x4F\x4D\x42')).search(reading[fpt_start:fpt_end]) # ROMB detection
+					byp_x86 = fpt_pre_hdr.ROMB_Instr_0 # Check x86 Engine ROM-Bypass Instruction 0
+					if not fpt_romb_used and byp_x86 == 0 : fpt_romb_found = False # x86 Engine ROMB depends on $FPT Offset/Size + Instructions
+				
 			jhi_medal_match = (re.compile(br'\x24\x4D\x44\x4C\x4D\x65\x64\x61\x6C')).search(reading) # TXE IPT-DAL Applet Module Detection
 			if jhi_medal_match is not None :
 				variant = "TXE" # Only TXE? Who cares...
@@ -1474,7 +1496,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			# PRD/PRE/BYP must be after ME-REC/IPT-DAL Module Release Detection
 			if me_rec_ffs : release = "ME Recovery Module"
 			elif jhi_warn : release = "IPT-DAL Applet Module"
-			elif byp_match not in [None,'00000000'] : release = "ROM-Bypass"
+			elif fpt_romb_found : release = "ROM-Bypass"
 			elif rel_signed == "Production" : release = "Production"
 			elif rel_signed == "Debug" : release = "Pre-Production"
 			else :
@@ -2015,7 +2037,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						err_rep += 1
 						err_stor.append(sku)
 					
-					# Ignore: 9.6.x (10.0 Alpha)
+					# Ignore: 9.6.x (Intel Harris Beach Ultrabook, HSW developer preview)
+					# https://bugs.freedesktop.org/show_bug.cgi?id=90002
 					if minor == 6 : upd_found = True
 					
 					platform = "LynxPoint LP"
@@ -2149,32 +2172,21 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif any(s in sku_check for s in (' 06 00 00 80 00 ',' 02 B0 02 06 ',' 02 D0 02 06 ')) : fit_platform = "PCH-LP Premium Y KBL"
 						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "SPT-LP Base U"
 						elif me11_sku_ranges :
+							print('yes')
 							(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
 							sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
 							me11_sku_ranges.pop(-1) # Remove last SKU range
 							continue # Invoke while, check fit_platform in new sku_check
 						else : break # Could not find FIT SKU at any KROD
-				
+						
 				# 11.0 : Skylake , Sunrise Point
-				if minor == 0 :
-					
-					# Ignore: 11.0.0.7101
-					if hotfix == 0 and build == 7101 : upd_found = True
-					
-					platform = "SPT"
+				if minor == 0 : platform = "SPT"
 				
-				# 11.5 : Kabylake , Sunrise Point
-				elif minor == 5 :
-					
-					platform = "SPT/KBP"
+				# 11.5 : Some weird in-between, dead branch
+				elif minor == 5 : platform = "SPT/KBP"
 				
-				# 11.6 : Kabylake , Union Point
-				elif minor == 6 :
-					
-					# Ignore: 11.6.0.7069
-					if hotfix == 0 and build == 7069 : upd_found = True
-					
-					platform = "SPT/KBP"
+				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
+				elif minor == 6 : platform = "SPT/KBP"
 				
 				# 11.x : Unknown
 				else :
@@ -2198,9 +2210,22 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				else :
 					sku = sku_init + ' ' + pos_sku_ker # SKU retreived from Kernel Analysis
 				
-				# Adjust PCH Stepping if not from DB
-				if sku_stp == 'NaN' :
-					if release == "Production" and (minor == 0 or minor == 5 or minor == 6) and hotfix > 0 :
+				# Adjust PDM status manually from MEA or DB (PDM,NOPDM,UKPDM)
+				# Power Down Mitigation (PDM) seems to be some sort of timer errata
+				# PDM is hardcoded in FTPR > BUP Huffman compressed module
+				# Cannot detect compression patterns in BUP to separate PDM/NOPDM
+				# PDM status can be seen at the LSB of FW Status Register 3
+				# Based on ME 11.6 packages, PDM should be PCH-LP only
+				# Based on DB, PDM was first released with 11.0.0.1183
+				if ' H' in sku : sku_pdm = 'NOPDM'
+				
+				if sku_pdm == 'PDM' : pdm_status = 'Yes'
+				elif sku_pdm == 'NOPDM' : pdm_status = 'No'
+				else : pdm_status = 'Unknown'
+				
+				# Adjust Production PCH Stepping, if not found at DB
+				if sku_stp == 'NaN' and release == 'Production' :
+					if (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158))) or minor in [5,6] :
 						if ' LP' in sku : sku_stp = 'C0'
 						elif ' H' in sku : sku_stp = 'D0'
 				
@@ -2226,13 +2251,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_CORLP' % minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
-				# Adjust PDM status manually from DB (PDM,NOPDM,UKPDM)
-				# PDM is defined in FTPR>BUP module (Huffman, proprietary)
-				# Cannot detect any patterns in BUP to separate PDM/NOPDM yet
-				sku_db += '_%s' % sku_pdm
-				if sku_pdm == 'PDM' : pdm_status = 'Yes'
-				elif sku_pdm == 'NOPDM' : pdm_status = 'No'
-				else : pdm_status = 'Unknown'
+				sku_db += '_%s' % sku_pdm # Append PDM status to DB SKU
 				
 				if ('Error' in sku) or param.me11_ker_disp: me11_ker_anl = True
 				
@@ -2418,24 +2437,21 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				# Cannot detect RGN/EXTR properly at SPI, $FPT missing
 				# RGN from kits have $FPT and are not detected as the fallback "Update" fw_type
-				if fw_type == 'Update' :
-					fw_type = "Unknown"
-					rgn_exist = False
-					fd_lock_state = 0
+				#if fw_type == 'Update' :
+				fw_type = "Unknown"
+				rgn_exist = False
+				fd_lock_state = 0
 				
 				if minor == 0 :
 					
 					db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 					
+					# Adjust SoC Stepping if not from DB
 					if sku_stp == "NaN" :
-						# Adjust SoC Stepping if not from DB
-						if hotfix < 12 :
-							if release == "Production" : sku_stp = 'B' # PRD
-							else : sku_stp = 'A' # PRE, BYP
-						else :
-							sku_db = "X" # No/Single SKU for TXE 3.x, Rev only
-					else :
-						sku_db = sku_stp
+						if release == "Production" : sku_stp = 'Bx' # PRD
+						else : sku_stp = 'Ax' # PRE, BYP
+
+					sku_db = sku_stp # Single/No SKU for TXE3, Rev only
 					
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_30')
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
@@ -2768,7 +2784,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 
 				if ((variant == "ME" and major >= 8) or variant == "TXE") and not wcod_found : print("VCN:      %s" % vcn)
 
-				if variant == "ME" and major == 11 and wcod_found is False :
+				if variant == "ME" and major == 11 and ' LP' in sku and wcod_found is False :
 					# noinspection PyUnboundLocalVariable
 					print("PDM:      %s" % pdm_status)
 
@@ -2842,7 +2858,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		
 		if fuj_rgn_exist : gen_msg(warn_stor, col_magenta + "Warning: Fujitsu Intel Engine Firmware detected!" + col_end, '')
 		
-		if fwupd_ishc_bug : gen_msg(warn_stor, col_magenta + "Warning: Image not FWUpdate usable, at $FPT replace ISHC entry\n	 with 0xFF and fix EntryNum at 0x14 & Checksum at 0x1B!" + col_end, '')
+		if fwupd_ishc_bug and release == 'Production' : gen_msg(warn_stor, col_magenta + "Warning: This firmware requires FWUpdate 11.6.10.1196 or newer!" + col_end, '')
 		
 		if me_rec_ffs or jhi_warn : gen_msg(warn_stor, col_magenta + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_end, 'del')
 			

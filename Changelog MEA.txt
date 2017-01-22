@@ -1,3 +1,11 @@
+v1.8.1
+
+Improved ME 11.x PRD PCH Revision adjustment (D0,C0)
+Improved ME 11.x Power Down Mitigation (PDM) detection
+Improved ME 11.x ROM-Bypass Release detection
+Improved ME 11.x FWUpdate OEMID detection
+Updated Engine Firmware Repository Database to r76
+
 v1.8.0
 
 Added Engine firmware size validation and display
