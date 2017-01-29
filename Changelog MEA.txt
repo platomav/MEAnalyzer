@@ -1,3 +1,9 @@
+v1.8.2
+
+PDM is now only shown at ME 11.0 PCH-LP firmware
+Improved MCP Header structure, added Offset_Part_FPT
+Updated Engine Firmware Repository Database to r77
+
 v1.8.1
 
 Improved ME 11.x PRD PCH Revision adjustment (D0,C0)

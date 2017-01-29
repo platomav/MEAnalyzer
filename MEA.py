@@ -4,7 +4,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.8.1'
+title = 'ME Analyzer v1.8.2'
 
 import os
 import re
@@ -220,13 +220,13 @@ class MCP_Header(ctypes.LittleEndianStructure) :
 		("Tag",				char*4),		# 0x00
 		("HeaderSize",		uint32_t),		# 0x04 (*4)
 		("CodeSize",		uint32_t),		# 0x08
-		("Offset_MN2",		uint32_t),		# 0x0C (from $MN2)
-		("Unknown10_14",	uint32_t),  	# 0x10
+		("Offset_Code_MN2",	uint32_t),		# 0x0C (Code start from $MN2)
+		("Offset_Part_FPT",	uint32_t),  	# 0x10 (Partition start from $FPT)
 		("Hash",			uint8_t*32),	# 0x14
-		("Unknown34_38", 	uint32_t),  	# 0x34
-		("Unknown38_3C", 	uint32_t),  	# 0x38
-		("Unknown3C_40", 	uint32_t),  	# 0x3C
-		("Unknown40_44", 	uint32_t),  	# 0x40
+		("Unknown34_38", 	uint32_t),  	# 0x34 (00000100)
+		("Unknown38_3C", 	uint32_t),  	# 0x38 (08000000)
+		("Unknown3C_40", 	uint32_t),  	# 0x3C (01000000)
+		("Unknown40_44", 	uint32_t),  	# 0x40 (01000000)
 		# 0x44
 	]
 	
@@ -1348,7 +1348,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							mcp_mod = get_struct(reading, mcp_start, MCP_Header) # $MCP holds total partition size
 						
 							if mcp_mod.Tag == b'$MCP' : # Sanity check
-								p_end_last += mcp_mod.Offset_MN2 + mcp_mod.CodeSize
+								p_end_last += mcp_mod.Offset_Code_MN2 + mcp_mod.CodeSize
 							else :
 								break # main "while" loop
 						else :
@@ -2172,27 +2172,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						elif any(s in sku_check for s in (' 06 00 00 80 00 ',' 02 B0 02 06 ',' 02 D0 02 06 ')) : fit_platform = "PCH-LP Premium Y KBL"
 						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "SPT-LP Base U"
 						elif me11_sku_ranges :
-							print('yes')
 							(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
 							sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
 							me11_sku_ranges.pop(-1) # Remove last SKU range
 							continue # Invoke while, check fit_platform in new sku_check
 						else : break # Could not find FIT SKU at any KROD
-						
-				# 11.0 : Skylake , Sunrise Point
-				if minor == 0 : platform = "SPT"
-				
-				# 11.5 : Some weird in-between, dead branch
-				elif minor == 5 : platform = "SPT/KBP"
-				
-				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
-				elif minor == 6 : platform = "SPT/KBP"
-				
-				# 11.x : Unknown
-				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 11.x Minor version!" + col_red + " *" + col_end
-					err_rep += 1
-					err_stor.append(sku)
 				
 				if '-LP' in fit_platform : pos_sku_fit = "LP"
 				elif '-H' in fit_platform : pos_sku_fit = "H"
@@ -2209,19 +2193,6 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						pass # SKU retreived from manual DB entry
 				else :
 					sku = sku_init + ' ' + pos_sku_ker # SKU retreived from Kernel Analysis
-				
-				# Adjust PDM status manually from MEA or DB (PDM,NOPDM,UKPDM)
-				# Power Down Mitigation (PDM) seems to be some sort of timer errata
-				# PDM is hardcoded in FTPR > BUP Huffman compressed module
-				# Cannot detect compression patterns in BUP to separate PDM/NOPDM
-				# PDM status can be seen at the LSB of FW Status Register 3
-				# Based on ME 11.6 packages, PDM should be PCH-LP only
-				# Based on DB, PDM was first released with 11.0.0.1183
-				if ' H' in sku : sku_pdm = 'NOPDM'
-				
-				if sku_pdm == 'PDM' : pdm_status = 'Yes'
-				elif sku_pdm == 'NOPDM' : pdm_status = 'No'
-				else : pdm_status = 'Unknown'
 				
 				# Adjust Production PCH Stepping, if not found at DB
 				if sku_stp == 'NaN' and release == 'Production' :
@@ -2251,7 +2222,35 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_CORLP' % minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
-				sku_db += '_%s' % sku_pdm # Append PDM status to DB SKU
+				# 11.0 : Skylake , Sunrise Point
+				if minor == 0 :
+					
+					# Power Down Mitigation (PDM) is some 11.0 PCH-LP errata
+					# Hardcoded in FTPR > BUP, first appeared at 11.0.0.1183
+					# Cannot detect compression patterns to separate PDM/NOPDM
+					# PDM status can be seen at LSB of FW Status Register 3
+					if ' H' in sku :
+						pdm_status = 'NaN'
+					else :
+						if sku_pdm == 'PDM' : pdm_status = 'Yes'
+						elif sku_pdm == 'NOPDM' : pdm_status = 'No'
+						else : pdm_status = 'Unknown'
+						
+						sku_db += '_%s' % sku_pdm
+				
+					platform = "SPT"
+				
+				# 11.5 : Some weird in-between, dead branch
+				elif minor == 5 : platform = "SPT/KBP"
+				
+				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
+				elif minor == 6 : platform = "SPT/KBP"
+				
+				# 11.x : Unknown
+				else :
+					sku = col_red + "Error" + col_end + ", unknown ME 11.x Minor version!" + col_red + " *" + col_end
+					err_rep += 1
+					err_stor.append(sku)
 				
 				if ('Error' in sku) or param.me11_ker_disp: me11_ker_anl = True
 				
@@ -2784,7 +2783,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 
 				if ((variant == "ME" and major >= 8) or variant == "TXE") and not wcod_found : print("VCN:      %s" % vcn)
 
-				if variant == "ME" and major == 11 and ' LP' in sku and wcod_found is False :
+				if [variant,major,minor,wcod_found] == ['ME',11,0,False] and pdm_status != 'NaN' :
 					# noinspection PyUnboundLocalVariable
 					print("PDM:      %s" % pdm_status)
 
@@ -2866,7 +2865,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 		if multi_rgn : gen_msg(note_stor, col_yellow + "Note: Multiple (%d) Intel Engine Firmware detected in file!" % fpt_count + col_end, '')
 		
-		if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" : gen_msg(note_stor, col_yellow + "Note: This firmware was not found at the database, please report it!" + col_end, '')
+		if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" : gen_msg(note_stor, col_green + "Note: This firmware was not found at the database, please report it!" + col_end, '')
 		
 		if found_guid != "" : gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
 		
