@@ -4,7 +4,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.8.2'
+title = 'ME Analyzer v1.8.3_1'
 
 import os
 import re
@@ -22,11 +22,11 @@ import win32console
 
 # Initialize and setup Colorama
 colorama.init()
-col_red = colorama.Fore.RED + colorama.Style.BRIGHT
-col_green = colorama.Fore.GREEN + colorama.Style.BRIGHT
-col_yellow = colorama.Fore.YELLOW + colorama.Style.BRIGHT
-col_magenta = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
-col_end = colorama.Fore.RESET + colorama.Style.RESET_ALL
+col_r = colorama.Fore.RED + colorama.Style.BRIGHT
+col_g = colorama.Fore.GREEN + colorama.Style.BRIGHT
+col_y = colorama.Fore.YELLOW + colorama.Style.BRIGHT
+col_m = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
+col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
 
 char = ctypes.c_char
 uint8_t = ctypes.c_ubyte
@@ -267,7 +267,7 @@ def get_struct(str_, off, struct):
 	str_data = str_[off:off + struct_len]
 	fit_len = min(len(str_data), struct_len)
 	
-	if fit_len < struct_len: raise Exception(col_red + "\nError: cannot read %d bytes struct, expected %d!\n" % (fit_len, struct_len) + col_end)
+	if fit_len < struct_len: raise Exception(col_r + "\nError: cannot read %d bytes struct, expected %d!\n" % (fit_len, struct_len) + col_e)
 	
 	ctypes.memmove(ctypes.addressof(my_struct), str_data, fit_len)
 	
@@ -328,9 +328,9 @@ def get_script_dir(follow_symlinks=True) :
 
 # https://stackoverflow.com/a/781074
 def show_exception_and_exit(exc_type, exc_value, tb) :
-	print(col_red + '\nError: MEA just crashed, please report the following:\n')
+	print(col_r + '\nError: MEA just crashed, please report the following:\n')
 	traceback.print_exception(exc_type, exc_value, tb)
-	input(col_end + "\nPress enter to exit")
+	input(col_e + "\nPress enter to exit")
 	colorama.deinit() # Stop Colorama
 	sys.exit(-1)
 
@@ -525,9 +525,9 @@ def ker_anl(fw_type) :
 			with open(mea_dir + "\\" + 'ker_temp.bin', 'w+b') as ker_temp : ker_temp.write(ker_data)
 			if os.path.isfile(mea_dir + "\\" + ker_name) : os.remove(mea_dir + "\\" + ker_name)
 			os.rename(mea_dir + "\\" + 'ker_temp.bin', mea_dir + "\\" + ker_name)
-			print(col_yellow + "Extracted Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_end)
+			print(col_y + "Extracted Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
 		except :
-			print(col_red + "Error: could not extract Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_end)
+			print(col_r + "Error: could not extract Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
 			if os.path.isfile(mea_dir + "\\" + 'ker_temp.bin') : os.remove(mea_dir + "\\" + 'ker_temp.bin')
 		
 		return 'continue'
@@ -636,12 +636,12 @@ def intel_id() :
 	intel_id = reading[start_man_match - 0xB:start_man_match - 0x9]
 	intel_id = binascii.b2a_hex(intel_id[::-1]).decode('utf-8')
 	if intel_id != "8086" : # Initial Manifest is a false positive
-		print(col_red + "Error" + col_end + ": file does not contain Intel Engine firmware!")
+		print(col_r + "Error" + col_e + ": file does not contain Intel Engine firmware!")
 					
 		if param.multi : multi_drop() # Error Message not kept in array to allow param.multi detection
 		else: f.close()
 		
-		if found_guid != "" : gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
+		if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 		
 		if param.ubu_mea_pre : mea_exit(8)
 		else : return 'continue'
@@ -668,9 +668,9 @@ def msg_rep() :
 	elif param.alt_msg_echo and param.hid_find : print("") # When both -hid and -aecho, aecho prefered due to Rule 2
 	
 	if param.hid_find : # Parameter -hid always prints a message whether the error/warning/note arrays are empty or not
-		if me_rec_ffs : print(col_yellow + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver()) + col_end)
-		elif jhi_warn : print(col_yellow + "MEA: Found Intel %s IPT-DAL Module %s_NaN_IPT in file!" % (variant, fw_ver()) + col_end)
-		else : print(col_yellow + "MEA: Found Intel %s Firmware %s in file!" % (variant, name_db) + col_end)
+		if me_rec_ffs : print(col_y + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver()) + col_e)
+		elif jhi_warn : print(col_y + "MEA: Found Intel %s IPT-DAL Module %s_NaN_IPT in file!" % (variant, fw_ver()) + col_e)
+		else : print(col_y + "MEA: Found Intel %s Firmware %s in file!" % (variant, name_db) + col_e)
 		
 		if err_stor or warn_stor or note_stor : print("") # Separates -hid from -msg output (only when messages exist, Rule 1 compliant)
 		
@@ -720,13 +720,13 @@ if not param.skip_intro :
 	
 	if arg_num == 2 :
 		print("Press Enter to skip or input -? to list options\n")
-		print("\nFile:       " + col_green + "%s" % force_ascii(os.path.basename(sys.argv[1])) + col_end)
+		print("\nFile:       " + col_g + "%s" % force_ascii(os.path.basename(sys.argv[1])) + col_e)
 	elif arg_num > 2 :
 		print("Press Enter to skip or input -? to list options\n")
-		print("\nFiles:       " + col_yellow + "Multiple" + col_end)
+		print("\nFiles:       " + col_y + "Multiple" + col_e)
 	else :
 		print('Input a filename or "filepath" or press Enter to list options\n')
-		print("\nFile:       " + col_magenta + "None" + col_end)
+		print("\nFile:       " + col_m + "None" + col_e)
 
 	input_var = input('\nOption(s):  ')
 	
@@ -771,11 +771,11 @@ depend_db = os.path.isfile(db_path)
 depend_uf = os.path.isfile(uf_path)
 
 if not depend_db:
-	if not param.print_msg : print(col_red + "\nError: MEA.dat file is missing!" + col_end)
+	if not param.print_msg : print(col_r + "\nError: MEA.dat file is missing!" + col_e)
 	mea_exit(1)
 	
 if param.enable_uf and not depend_uf :
-	if not param.print_msg : print(col_red + "\nError: UEFIFind.exe file is missing!" + col_end)
+	if not param.print_msg : print(col_r + "\nError: UEFIFind.exe file is missing!" + col_e)
 	mea_exit(1)
 	
 for file_in in source :
@@ -880,7 +880,7 @@ for file_in in source :
 	if not os.path.isfile(file_in) :
 		if any(p in file_in for p in param.all) : continue # Next input file
 		
-		print(col_red + "\nError" + col_end + ": file %s was not found!" % file_in)
+		print(col_r + "\nError" + col_e + ": file %s was not found!" % file_in)
 		
 		if not param.mass_scan : mea_exit(0)
 		else : continue
@@ -895,9 +895,9 @@ for file_in in source :
 		print("\nFile:     %s" % force_ascii(os.path.basename(file_in)))
 		print("")
 	elif param.ubu_mea :
-		print(col_magenta + "\nMEA shows the Intel Engine firmware of the BIOS/SPI\n\
+		print(col_m + "\nMEA shows the Intel Engine firmware of the BIOS/SPI\n\
 image that you opened with UBU. It does NOT show the\n\
-current Intel Engine firmware running on your system!\n" + col_end)
+current Intel Engine firmware running on your system!\n" + col_e)
 		
 	# UEFIFind Engine GUID Detection
 	if param.enable_uf : # UEFI Strip is expected to call MEA without UEFIFind
@@ -965,15 +965,15 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			# ME Region is Fujitsu UMEM compressed
 			if fuj_version != "NaN" :
-				no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
-				text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
+				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
+				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
 			# ME Region is Unknown
 			else :
-				no_man_text = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware\n\n" + col_red + "Please report this issue!" + col_end
-				text_ubu_pre = "Found" + col_yellow + " unidentifiable " + col_end + "Intel Engine Firmware"
+				no_man_text = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware\n\n" + col_r + "Please report this issue!" + col_e
+				text_ubu_pre = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
 		
@@ -990,20 +990,20 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if param.extr_mea :
 					no_man_text = "NaN NaN_NaN_REC NaN NaN NaN" # For UEFI Strip (-extr)
 				elif param.print_msg :
-					no_man_text = col_magenta + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_end + \
-					col_yellow + "\n\nNote: further analysis not possible without manifest header." + col_end
+					no_man_text = col_m + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_e + \
+					col_y + "\n\nNote: further analysis not possible without manifest header." + col_e
 				elif param.ubu_mea_pre :
 					no_man_text = "File does not contain Intel Engine Firmware"
 				else :
 					no_man_text = "Release:  MERecovery Module\nGUID:     821D110C-D0A3-4CF7-AEF3-E28088491704" + \
-					col_magenta + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_end + \
-					col_yellow + "\n\nNote: further analysis not possible without manifest header." + col_end
+					col_m + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_e + \
+					col_y + "\n\nNote: further analysis not possible without manifest header." + col_e
 			
 			# Image is ME Fujitsu UMEM compressed
 			elif fuj_version != "NaN" :
 				param.multi = False # Disable param.multi to keep such compressed Engine Regions
-				no_man_text = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
-				text_ubu_pre = "Found" + col_yellow + " Fujitsu Compressed " + col_end + ("Intel Engine Firmware v%s" % fuj_version)
+				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
+				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
@@ -1015,16 +1015,16 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				if fpt_hdr.FitBuild != 0 and fpt_hdr.FitBuild != 65535 :
 					fitc_ver = "%s.%s.%s.%s" % (fpt_hdr.FitMajor, fpt_hdr.FitMinor, fpt_hdr.FitHotfix, fpt_hdr.FitBuild)
-					no_man_text = "Found" + col_yellow + " Unknown " + col_end + ("Intel Engine Flash Partition Table v%s\n\n" % fitc_ver) + col_red + \
-					"Please report this issue!" + col_end
-					text_ubu_pre = "Found" + col_yellow + " Unknown " + col_end + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
+					no_man_text = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s\n\n" % fitc_ver) + col_r + \
+					"Please report this issue!" + col_e
+					text_ubu_pre = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
 					
 					if param.extr_mea : no_man_text = "NaN %s_NaN_FPT %s NaN NaN" % (fitc_ver, fitc_ver) # For UEFI Strip (-extr)
 				
 				else :
-					no_man_text = "Found" + col_yellow + " Unknown " + col_end + "Intel Engine Flash Partition Table\n\n" + col_red + \
-					"Please report this issue!" + col_end
-					text_ubu_pre = "Found" + col_yellow + " Unknown " + col_end + "Intel Engine Flash Partition Table"
+					no_man_text = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table\n\n" + col_r + \
+					"Please report this issue!" + col_e
+					text_ubu_pre = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table"
 					
 					if param.extr_mea : no_man_text = "NaN NaN_NaN_FPT NaN NaN NaN" # For UEFI Strip (-extr)
 				
@@ -1039,7 +1039,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			if param.alt_msg_echo : print("\nMEA: %s" % no_man_text) # Rule 2, one empty line at the end
 			else : print("MEA: %s\n" % no_man_text) # Rule 1, one empty line at the beginning
 			if found_guid != "" :
-				gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
+				gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 				for i in range(len(note_stor)) : print(note_stor[i])
 				print("")
 		elif param.ubu_mea_pre : # Must be before param.ubu_mea
@@ -1048,11 +1048,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			else : pass
 		elif param.ubu_mea :
 			print("%s" % no_man_text)
-			if found_guid != "" : gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
+			if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 			print("")
 		else :
 			print("%s" % no_man_text)
-			if found_guid != "" : gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
+			if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 			
 		if param.multi : multi_drop() # All Messages here are not kept in arrays to allow param.multi deletion
 		else: f.close()
@@ -1436,11 +1436,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					padd_size_fd = me_fd_size - eng_fw_end
 					
 					if eng_fw_end > me_fd_size :
-						eng_size_text = col_magenta + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_end
+						eng_size_text = col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e
 					elif eng_fw_end < me_fd_size :
 						if reading[fpt_start + eng_fw_end:fpt_start + eng_fw_end + padd_size_fd] != padd_size_fd * b'\xFF' :
 							# Extra data at Engine FD region padding
-							eng_size_text = col_magenta + 'Warning: Data in Engine region padding, possible data corruption!' + col_end
+							eng_size_text = col_m + 'Warning: Data in Engine region padding, possible data corruption!' + col_e
 					
 					if fwupd_ishc_bug : fwupd_ishc_bug = False # FWUpdate is expected to use bare Engine regions only
 				# Bare Engine Region
@@ -1500,7 +1500,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			elif rel_signed == "Production" : release = "Production"
 			elif rel_signed == "Debug" : release = "Pre-Production"
 			else :
-				release = col_red + "Error" + col_end + ", unknown firmware release!" + col_red + " *" + col_end
+				release = col_r + "Error" + col_e + ", unknown firmware release!" + col_r + " *" + col_e
 				err_rep += 1
 				err_stor.append(release)
 			
@@ -1524,7 +1524,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if pvbit == 0 : pvpc = "No"
 				elif pvbit == 1 : pvpc = "Yes"
 				else :
-					pvpc = col_red + "Error" + col_end + ", unknown PV bit!" + col_red + " *" + col_end
+					pvpc = col_r + "Error" + col_e + ", unknown PV bit!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(pvpc)
 		
@@ -1561,17 +1561,17 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				print("Version:  %s.%s.%s" % (major, minor, hotfix))
 				print("Platform: GbE 82573E")
 
-				if upd_found : print("Latest:   " + col_red + "No" + col_end)
-				else : print("Latest:   " + col_green + "Yes" + col_end)
+				if upd_found : print("Latest:   " + col_r + "No" + col_e)
+				else : print("Latest:   " + col_g + "Yes" + col_e)
 			
 				if fw_in_db_found == "No" :
 					print("")
-					print(col_yellow + "Note: This firmware was not found at the database, please report it!" + col_end)
-					note_stor.append(col_yellow + "Note: This firmware was not found at the database, please report it!" + col_end)
+					print(col_y + "Note: This firmware was not found at the database, please report it!" + col_e)
+					note_stor.append(col_y + "Note: This firmware was not found at the database, please report it!" + col_e)
 				
 				if param.multi : multi_drop() # Some (not all) Messages here are not kept in arrays to allow param.multi deletion
 				
-				if found_guid != "" : gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
+				if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 				
 				f.close()
 				continue # Next input file
@@ -1590,7 +1590,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_2_QST')
 					if minor == 0 and (hotfix < db_hot or (hotfix == db_hot and build < db_bld)) : upd_found = True
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 2 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 2 SKU!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 				
@@ -1659,7 +1659,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_3_QST')
 					if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 3 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 3 SKU!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 
@@ -1709,7 +1709,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku = "TPM" # CA_ICH9_REL_NOAMT_ (TPM)
 					sku_db = "TPM"
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 4 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 4 SKU!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 				
@@ -1780,7 +1780,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_5_DHBC')
 					if minor < db_min or (minor == db_min and hotfix == db_hot and build < db_bld) : upd_found = True
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 5 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 5 SKU!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 					
@@ -1824,7 +1824,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_6_5MBDT')
 					if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 6 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 6 SKU!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 				
@@ -1869,8 +1869,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					sku_db = "5MB_PBG"
 					platform = "PBG"
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 7 SKU!" + col_red + " *" + col_end
-					platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 7 SKU!" + col_r + " *" + col_e
+					platform = col_r + "Error" + col_e + ", this firmware requires investigation!" + col_r + " *" + col_e
 					if minor != 1 and hotfix != 20 and build != 1056 : # Exception for firmware 7.1.20.1056 Alpha (check below)
 						err_rep += 1
 						err_stor.append(sku)
@@ -1880,7 +1880,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if (20 < hotfix < 30 and hotfix != 21 and build != 1056) or (41 < hotfix < 50) : # Versions that, if exist, require manual investigation
 						sku = "1.5MB"
 						sku_db = "NaN"
-						platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
+						platform = col_r + "Error" + col_e + ", this firmware requires investigation!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(platform)
 					elif 20 <= hotfix <= 41 and hotfix != 21 and build != 1056 : # CPT firmware but with PBG SKU (during the "transition" period)
@@ -1895,7 +1895,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if (20 < hotfix < 30 and hotfix != 21 and build != 1056 and build != 1165) or (41 < hotfix < 50) : # Versions that, if exist, require manual investigation
 						sku = "5MB"
 						sku_db = "NaN"
-						platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
+						platform = col_r + "Error" + col_e + ", this firmware requires investigation!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(platform)
 					elif 20 <= hotfix <= 41 and hotfix != 21 and build != 1056 and build != 1165 : # CPT firmware but with PBG SKU (during the "transition" period)
@@ -1920,8 +1920,8 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku_db = "5MB_PBG"
 						platform = "PBG"
 					else :
-						sku = col_red + "Error" + col_end + ", unknown ME 7 SKU!" + col_red + " *" + col_end
-						platform = col_red + "Error" + col_end + ", this firmware requires investigation!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown ME 7 SKU!" + col_r + " *" + col_e
+						platform = col_r + "Error" + col_e + ", this firmware requires investigation!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 						err_stor.append(platform)
@@ -1952,7 +1952,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						if me7_romb_upd == "B805" : release = "ROM-Bypass" # B805 is 1.5MB ROM-Bypass
 						elif me7_romb_upd == "6806" : release = "ROM-Bypass" # 6806 is 5MB ROM-Bypass
 						else : # Unknown ROM-Bypass $MCP entry
-							release = col_red + "Error" + col_end + ", unknown ME 7 ROM-Bypass SKU!" + col_red + " *" + col_end
+							release = col_r + "Error" + col_e + ", unknown ME 7 ROM-Bypass SKU!" + col_r + " *" + col_e
 							err_rep += 1
 							err_stor.append(release)
 			
@@ -1969,7 +1969,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_8_5MB')
 					if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 8 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 8 SKU!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 					
@@ -1990,7 +1990,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_90_5MB')
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
-						sku = col_red + "Error" + col_end + ", unknown ME 9.0 SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown ME 9.0 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 					
@@ -2011,7 +2011,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_91_5MB')
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
-						sku = col_red + "Error" + col_end + ", unknown ME 9.1 SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown ME 9.1 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 					platform = "LynxPoint"
@@ -2033,7 +2033,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_95_MAC')
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True 
 					else :
-						sku = col_red + "Error" + col_end + ", unknown ME 9.5 SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown ME 9.5 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 					
@@ -2043,7 +2043,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					
 					platform = "LynxPoint LP"
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 9.x Minor version!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 9.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 				
@@ -2065,12 +2065,12 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_100_MAC')
 						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
-						sku = col_red + "Error" + col_end + ", unknown ME 10.0 SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown ME 10.0 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 					platform = "Broadwell LP"
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 10.x Minor version!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 10.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 			
@@ -2184,7 +2184,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				if pos_sku_ker == "Unknown" : # SKU not retreived from Kernel Analysis
 					if sku == "NaN" : # SKU not retreived from manual DB entry
 						if pos_sku_fit == "NaN" : # SKU not retreived from FIT Platform SKU
-							sku = col_red + "Error" + col_end + ", unknown ME %s.%s %s SKU!" % (major,minor,sku_init) + col_red + " *" + col_end
+							sku = col_r + "Error" + col_e + ", unknown ME %s.%s %s SKU!" % (major,minor,sku_init) + col_r + " *" + col_e
 							err_rep += 1
 							err_stor.append(sku)
 						else :
@@ -2248,7 +2248,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				
 				# 11.x : Unknown
 				else :
-					sku = col_red + "Error" + col_end + ", unknown ME 11.x Minor version!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown ME 11.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 				
@@ -2259,23 +2259,23 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						
 					if pos_sku_ker == pos_sku_fit :
 						if pos_sku_ker == "Unknown" :
-							err_stor_ker.append(col_magenta + "\nWarning: the SKU cannot be determined by Kernel & FIT:" + col_end + "\n\n	" + col_red + "Avoid flash" + col_end)
+							err_stor_ker.append(col_m + "\nWarning: the SKU cannot be determined by Kernel & FIT:" + col_e + "\n\n	" + col_r + "Avoid flash" + col_e)
 						else :
-							err_stor_ker.append(col_magenta + "\nBased on Kernel & FIT, the SKU could be:"  + col_end + "\n\n	%s %s" % (sku_init, pos_sku_ker))
+							err_stor_ker.append(col_m + "\nBased on Kernel & FIT, the SKU could be:"  + col_e + "\n\n	%s %s" % (sku_init, pos_sku_ker))
 						if db_sku_chk not in ["NaN",pos_sku_ker] :
-							err_stor_ker.append(col_magenta + "\nWarning: Kernel & FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, db_sku_chk) + col_end)
+							err_stor_ker.append(col_m + "\nWarning: Kernel & FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, db_sku_chk) + col_e)
 					elif pos_sku_ker == "Unknown" and pos_sku_fit != "Unknown" :
-						err_stor_ker.append(col_magenta + "\nBased on FIT only, the SKU could be:"  + col_end + "\n\n	%s %s" % (sku_init, pos_sku_fit) + col_end)
+						err_stor_ker.append(col_m + "\nBased on FIT only, the SKU could be:"  + col_e + "\n\n	%s %s" % (sku_init, pos_sku_fit) + col_e)
 						if db_sku_chk not in ["NaN",pos_sku_fit] :
-							err_stor_ker.append(col_magenta + "\nWarning: FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_fit, db_sku_chk) + col_end)
+							err_stor_ker.append(col_m + "\nWarning: FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_fit, db_sku_chk) + col_e)
 					elif pos_sku_fit == "Unknown" and pos_sku_ker != "Unknown" :
-						err_stor_ker.append(col_magenta + "\nBased on Kernel only, the SKU could be:"  + col_end + "\n\n	%s %s" % (sku_init, pos_sku_ker) + col_end)
+						err_stor_ker.append(col_m + "\nBased on Kernel only, the SKU could be:"  + col_e + "\n\n	%s %s" % (sku_init, pos_sku_ker) + col_e)
 						if db_sku_chk not in ["NaN",pos_sku_ker] :
-							err_stor_ker.append(col_magenta + "\nWarning: Kernel (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, db_sku_chk) + col_end)
+							err_stor_ker.append(col_m + "\nWarning: Kernel (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, db_sku_chk) + col_e)
 					elif pos_sku_ker != pos_sku_fit :
-						err_stor_ker.append(col_magenta + "\nWarning: Kernel (%s) & FIT (%s) SKU mismatch:" % (pos_sku_ker,pos_sku_fit) + col_end + "\n\n	" + col_red + "Avoid flash" + col_end)
+						err_stor_ker.append(col_m + "\nWarning: Kernel (%s) & FIT (%s) SKU mismatch:" % (pos_sku_ker,pos_sku_fit) + col_e + "\n\n	" + col_r + "Avoid flash" + col_e)
 						if db_sku_chk not in ["NaN",pos_sku_ker,pos_sku_fit] :
-							err_stor_ker.append(col_magenta + "\nWarning: Kernel (%s) & FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, pos_sku_fit, db_sku_chk) + col_end)
+							err_stor_ker.append(col_m + "\nWarning: Kernel (%s) & FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, pos_sku_fit, db_sku_chk) + col_e)
 							
 					me11_ker_msg = True
 					for i in range(len(err_stor_ker)) : err_stor.append(err_stor_ker[i]) # For -msg
@@ -2293,7 +2293,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			# Report unknown ME Major version (ME 1.x exits before this check)
 			elif major < 1 or major > 11 :
 				unk_major = True
-				sku = col_red + "Error" + col_end + ", unknown ME SKU due to unknown Major version!" + col_red + " *" + col_end
+				sku = col_r + "Error" + col_e + ", unknown ME SKU due to unknown Major version!" + col_r + " *" + col_e
 				err_rep += 1
 				err_stor.append(sku)
 		
@@ -2321,7 +2321,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 						sku = "3MB" + txe_sub
 						sku_db = "3MB" + txe_sub_db
 					else :
-						sku = col_red + "Error" + col_end + ", unknown TXE 0.x SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown TXE 0.x SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 				
@@ -2346,7 +2346,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 								db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_10_3MB_IT')
 								if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 						else :
-							sku = col_red + "Error" + col_end + ", unknown TXE 1.0 SKU!" + col_red + " *" + col_end
+							sku = col_r + "Error" + col_e + ", unknown TXE 1.0 SKU!" + col_r + " *" + col_e
 							err_rep += 1
 							err_stor.append(sku)
 					elif minor == 1 :
@@ -2360,7 +2360,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 								db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_11_1375MB_IT')
 								if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 						else :
-							sku = col_red + "Error" + col_end + ", unknown TXE 1.1 SKU!" + col_red + " *" + col_end
+							sku = col_r + "Error" + col_e + ", unknown TXE 1.1 SKU!" + col_r + " *" + col_e
 							err_rep += 1
 							err_stor.append(sku)
 					elif minor == 2 :
@@ -2374,11 +2374,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 								#db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_12_1375MB_IT')
 								#if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 						else :
-							sku = col_red + "Error" + col_end + ", unknown TXE 1.2 SKU!" + col_red + " *" + col_end
+							sku = col_r + "Error" + col_e + ", unknown TXE 1.2 SKU!" + col_r + " *" + col_e
 							err_rep += 1
 							err_stor.append(sku)
 					else :
-						sku = col_red + "Error" + col_end + ", unknown TXE 1.x Minor version!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown TXE 1.x Minor version!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 					
@@ -2403,7 +2403,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_20_1375MB')
 							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
-						sku = col_red + "Error" + col_end + ", unknown TXE 2.0 SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown TXE 2.0 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 				elif minor == 1 :
@@ -2416,11 +2416,11 @@ current Intel Engine firmware running on your system!\n" + col_end)
 							db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_21_1375MB')
 							if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
-						sku = col_red + "Error" + col_end + ", unknown TXE 2.1 SKU!" + col_red + " *" + col_end
+						sku = col_r + "Error" + col_e + ", unknown TXE 2.1 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 				else :
-					sku = col_red + "Error" + col_end + ", unknown TXE 2.x Minor version!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown TXE 2.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 				
@@ -2456,7 +2456,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
 				else :
-					sku = col_red + "Error" + col_end + ", unknown TXE 3.x Minor version!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown TXE 3.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
 
@@ -2468,7 +2468,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			elif major > 3 :
 				unk_major = True
-				sku = col_red + "Error" + col_end + ", unknown TXE SKU due to unknown Major version" + col_red + " *" + col_end
+				sku = col_r + "Error" + col_e + ", unknown TXE SKU due to unknown Major version" + col_r + " *" + col_e
 				err_rep += 1
 				err_stor.append(sku)
 
@@ -2512,21 +2512,21 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			if major == 1 :
 				if sku_sps != "08000000" : # All SPS 1 firmware have the same SKU.
-					sku = col_red + "Error" + col_end + ", unknown SPS 1 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown SPS 1 SKU!" + col_r + " *" + col_e
 					err_sps_sku = "Yes"
 					err_rep += 1
 					err_stor.append(sku)
 					
 			elif major == 2 :
 				if sku_sps != "2FE40100" : # All SPS 2 & 3 firmware have the same SKU.
-					sku = col_red + "Error" + col_end + ", unknown SPS 2 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown SPS 2 SKU!" + col_r + " *" + col_e
 					err_sps_sku = "Yes"
 					err_rep += 1
 					err_stor.append(sku)
 			
 			elif major == 3 :
 				if sku_sps != "2FE40100" : # All SPS 2 & 3 firmware have the same SKU.
-					sku = col_red + "Error" + col_end + ", unknown SPS 3 SKU!" + col_red + " *" + col_end
+					sku = col_r + "Error" + col_e + ", unknown SPS 3 SKU!" + col_r + " *" + col_e
 					err_sps_sku = "Yes"
 					err_rep += 1
 					err_stor.append(sku)
@@ -2546,7 +2546,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 			
 			elif major > 4 :
 				unk_major = True
-				sku = col_red + "Error" + col_end + ", unknown SPS SKU due to unknown Major version" + col_red + " *" + col_end
+				sku = col_r + "Error" + col_e + ", unknown SPS SKU due to unknown Major version" + col_r + " *" + col_e
 				err_rep += 1
 				err_stor.append(sku)
 		
@@ -2701,14 +2701,14 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		if variant == "SPS" :
 			if release == "Production" and err_rep == 0 and fw_type != "Operational" and fw_type != "Recovery" : # Does not display if there is any error or firmware is OPR/REC
 				if upd_found :
-					upd_rslt = "Latest:   " + col_red + "No" + col_end
+					upd_rslt = "Latest:   " + col_r + "No" + col_e
 				elif not upd_found :
-					upd_rslt = "Latest:   " + col_green + "Yes" + col_end
+					upd_rslt = "Latest:   " + col_g + "Yes" + col_e
 		elif release == "Production" and err_rep == 0 and not wcod_found : # Does not display if there is any error or firmware is Partial Update
 			if variant == "TXE" and major == 0 : pass # Exclude TXE v0.x
 			else :
-				if upd_found : upd_rslt = "Latest:   " + col_red + "No" + col_end
-				elif not upd_found : upd_rslt = "Latest:   " + col_green + "Yes" + col_end
+				if upd_found : upd_rslt = "Latest:   " + col_r + "No" + col_e
+				elif not upd_found : upd_rslt = "Latest:   " + col_g + "Yes" + col_e
 		
 		# Rename input file based on the DB structured name
 		if param.give_db_name :
@@ -2721,7 +2721,7 @@ current Intel Engine firmware running on your system!\n" + col_end)
 		# UEFI Bios Updater Pre-Menu Integration (must be after processing but before message printing)
 		if param.ubu_mea_pre :
 			if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" :
-				print(col_yellow + "Engine firmware not found at the database, run ME Analyzer for details!" + col_end)
+				print(col_y + "Engine firmware not found at the database, run ME Analyzer for details!" + col_e)
 			mea_exit(9)
 		
 		# UEFI Strip Integration (must be after Printed Messages)
@@ -2830,44 +2830,44 @@ current Intel Engine firmware running on your system!\n" + col_end)
 				print("Date:     %s" % date)
 				
 		# General MEA Messages (must be Errors > Warnings > Notes)
-		if unk_major : gen_msg(err_stor, col_red + "Error: unknown Intel Engine Major version! *" + col_end, '')
+		if unk_major : gen_msg(err_stor, col_r + "Error: unknown Intel Engine Major version! *" + col_e, '')
 		
 		if not param.print_msg and me11_ker_msg and fw_type != "Partial Update" :
 			for i in range(len(err_stor_ker)) : print(err_stor_ker[i])
 		
-		if rec_missing and fw_type != "Partial Update" : gen_msg(err_stor, col_red + "Error: Recovery section missing, Manifest Header not found! *" + col_end, '')
+		if rec_missing and fw_type != "Partial Update" : gen_msg(err_stor, col_r + "Error: Recovery section missing, Manifest Header not found! *" + col_e, '')
 		
-		if sku_missing : gen_msg(err_stor, col_red + "Error: SKU tag missing, incomplete Intel Engine firmware!" + col_end, '')
+		if sku_missing : gen_msg(err_stor, col_r + "Error: SKU tag missing, incomplete Intel Engine firmware!" + col_e, '')
 		
-		if variant == "TXE" and ('UNK' in txe_sub) : gen_msg(err_stor, col_red + "Error: Unknown TXE %s.x platform! *" % major + col_end, '')
+		if variant == "TXE" and ('UNK' in txe_sub) : gen_msg(err_stor, col_r + "Error: Unknown TXE %s.x platform! *" % major + col_e, '')
 		
-		if apl_warn : gen_msg(err_stor, col_red + 'Error: Intel TXE 3 APL is not supported yet!' + col_end, '')
+		if apl_warn : gen_msg(err_stor, col_r + 'Error: Intel TXE 3 APL is not supported yet!' + col_e, '')
 		
-		if uf_error : gen_msg(err_stor, col_red + 'Error: UEFIFind Engine GUID detection failed!' + col_end, '')
+		if uf_error : gen_msg(err_stor, col_r + 'Error: UEFIFind Engine GUID detection failed!' + col_e, '')
 		
-		if err_rep > 0 : gen_msg(err_stor, col_red + "* Please report this issue!" + col_end, '')
+		if err_rep > 0 : gen_msg(err_stor, col_r + "* Please report this issue!" + col_e, '')
 		
-		if eng_size_text != '' and not (major ==6 and release == "ROM-Bypass") : gen_msg(warn_stor, col_magenta + '%s' % eng_size_text + col_end, '')
+		if eng_size_text != '' and not (major ==6 and release == "ROM-Bypass") : gen_msg(warn_stor, col_m + '%s' % eng_size_text + col_e, '')
 		
-		if fpt_chk_fail : gen_msg(warn_stor, col_magenta + "Warning: Wrong $FPT checksum %s, expected %s!" % (fpt_chk_file,fpt_chk_calc) + col_end, '')
+		if fpt_chk_fail : gen_msg(warn_stor, col_m + "Warning: Wrong $FPT checksum %s, expected %s!" % (fpt_chk_file,fpt_chk_calc) + col_e, '')
 		
-		if sps3_chk_fail : gen_msg(warn_stor, col_magenta + "Warning: Wrong $FPT SPS3 checksum %s, expected %s!" % (sps3_chk16_file,sps3_chk16_calc) + col_end, '')
+		if sps3_chk_fail : gen_msg(warn_stor, col_m + "Warning: Wrong $FPT SPS3 checksum %s, expected %s!" % (sps3_chk16_file,sps3_chk16_calc) + col_e, '')
 		
-		if fpt_num_fail : gen_msg(warn_stor, col_magenta + "Warning: Wrong $FPT entry count %s, expected %s!" % (fpt_num_file,fpt_num_calc) + col_end, '')
+		if fpt_num_fail : gen_msg(warn_stor, col_m + "Warning: Wrong $FPT entry count %s, expected %s!" % (fpt_num_file,fpt_num_calc) + col_e, '')
 		
-		if fuj_rgn_exist : gen_msg(warn_stor, col_magenta + "Warning: Fujitsu Intel Engine Firmware detected!" + col_end, '')
+		if fuj_rgn_exist : gen_msg(warn_stor, col_m + "Warning: Fujitsu Intel Engine Firmware detected!" + col_e, '')
 		
-		if fwupd_ishc_bug and release == 'Production' : gen_msg(warn_stor, col_magenta + "Warning: This firmware requires FWUpdate 11.6.10.1196 or newer!" + col_end, '')
+		if [fwupd_ishc_bug,release,major,minor] == [True,'Production',11,0] : gen_msg(warn_stor, col_m + "Warning: This firmware requires FWUpdate 11.6.10.1196 or newer!" + col_e, '')
 		
-		if me_rec_ffs or jhi_warn : gen_msg(warn_stor, col_magenta + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_end, 'del')
+		if me_rec_ffs or jhi_warn : gen_msg(warn_stor, col_m + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_e, 'del')
 			
-		if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_yellow + "Note: %s Firmware Update OEM ID detected!" % uuid_found + col_end, '')
+		if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_y + "Note: %s Firmware Update OEM ID detected!" % uuid_found + col_e, '')
 				
-		if multi_rgn : gen_msg(note_stor, col_yellow + "Note: Multiple (%d) Intel Engine Firmware detected in file!" % fpt_count + col_end, '')
+		if multi_rgn : gen_msg(note_stor, col_y + "Note: Multiple (%d) Intel Engine Firmware detected in file!" % fpt_count + col_e, '')
 		
-		if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" : gen_msg(note_stor, col_green + "Note: This firmware was not found at the database, please report it!" + col_end, '')
+		if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" : gen_msg(note_stor, col_g + "Note: This firmware was not found at the database, please report it!" + col_e, '')
 		
-		if found_guid != "" : gen_msg(note_stor, col_yellow + 'Note: Detected Engine GUID %s!' % found_guid + col_end, '')
+		if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 		
 		# Print Error/Warning/Note Messages
 		if param.print_msg : msg_rep()
