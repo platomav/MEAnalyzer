@@ -42,7 +42,7 @@ ME Analyzer's main goal is to allow users to quickly analyze and/or report new f
 
 ##**B. How to use ME Analyzer**
 
-There are two ways to use ME Analyzer, MEA.exe & Command Prompt. The MEA executable allows you to drag & drop one or more firmware and view them one by one. To manually call ME Analyzer, a Command Prompt can be used with -skip as parameter.
+There are two ways to use ME Analyzer, MEA executable & Command Prompt. The MEA executable allows you to drag & drop one or more firmware and view them one by one. To manually call ME Analyzer, a Command Prompt can be used with -skip as parameter.
 
 ####**B1. ME Analyzer Executable**
 
@@ -52,43 +52,58 @@ To use ME Analyzer, select one or multiple files and Drag & Drop them to its exe
 
 There are various parameters which enhance or modify the default behavior of ME Analyzer.
 
-* -? : Displays help & usage screen
-* -skip : Skips options intro screen
-* -multi : Scans multiple files and renames on messages
-* -mass : Scans all files of a given directory
-* -enuf : Enables UEFIFind Engine GUID detection
-* -pdb : Writes input firmware's DB entries to file
-* -dfpt : Displays details about the $FPT header
+* -?      : Displays help & usage screen
+* -skip   : Skips options intro screen
+* -multi  : Scans multiple files and renames on messages
+* -mass   : Scans all files of a given directory
+* -enuf   : Enables UEFIFind Engine GUID detection
+* -pdb    : Writes input firmware's DB entries to file
+* -dfpt   : Displays details about the $FPT header
 * -dbname : Renames input file based on DB name
-* -adir : Sets UEFIFind to the previous directory
-* -dker : Prints H/LP SKU analysis for ME11+ firmware
-* -ubu : SoniX/LS_29's UEFI BIOS Updater mode
+
+The following are Windows specific:
+
+* -adir   : Sets UEFIFind to the previous directory
+* -ubu    : SoniX/LS_29's UEFI BIOS Updater mode
 * -ubupre : SoniX/LS_29's UEFI BIOS Updater Pre-Menu mode
-* -extr : Lordkag's UEFIStrip mode
-* -msg : Prints only messages without headers
-* -hid : Displays all firmware even without messages (-msg)
-* -aecho : Alternative display of empty lines (-msg, -hid)
+* -extr   : Lordkag's UEFIStrip mode
+* -msg    : Prints only messages without headers
+* -hid    : Displays all firmware even without messages (-msg)
+* -aecho  : Alternative display of empty lines (-msg, -hid)
 
 ####**B3. ME Analyzer Error Control**
 
-During operation, ME Analyzer may encounter some issues that can trigger Notes, Warnings or Errors. Notes (yellow color) provide useful information about a characteristic of this particular firmware. Warnings (purple color) notify the user of possible problems that can cause system instability. Errors (red color) are shown when something unexpected is encountered like unknown Major/Minor/SKU releases, Failure to find/open/read files etc.
+During operation, ME Analyzer may encounter some issues that can trigger Notes, Warnings or Errors. Notes (yellow color) provide useful information about a characteristic of this particular firmware. Warnings (purple color) notify the user of possible problems that can cause system instability. Errors (red color) are shown when something unexpected or problematic is encountered.
 
 ##**C. Download ME Analyzer**
 
-ME Analyzer is developed under Windows using Python 3.x. Since the Engine Firmware Repository Database is updated more frequently compared to the main program, a separate release is provided when needed.
+ME Analyzer is developed using Python 3.x and can work under Windows, Linux and macOS operating systems. Pre-built binaries are provided for Windows only with build/freeze instructions for all three OS found below.
 
 ####**C1. Compatibility**
 
-ME Analyzer has been tested to be compatible with Windows XP up to Windows 10 operating systems. It is built and executed using Python 3.4. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. The script is frozen using Py2Exe.
+ME Analyzer has been tested to be compatible with Windows XP-10, Ubuntu 16.04 and macOS Sierra operating systems. It is expected to work at all Linux or macOS operating systems which have Python 3.x support but feel free to test it. It is executed using Python 3.4 under Windows and the built-in Python 3.5 under Linux and macOS. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible.
 
 ####**C2. Code Prerequisites**
 
-To run ME Analyzer, you need to have the following python modules installed:
+To run ME Analyzer, you need to have the following 3rd party Python module installed:
 
 * [Colorama](https://pypi.python.org/pypi/colorama)
-* [PyWin32](https://sourceforge.net/projects/pywin32/files/pywin32/)
 
 To freeze ME Analyzer, you can use whatever you like. The following are verified to work:
 
-* [Py2Exe](https://pypi.python.org/pypi/py2exe)
-* [PyInstaller](https://pypi.python.org/pypi/PyInstaller/)
+* [Py2exe](https://pypi.python.org/pypi/py2exe) (Windows)
+* [Py2app](https://pypi.python.org/pypi/py2app) (macOS)
+* [PyInstaller](https://pypi.python.org/pypi/PyInstaller/) (Windows/Linux/macOS)
+
+####**C3. Freeze with PyInstaller**
+
+PyInstaller can freeze ME Analyzer at all three platforms, it is simple to run and gets updated often.
+
+1. Make sure you have Python 3.5 installed
+2. Use pip to install colorama module
+3. Use pip to install pyinstaller module
+4. Open a command prompt and execute:
+
+> pyinstaller --clean --noconfirm --noupx --onefile --log-level=WARN --name MEA MEA.py
+
+5. At dist folder you should find the final MEA executable

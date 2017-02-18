@@ -1,10 +1,12 @@
+#!/usr/bin/env python3
+
 """
 ME Analyzer
 Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.8.3_1'
+title = 'ME Analyzer v1.9.0'
 
 import os
 import re
@@ -16,9 +18,7 @@ import binascii
 import tempfile
 import colorama
 import traceback
-import fileinput
 import subprocess
-import win32console
 
 # Initialize and setup Colorama
 colorama.init()
@@ -27,6 +27,22 @@ col_g = colorama.Fore.GREEN + colorama.Style.BRIGHT
 col_y = colorama.Fore.YELLOW + colorama.Style.BRIGHT
 col_m = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
 col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
+
+# Detect OS Platform
+mea_os = sys.platform
+if mea_os == 'win32' :
+	cl_wipe = 'cls'
+	uf_exec = 'UEFIFind.exe'
+	os_dir = '\\'
+elif mea_os.startswith('linux') or mea_os == 'darwin' :
+	cl_wipe = 'clear'
+	uf_exec = 'UEFIFind'
+	os_dir = '//'
+else :
+	print(col_r + '\nError: ' + col_e + 'Unsupported platform: %s\n' % mea_os)
+	input('Press enter to exit')
+	colorama.deinit()
+	sys.exit(-1)
 
 char = ctypes.c_char
 uint8_t = ctypes.c_ubyte
@@ -38,8 +54,14 @@ class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-adir','-hid','-aecho','-eker',
-					'-dker','-pdb','-enuf','-dbname','-mass','-dfpt']
+		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-hid','-adir','-aecho','-eker','-dker','-pdb','-enuf','-dbname','-mass','-dfpt']
+
+		self.win = ['-ubupre','-ubu','-extr','-msg','-hid','-aecho','-adir'] # Windows only
+		
+		if mea_os == 'win32' :
+			self.val = self.all
+		else :
+			self.val = [item for item in self.all if item not in self.win]
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -63,13 +85,6 @@ class MEA_Param :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
 			if i == '-multi' : self.multi = True # Checks multiple files, keeps those with messages and renames everything else.
-			if i == '-ubupre' : self.ubu_mea_pre = True # UBU Pre-Menu mode, 9 --> Engine FW found, 8 --> Engine FW not found.
-			if i == '-ubu' : self.ubu_mea = True # UBU mode, prints everything without some headers.
-			if i == '-extr' : self.extr_mea = True # UEFI Strip mode, prints special one-line outputs.
-			if i == '-msg' : self.print_msg = True # Prints all messages without any headers.
-			if i == '-adir' : self.alt_dir = True # Sets UEFIFind.exe to the previous directory.
-			if i == '-hid' : self.hid_find = True # Forces MEA to display any firmware found. Works with -msg.
-			if i == '-aecho' : self.alt_msg_echo = True # Enables an alternative display of empty lines. Works with -msg and -hid.
 			if i == '-eker' : self.me11_ker_extr = True # Extraction of post-SKL FTPR > Kernel region.
 			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print post-SKL Kernel/FIT SKU analysis even when firmware is hash-known.
 			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
@@ -78,6 +93,15 @@ class MEA_Param :
 			if i == '-mass' : self.mass_scan = True # Scans all files of a given directory, no limit.
 			if i == '-dfpt' : self.fpt_disp = True # Displays details about the $FPT header.
 			
+			if mea_os == 'win32' : # Windows only options
+				if i == '-adir' : self.alt_dir = True # Sets UEFIFind to the previous directory.
+				if i == '-ubupre' : self.ubu_mea_pre = True # UBU Pre-Menu mode, 9 --> Engine FW found, 8 --> Engine FW not found.
+				if i == '-ubu' : self.ubu_mea = True # UBU mode, prints everything without some headers.
+				if i == '-extr' : self.extr_mea = True # UEFI Strip mode, prints special one-line outputs.
+				if i == '-msg' : self.print_msg = True # Prints all messages without any headers.
+				if i == '-hid' : self.hid_find = True # Forces MEA to display any firmware found. Works with -msg.
+				if i == '-aecho' : self.alt_msg_echo = True # Enables an alternative display of empty lines. Works with -msg and -hid.
+			
 		if self.ubu_mea_pre or self.ubu_mea or self.extr_mea or self.print_msg or self.mass_scan \
 		or self.db_print_new : self.skip_intro = True
 
@@ -85,10 +109,10 @@ class MEA_Param :
 class FPT_Pre_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
-		("ROMB_Instr_0",	uint32_t),		# 0x00 (SPS1, x86 ROMB Instruction 0)
-		("Unknown04_08",	uint32_t),		# 0x04 (SPS1)
-		("Unknown08_0C",	uint32_t),		# 0x08 (SPS1)
-		("Unknown0C_10",	uint32_t),		# 0x0C (SPS1)
+		("ROMB_Instr_0",	uint32_t),		# 0x00 (x86 ROMB Instruction 0)
+		("ROMB_Instr_1",	uint32_t),		# 0x04 (x86 ROMB Instruction 1)
+		("ROMB_Instr_2",	uint32_t),		# 0x08 (x86 ROMB Instruction 2)
+		("ROMB_Instr_3",	uint32_t),		# 0x0C (x86 ROMB Instruction 3)
 		# 0x10
 	]
 
@@ -294,26 +318,28 @@ def mea_hdr(db_rev) :
 	print("            Database %s" % db_rev)
 		
 def mea_help() :
-	print("\n\
-Usage: MEA.exe [FilePath] {Options}\n\n\
-{Options}\n\n\
-	-? : Displays help & usage screen\n\
-	-skip : Skips options intro screen\n\
-	-multi : Scans multiple files and renames on messages\n\
-	-mass : Scans all files of a given directory\n\
-	-enuf : Enables UEFIFind Engine GUID detection\n\
-	-pdb : Writes input firmware's DB entries to file\n\
-	-dfpt : Displays details about the $FPT header\n\
-	-dbname : Renames input file based on DB name\n\
-	-adir : Sets UEFIFind to the previous directory\n\
-	-dker : Prints H/LP SKU analysis for ME11+ firmware\n\
-	-ubu : SoniX/LS_29's UEFI BIOS Updater mode\n\
-	-ubupre : SoniX/LS_29's UEFI BIOS Updater Pre-Menu mode\n\
-	-extr : Lordkag's UEFIStrip mode\n\
-	-msg : Prints only messages without headers\n\
-	-hid : Displays all firmware even without messages (-msg)\n\
-	-aecho : Alternative display of empty lines (-msg, -hid)\
-	")
+	
+	text = "\nUsage: MEA [FilePath] {Options}\n\n{Options}\n\n"
+	text += "-?      : Displays help & usage screen\n"
+	text += "-skip   : Skips options intro screen\n"
+	text += "-multi  : Scans multiple files and renames on messages\n"
+	text += "-mass   : Scans all files of a given directory\n"
+	text += "-enuf   : Enables UEFIFind Engine GUID detection\n"
+	text += "-pdb    : Writes input firmware's DB entries to file\n"
+	text += "-dfpt   : Displays details about the $FPT header\n"
+	text += "-dbname : Renames input file based on DB name"
+	
+	if mea_os == 'win32' :
+		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
+		text += "-ubu    : SoniX/LS_29's UEFI BIOS Updater mode\n"
+		text += "-ubupre : SoniX/LS_29's UEFI BIOS Updater Pre-Menu mode\n"
+		text += "-extr   : Lordkag's UEFIStrip mode\n"
+		text += "-msg    : Prints only messages without headers\n"
+		text += "-hid    : Displays all firmware even without messages (-msg)\n"
+		text += "-aecho  : Alternative display of empty lines (-msg, -hid)"
+	
+	print(text)
+	mea_exit(0)
 
 # https://stackoverflow.com/a/22881871
 def get_script_dir(follow_symlinks=True) :
@@ -348,20 +374,12 @@ def sha1_text(text) :
 def multi_drop() :
 	if err_stor or warn_stor or note_stor : # Any note, warning or error renames the file
 		f.close()
-		new_multi_name = os.path.dirname(file_in) + "\__CHECK__" + os.path.basename(file_in)
+		new_multi_name = os.path.dirname(file_in) + os_dir + "__CHECK__" + os.path.basename(file_in)
 		os.rename(file_in, new_multi_name)
 
 def db_open() :
 	fw_db = open(db_path, "r")
 	return fw_db
-
-def db_repl(file,f_find,f_replace) :
-	for line in fileinput.input(file, inplace=1):
-		if f_find in line :
-			line = line.replace(f_find,f_replace)
-		sys.stdout.write(line)
-		
-	mea_exit(0)
 	
 def check_upd(key) :
 	upd_key_found = False
@@ -522,13 +540,13 @@ def ker_anl(fw_type) :
 	if fw_type == "extr" :
 		ker_data = reading[ker_start:ker_end]
 		try :
-			with open(mea_dir + "\\" + 'ker_temp.bin', 'w+b') as ker_temp : ker_temp.write(ker_data)
-			if os.path.isfile(mea_dir + "\\" + ker_name) : os.remove(mea_dir + "\\" + ker_name)
-			os.rename(mea_dir + "\\" + 'ker_temp.bin', mea_dir + "\\" + ker_name)
+			with open(mea_dir + os_dir + 'ker_temp.bin', 'w+b') as ker_temp : ker_temp.write(ker_data)
+			if os.path.isfile(mea_dir + os_dir + ker_name) : os.remove(mea_dir + os_dir + ker_name)
+			os.rename(mea_dir + os_dir + 'ker_temp.bin', mea_dir + os_dir + ker_name)
 			print(col_y + "Extracted Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
 		except :
 			print(col_r + "Error: could not extract Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
-			if os.path.isfile(mea_dir + "\\" + 'ker_temp.bin') : os.remove(mea_dir + "\\" + 'ker_temp.bin')
+			if os.path.isfile(mea_dir + os_dir + 'ker_temp.bin') : os.remove(mea_dir + os_dir + 'ker_temp.bin')
 		
 		return 'continue'
 		
@@ -706,11 +724,12 @@ param = MEA_Param(sys.argv)
 arg_num = len(sys.argv)
 
 # Set dependencies paths
-db_path = mea_dir + "\\" + "MEA.dat"
+db_path = mea_dir + os_dir + 'MEA.dat'
 if param.alt_dir :
 	top_dir = os.path.dirname(mea_dir) # Get parent dir of mea_dir -> UBU folder or UEFI_Strip folder
-	uf_path = top_dir + "\\" + "UEFIFind.exe"
-else : uf_path = mea_dir + "\\" + "UEFIFind.exe"
+	uf_path = top_dir + os_dir + uf_exec
+else :
+	uf_path = mea_dir + os_dir + uf_exec
 
 if not param.skip_intro :
 	db_rev = mea_hdr_init()
@@ -739,13 +758,13 @@ if not param.skip_intro :
 	# Non valid parameters are treated as files
 	if input_var[0] != "" :
 		for i in input_var:
-			if i not in param.all :
+			if i not in param.val :
 				sys.argv.append(i.strip('"'))
 	
 	# Re-enumerate parameter input
 	arg_num = len(sys.argv)
 	
-	os.system('cls')
+	os.system(cl_wipe)
 	
 	mea_hdr(db_rev)
 	
@@ -757,8 +776,8 @@ if (arg_num < 2 and not param.help_scr and not param.mass_scan) or param.help_sc
 if param.ubu_mea_pre or param.ubu_mea or param.extr_mea or param.print_msg :
 	pass
 else :
-	sys.excepthook = show_exception_and_exit  # Pause after any unexpected python exception
-	win32console.SetConsoleTitle(title) # Set console window title
+	sys.excepthook = show_exception_and_exit # Pause after any unexpected python exception
+	if mea_os == 'win32' : ctypes.windll.kernel32.SetConsoleTitleW(title) # Set console window title
 
 if param.mass_scan :
 	in_path = input('\nType the full folder path : ')
@@ -775,7 +794,7 @@ if not depend_db:
 	mea_exit(1)
 	
 if param.enable_uf and not depend_uf :
-	if not param.print_msg : print(col_r + "\nError: UEFIFind.exe file is missing!" + col_e)
+	if not param.print_msg : print(col_r + "\nError: UEFIFind file is missing!" + col_e)
 	mea_exit(1)
 	
 for file_in in source :
@@ -878,7 +897,7 @@ for file_in in source :
 	eng_fw_end = 0xFFFFFFFF
 	
 	if not os.path.isfile(file_in) :
-		if any(p in file_in for p in param.all) : continue # Next input file
+		if any(p in file_in for p in param.val) : continue # Next input file
 		
 		print(col_r + "\nError" + col_e + ": file %s was not found!" % file_in)
 		
@@ -2671,7 +2690,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		name_db_hash = name_db + '_' + rsa_hash
 		
 		if param.db_print_new :
-			with open(mea_dir + "\\" + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
+			with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
 			continue # Next input file
 		
 		# Search Engine database for firmware
