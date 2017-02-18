@@ -46,7 +46,7 @@ There are two ways to use ME Analyzer, MEA executable & Command Prompt. The MEA 
 
 ####**B1. ME Analyzer Executable**
 
-To use ME Analyzer, select one or multiple files and Drag & Drop them to its executable. You can also input certain optional parameters either by running MEA directly or by first dropping one or more files to it. Keep in mind that, due to operating system limitations, there is a limit on how many files can be dropped at once.
+To use ME Analyzer, select one or multiple files and Drag & Drop them to its executable. You can also input certain optional parameters either by running MEA directly or by first dropping one or more files to it. Keep in mind that, due to operating system limitations, there is a limit on how many files can be dropped at once. If the latter is a problem, you can always use the -mass parameter as explained below.
 
 ####**B2. ME Analyzer Parameters**
 
@@ -106,4 +106,4 @@ PyInstaller can freeze ME Analyzer at all three platforms, it is simple to run a
 
 > pyinstaller --clean --noconfirm --noupx --onefile --log-level=WARN --name MEA MEA.py
 
-5. At dist folder you should find the final MEA executable
+At dist folder you should find the final MEA executable
