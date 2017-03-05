@@ -1,7 +1,9 @@
 # ME Analyzer
 Intel Engine Firmware Analysis Tool
 
-[Official ME Analyzer forum thread](http://www.win-raid.com/t840f39-ME-Analyzer-Intel-Engine-Firmware-Analysis-Tool.html#msg14803)
+[ME Analyzer Discussion Topic](http://www.win-raid.com/t840f39-ME-Analyzer-Intel-Engine-Firmware-Analysis-Tool.html#msg14803)
+
+![](https://i.imgur.com/M29aJqF.png)
 
 ##**A. About ME Analyzer**
 
@@ -9,7 +11,7 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 
 ####**A1. ME Analyzer Features**
 
-- Supports all Engine firmware generations (ME 1 - 11, TXE 1 - 2 & SPS 1 - 4)
+- Supports all Engine firmware generations (ME 1 - 11, TXE 1 - 3 & SPS 1 - 4)
 - Supports all types of file images (Engine Regions, SPI/BIOS images etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
 - Detection of Production, Pre-Production, ROM-Bypass, MERecovery etc Releases
@@ -81,7 +83,7 @@ ME Analyzer is developed using Python 3.x and can work under Windows, Linux and 
 
 ####**C1. Compatibility**
 
-ME Analyzer has been tested to be compatible with Windows XP-10, Ubuntu 16.04 and macOS Sierra operating systems. It is expected to work at all Linux or macOS operating systems which have Python 3.x support but feel free to test it. It is executed using Python 3.4 under Windows and the built-in Python 3.5 under Linux and macOS. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible.
+ME Analyzer has been tested to be compatible with Windows Vista-10, Ubuntu 16.04 and macOS Sierra operating systems. It is expected to work at all Linux or macOS operating systems which have Python 3.5+ support but feel free to test it. It is executed using Python 3.6 under Windows and the built-in Python 3.5 under Linux and macOS. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible.
 
 ####**C2. Code Prerequisites**
 
@@ -99,7 +101,7 @@ To freeze ME Analyzer, you can use whatever you like. The following are verified
 
 PyInstaller can freeze ME Analyzer at all three platforms, it is simple to run and gets updated often.
 
-1. Make sure you have Python 3.5 installed
+1. Make sure you have Python 3.5+ installed
 2. Use pip to install colorama module
 3. Use pip to install pyinstaller module
 4. Open a command prompt and execute:

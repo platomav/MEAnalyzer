@@ -1,3 +1,12 @@
+v1.10.0
+
+Added support for TXE 3.x APL firmware
+Greatly improved false positive firmware detection
+Transitioned to Python 3.6, Windows XP dropped
+Transitioned to PyInstaller, msvcr100 not needed
+Fixed issue where filenames were missing letters
+Updated Engine Firmware Repository Database to r79
+
 v1.9.0
 
 Added Linux and macOS support

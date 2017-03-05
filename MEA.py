@@ -6,14 +6,16 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.9.0'
+title = 'ME Analyzer v1.10.0'
 
 import os
 import re
 import sys
+import time
 import ctypes
 import hashlib
 import inspect
+#import sqlite3
 import binascii
 import tempfile
 import colorama
@@ -361,10 +363,37 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 	sys.exit(-1)
 
 def mea_exit(code) :
+	try :
+		c.close()
+		conn.close() # Close DB connection
+	except :
+		pass
 	colorama.deinit() # Stop Colorama
 	if param.ubu_mea_pre or param.ubu_mea or param.extr_mea or param.print_msg : sys.exit(code)
 	input("\nPress enter to exit")
 	sys.exit(code)
+
+'''
+def mc_upd_chk(mc_dates):
+	mc_latest = True
+	
+	if mc_dates is not None:
+		for date in mc_dates:
+			dd = date[0][2:4]
+			mm = date[0][:2]
+			yyyy = date[0][4:8]
+			
+			if year < yyyy or (year == yyyy and month < mm or (month == mm and day < dd)):
+				mc_latest = False
+				break # No need for more loops
+	
+	if mc_latest:
+		mc_upd = col_g + 'Latest' + col_e
+	else:
+		mc_upd = col_r + 'Outdated' + col_e
+	
+	return mc_upd
+'''
 
 # Calculate SHA-1 hash of text
 def sha1_text(text) :
@@ -435,14 +464,19 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 		if (variant == 'ME' and major <= 10) or (variant == 'TXE' and major <= 2) : # CPU/BIOS, ME, GBE check
 			fd_bytes = reading[end_fd_match + 0x4E:end_fd_match + 0x50] + reading[end_fd_match + 0x52:end_fd_match + 0x54] \
 					   + reading[end_fd_match + 0x56:end_fd_match + 0x58]
-			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper() # Hex value with Little Endianess
+			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
 			if fd_bytes == 'FFFFFFFFFFFF' : return 2 # Unlocked FD
 			else : return 1 # Locked FD
-		elif (variant == 'ME' and major > 10) or (variant == 'TXE' and major > 2) : # CPU/BIOS, ME, GBE, EC check
+		elif (variant == 'ME' and major > 10) : # CPU/BIOS, ME, GBE, EC check
 			fd_bytes = reading[end_fd_match + 0x6D:end_fd_match + 0x70] + reading[end_fd_match + 0x71:end_fd_match + 0x74] \
 					   + reading[end_fd_match + 0x75:end_fd_match + 0x78] + reading[end_fd_match + 0x7D:end_fd_match + 0x80]
-			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper() # Hex value with Little Endianess
+			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
 			if fd_bytes == 'FFFFFFFFFFFFFFFFFFFFFFFF' : return 2 # Unlocked FD
+			else : return 1 # Locked FD
+		elif (variant == 'TXE' and major > 2) :
+			fd_bytes = reading[end_fd_match + 0x6D:end_fd_match + 0x70] + reading[end_fd_match + 0x71:end_fd_match + 0x74]
+			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
+			if fd_bytes == 'FFFFFFFFFFFF' : return 2 # Unlocked FD
 			else : return 1 # Locked FD
 	elif action == 'region' :
 		me_fd_base = int.from_bytes(reading[end_fd_match + 0x34:end_fd_match + 0x36], 'little')
@@ -649,20 +683,11 @@ def db_pkey() :
 	return pkey_var
 
 def intel_id() :
-	# DEV_ID is not always 8086, will fix when TXE3 support is added
-	# Engine x86 ISHC module can have OEM Signature & DEV_ID at $MN2
 	intel_id = reading[start_man_match - 0xB:start_man_match - 0x9]
 	intel_id = binascii.b2a_hex(intel_id[::-1]).decode('utf-8')
-	if intel_id != "8086" : # Initial Manifest is a false positive
-		print(col_r + "Error" + col_e + ": file does not contain Intel Engine firmware!")
-					
-		if param.multi : multi_drop() # Error Message not kept in array to allow param.multi detection
-		else: f.close()
-		
-		if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
-		
-		if param.ubu_mea_pre : mea_exit(8)
-		else : return 'continue'
+	
+	# Initial Manifest is a false positive
+	if intel_id != "8086" : return 'continue'
 	
 	return 'OK'
 	
@@ -702,7 +727,8 @@ def msg_rep() :
 # Force string to be printed as ASCII, ignore errors
 def force_ascii(string) :
 	# Input string is bare and only for printing (no open(), no Colorama etc)
-	ascii_str = (str(string.encode('ascii', 'ignore'))).strip("b'")
+	ascii_str = str((string.encode('ascii', 'ignore')).decode('utf-8', 'ignore'))
+	
 	return ascii_str
 	
 def mass_scan(f_path) :
@@ -712,7 +738,21 @@ def mass_scan(f_path) :
 			mass_files.append(os.path.join(root, name))
 			
 	input('\nFound %s file(s)\n\nPress enter to start' % len(mass_files))
+	
 	return mass_files
+
+# Setup DB Tables
+def create_tables():
+	c.execute('CREATE TABLE IF NOT EXISTS MEA(revision INTEGER, developer INTEGER, date INTEGER)')
+	c.execute('CREATE TABLE IF NOT EXISTS RSA(variant TEXT, pkey BLOB)')
+	c.execute('CREATE TABLE IF NOT EXISTS ME1(major INTEGER, minor INTEGER, hotfix INTEGER)')
+	c.execute('CREATE TABLE IF NOT EXISTS ME(major INTEGER, minor INTEGER, hotfix INTEGER, build INTEGER, sku TEXT, rel INTEGER, type TEXT, hash BLOB)')
+	c.execute('CREATE TABLE IF NOT EXISTS TXE(major INTEGER, minor INTEGER, hotfix INTEGER, build INTEGER, sku TEXT, rel INTEGER, type TEXT, hash BLOB)')
+	c.execute('CREATE TABLE IF NOT EXISTS SPS(major INTEGER, minor INTEGER, hotfix INTEGER, build INTEGER, sku TEXT, rel INTEGER, type TEXT, hash BLOB)')
+	
+	conn.commit()
+	
+	return
 	
 # Get script location
 mea_dir = get_script_dir()
@@ -789,10 +829,24 @@ else :
 depend_db = os.path.isfile(db_path)
 depend_uf = os.path.isfile(uf_path)
 
-if not depend_db:
-	if not param.print_msg : print(col_r + "\nError: MEA.dat file is missing!" + col_e)
-	mea_exit(1)
+# Connect to DB, if it exists
+if depend_db :
+	'''
+	conn = sqlite3.connect(mea_dir + os_dir + 'MEA.db')
+	c = conn.cursor()
 	
+	try :
+		c.execute('PRAGMA quick_check')
+	except :
+		print(col_r + "\nError: MEA.db file is corrupted!" + col_e)
+		mea_exit(1)
+	
+	create_tables()
+	'''
+else :
+	print(col_r + "\nError: MEA.dat file is missing!" + col_e)
+	mea_exit(1)
+
 if param.enable_uf and not depend_uf :
 	if not param.print_msg : print(col_r + "\nError: UEFIFind file is missing!" + col_e)
 	mea_exit(1)
@@ -835,7 +889,6 @@ for file_in in source :
 	me1_match = None
 	me11_vcn_match = None
 	jhi_warn = False
-	apl_warn = False
 	uf_error = False
 	multi_rgn = False
 	upd_found = False
@@ -965,7 +1018,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 	man_match_store = list(man_pat.finditer(reading))
 	
 	if len(man_match_store) :
-		for m in man_match_store : man_match_ranges.append(m)  # Store all Manifest ranges
+		for m in man_match_store : man_match_ranges.append(m) # Store all Manifest ranges
 		man_match = man_match_ranges[0] # Start from 1st Manifest by default
 	else :
 		me1_match = (re.compile(br'\x54\x65\x6B\x6F\x61\x41\x70\x70')).search(reading)  # TekoaApp detection, AMT 1.x only
@@ -1012,7 +1065,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					no_man_text = col_m + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_e + \
 					col_y + "\n\nNote: further analysis not possible without manifest header." + col_e
 				elif param.ubu_mea_pre :
-					no_man_text = "File does not contain Intel Engine Firmware"
+					no_man_text = "File does not contain Intel Engine firmware"
 				else :
 					no_man_text = "Release:  MERecovery Module\nGUID:     821D110C-D0A3-4CF7-AEF3-E28088491704" + \
 					col_m + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_e + \
@@ -1049,7 +1102,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 			# Image does not contain any kind of Intel Engine firmware
 			else :
-				no_man_text = "File does not contain Intel Engine Firmware"
+				no_man_text = "File does not contain Intel Engine firmware"
 
 		if param.extr_mea :
 			if no_man_text != "NaN" : print(no_man_text)
@@ -1062,7 +1115,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				for i in range(len(note_stor)) : print(note_stor[i])
 				print("")
 		elif param.ubu_mea_pre : # Must be before param.ubu_mea
-			if 'File does not contain Intel Engine Firmware' not in no_man_text :
+			if 'File does not contain Intel Engine firmware' not in no_man_text :
 				print(text_ubu_pre + ', use ME Analyzer for details!')
 			else : pass
 		elif param.ubu_mea :
@@ -1089,7 +1142,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			# Detect Firmware Starting Offset
 			if len(fpt_matches):
-				rgn_exist = True  # Set Engine/$FPT detection boolean
+				rgn_exist = True # Set Engine/$FPT detection boolean
 				
 				for r in fpt_matches:
 					fpt_ranges.append(r.span())  # Store all $FPT ranges
@@ -1182,34 +1235,49 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			start_man_match += rec_rgn_start
 			end_man_match += rec_rgn_start
 			
-			pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]).decode('utf-8', 'ignore') # FTPR (ME >= 11, TXE >= 3, SPS >= 4)
-			pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # FTPR (6 <= ME <= 10, TXE <= 2, SPS <= 3)
+			pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]).decode('utf-8', 'ignore') # FTPR,OPR. (ME >= 11, TXE >= 3, SPS >= 4)
+			pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # FTPR,OPxx,WCOD,LOCL (6 <= ME <= 10, TXE <= 2, SPS <= 3)
 			pr_man_3 = (reading[end_man_match + 0x28C:end_man_match + 0x290]).decode('utf-8', 'ignore') # BRIN (ME <= 5)
-			pr_man_4 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E0]).decode('utf-8', 'ignore') # EpsR (SPS 1)
+			pr_man_4 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E0]).decode('utf-8', 'ignore') # EpsR,EpsF (SPS 1)
 			pr_man_5 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # IGRT (ME 6 IGN)
+			pr_man_6 = (reading[end_man_match + 0x270:end_man_match + 0x277]).decode('utf-8', 'ignore') # $MMEBUP (ME 6 IGN BYP)
+			pr_man_7 = (reading[end_man_match + 0x26C:end_man_match + 0x270]).decode('utf-8', 'ignore') # WCOD,LOCL (ME >= 11 Partial)
 			
-			# Adjust Manifest Header to Recovery section, fallback when no $FPT or wrong initial manifest
-			if ("FTPR" not in [pr_man_1,pr_man_2]) and ("BRIN" not in pr_man_3) and ("EpsR" not in pr_man_4) and ("IGRT" not in pr_man_5) :
+			# Recovery Manifest Header not found (no $FPT or wrong initial manifest), fall back to manual scanning
+			if not any(p in pr_man_1 for p in ('FTPR','OPR')) and not any(p in pr_man_2 for p in ('FTPR','OP','WCOD','LOCL')) \
+			and ("BRIN" not in pr_man_3) and not any(p in pr_man_4 for p in ('EpsR','EpsF')) and ("IGRT" not in pr_man_5) \
+			and ("$MMEBUP" not in pr_man_6) and not any(p in pr_man_7 for p in ('WCOD','LOCL')) :
 				
 				if len(man_match_store) > 1 : # Extra searches only if multiple manifest exist
 					pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x274] + FTPR
+					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x4F\x50\x52\x00', re.DOTALL)).search(reading) # .$MN2 + [0x274] + OPR.
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x49\x47\x52\x54', re.DOTALL)).search(reading) # .$MN2 + [0x264] + IGRT
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x264] + FTPR
+					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x4F\x50.{2}',     re.DOTALL)).search(reading) # .$MN2 + [0x264] + OPxx
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{652}\x42\x52\x49\x4E', re.DOTALL)).search(reading) # .$MAN + [0x28C] + BRIN
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73\x52', re.DOTALL)).search(reading) # .$MAN + [0x2DC] + EpsR
-				
+					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73',     re.DOTALL)).search(reading) # .$MAN + [0x2DC] + Epsx
+					
+					# Found proper Manifest Header from Recovery section
 					if pr_man is not None :
-						# Found proper Manifest Header from Recovery section
 						(start_man_match, end_man_match) = pr_man.span()
 						end_man_match = start_man_match + 0x5 # .$MAN/.$MN2
+						
+						# Check if Intel DEV_ID of 8086 is valid
+						if intel_id() != 'OK' :
+							print("File does not contain Intel Engine firmware")
+							continue # Next input file
 					else :
-						# Fallback to initial Manifest, check Intel ID 8086 validity
-						if intel_id() == 'continue' : continue # Next input file
-						err_rep += 1
-						rec_missing = True
+						print("File does not contain Intel Engine firmware")
+						continue
+				# Only one (initial, non-Recovery) Manifest Header exists
 				else :
-					# Only one (initial) Manifest found, check Intel ID 8086 validity
-					if intel_id() == 'continue' : continue # Next input file
+					print("File does not contain Intel Engine firmware")
+					continue
+			
+			# Recovery Manifest Header found, check if Intel DEV_ID of 8086 is valid
+			elif intel_id() != 'OK' :
+				print("File does not contain Intel Engine firmware")
+				continue # Next input file
 			
 			# Detect RSA Signature and Public Key
 			rsa_hash,rsa_pkey = rsa_anl()
@@ -1282,6 +1350,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_size]) - reading[fpt_start + fpt_chk_byte]
 				fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
 				if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
+				
+				# TXE3 EXTR checksum from FIT is a placeholder (0x00), ignore
+				if [variant,major,fpt_chk_fail] == ['TXE',3,True] : fpt_chk_fail = False
 				
 				# Check SPS3 $FPT Checksum validity (from Lordkag's UEFIStrip)
 				if variant == 'SPS' and major == 3 :
@@ -2214,8 +2285,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku = sku_init + ' ' + pos_sku_ker # SKU retreived from Kernel Analysis
 				
 				# Adjust Production PCH Stepping, if not found at DB
-				if sku_stp == 'NaN' and release == 'Production' :
-					if (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158))) or minor in [5,6] :
+				if sku_stp == 'NaN' :
+					if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or minor in [5,6] :
 						if ' LP' in sku : sku_stp = 'C0'
 						elif ' H' in sku : sku_stp = 'D0'
 				
@@ -2445,20 +2516,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				platform = "BSW/CHT"
 				
-			elif major == 3 : # Not fully supported yet!
-				
-				apl_warn = True
-				
+			elif major == 3 :
 				vcn = vcn_skl(start_man_match, variant) # Detect VCN
 				
 				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
 				
-				# Cannot detect RGN/EXTR properly at SPI, $FPT missing
-				# RGN from kits have $FPT and are not detected as the fallback "Update" fw_type
-				#if fw_type == 'Update' :
-				fw_type = "Unknown"
-				rgn_exist = False
-				fd_lock_state = 0
+				if fw_type == 'Update' : fw_type = "Region, Extracted" # TXE3 PRD & PRE in IFWI/BIOS, BYP in TXE Region
 				
 				if minor == 0 :
 					
@@ -2478,10 +2541,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku = col_r + "Error" + col_e + ", unknown TXE 3.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
-
-				if param.me11_ker_extr :
-					ker_start,ker_end,rel_db = ker_anl('anl') # Detect Kernel offsets
-					ker_anl('extr') # Kernel Extraction
 				
 				platform = "Apollo Lake"
 			
@@ -2603,7 +2662,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							else : fw_type = "Region, Stock"
 						else :
 							fw_type = "Region, Stock"
-			elif (variant == "ME" and major >=8) or (variant == "TXE") or (variant == "SPS" and major > 3) :
+			elif (variant == "ME" and major >=8) or (variant == "TXE" and major < 3) or (variant == "SPS" and major > 3) :
 				# Check 1, FITC Version
 				# noinspection PyUnboundLocalVariable
 				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
@@ -2620,6 +2679,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					fitc_minor = fpt_hdr.FitMinor
 					fitc_hotfix = fpt_hdr.FitHotfix
 					fitc_build = fpt_hdr.FitBuild
+			elif variant == 'TXE' and major > 2 :
+				# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
+				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
+				reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' :
+					fw_type = "Region, Extracted"
+				else :
+					fw_type = "Region, Stock"
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
 		locl_start = (re.compile(br'\x24\x43\x50\x44........\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
@@ -2690,6 +2756,37 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		name_db_hash = name_db + '_' + rsa_hash
 		
 		if param.db_print_new :
+			'''
+			db_action = False
+			
+			command1 = "SELECT * FROM %s WHERE major=? AND minor=? AND hotfix=? AND build=? AND sku=? AND rel=? AND type=? AND hash=?" % variant
+			command2 = "INSERT INTO %s (major,minor,hotfix,build,sku,rel,type,hash) VALUES (?,?,?,?,?,?,?,?)" % variant
+			
+			if variant == 'ME' or variant == 'TXE' :
+				fw_at_db = (c.execute(command1, (major, minor, hotfix, build, sku_db, rel_db, type_db, rsa_hash,))).fetchone()
+					
+				if fw_at_db is None :
+					c.execute(command2, (major, minor, hotfix, build, sku_db, rel_db, type_db, rsa_hash))
+					
+					db_action = True
+				
+			elif variant == 'SPS' :
+				fw_at_db = (c.execute(command1, (major, minor, hotfix, build, sub_sku, rel_db, type_db, rsa_hash,))).fetchone()
+				
+				if fw_at_db is None :
+					c.execute(command2, (major, minor, hotfix, build, sub_sku, rel_db, type_db, rsa_hash))
+					
+					db_action = True
+				
+			if db_action :
+				c.execute('UPDATE MEA SET date=?', (int(time.time()),))
+				
+				conn.commit()
+				
+				print(col_g + "Added %s" % name_db + col_e)
+				
+			'''
+			
 			with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
 			continue # Next input file
 		
@@ -2859,8 +2956,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		if sku_missing : gen_msg(err_stor, col_r + "Error: SKU tag missing, incomplete Intel Engine firmware!" + col_e, '')
 		
 		if variant == "TXE" and ('UNK' in txe_sub) : gen_msg(err_stor, col_r + "Error: Unknown TXE %s.x platform! *" % major + col_e, '')
-		
-		if apl_warn : gen_msg(err_stor, col_r + 'Error: Intel TXE 3 APL is not supported yet!' + col_e, '')
 		
 		if uf_error : gen_msg(err_stor, col_r + 'Error: UEFIFind Engine GUID detection failed!' + col_e, '')
 		
