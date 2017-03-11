@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.10.0'
+title = 'ME Analyzer v1.10.1'
 
 import os
 import re
@@ -286,14 +286,22 @@ class CPD_Entry_Details(ctypes.LittleEndianStructure) :
 		# 0x34
 	]
 
-# Taken from Igor Skochinsky's me_unpack
+# Inspired from Igor Skochinsky's me_unpack
 def get_struct(str_, off, struct):
 	my_struct = struct()
 	struct_len = ctypes.sizeof(my_struct)
 	str_data = str_[off:off + struct_len]
 	fit_len = min(len(str_data), struct_len)
 	
-	if fit_len < struct_len: raise Exception(col_r + "\nError: cannot read %d bytes struct, expected %d!\n" % (fit_len, struct_len) + col_e)
+	if (off > file_end) or (fit_len < struct_len) :
+		err_stor.append(col_r + "Error: Offset 0x%0.2X out of bounds, incomplete image!" % off + col_e)
+		
+		for error in err_stor : print(error)
+		
+		if param.multi : multi_drop()
+		else: f.close()
+		
+		mea_exit(1)
 	
 	ctypes.memmove(ctypes.addressof(my_struct), str_data, fit_len)
 	
@@ -362,7 +370,7 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 	colorama.deinit() # Stop Colorama
 	sys.exit(-1)
 
-def mea_exit(code) :
+def mea_exit(code=0) :
 	try :
 		c.close()
 		conn.close() # Close DB connection
@@ -589,7 +597,7 @@ def ker_anl(fw_type) :
 def krod_anl() :
 	me11_sku_match = (re.compile(br'\x4B\x52\x4F\x44')).finditer(reading) # KROD detection
 
-	uuid_found = ""
+	uuid_found = ''
 	sku_check = "NaN"
 	me11_sku_ranges = []
 	
@@ -1021,8 +1029,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		for m in man_match_store : man_match_ranges.append(m) # Store all Manifest ranges
 		man_match = man_match_ranges[0] # Start from 1st Manifest by default
 	else :
-		me1_match = (re.compile(br'\x54\x65\x6B\x6F\x61\x41\x70\x70')).search(reading)  # TekoaApp detection, AMT 1.x only
-		if me1_match is not None : man_match = (re.compile(br'\x50\x72\x6F\x76\x69\x73\x69\x6F\x6E\x53\x65\x72\x76\x65\x72')).search(reading)  # ProvisionServer detection
+		me1_match = (re.compile(br'\x54\x65\x6B\x6F\x61\x41\x70\x70')).search(reading) # TekoaApp detection, AMT 1.x only
+		if me1_match is not None : man_match = (re.compile(br'\x50\x72\x6F\x76\x69\x73\x69\x6F\x6E\x53\x65\x72\x76\x65\x72')).search(reading) # ProvisionServer detection
 	
 	if man_match is None :
 		
@@ -1032,7 +1040,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		# Engine Region exists but cannot be identified
 		if fd_rgn_exist :
-			param.multi = False # Disable param.multi to keep such compressed ME Regions
 			fuj_version = fuj_umem_ver(me_fd_start) # Check if ME Region is Fujitsu UMEM compressed (me_fd_start from spi_fd function)
 			
 			# ME Region is Fujitsu UMEM compressed
@@ -1041,6 +1048,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
+			
+			# ME Region is Foxconn X58 Test?
+			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
+				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
+				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
+				
+				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
 			
 			# ME Region is Unknown
 			else :
@@ -1057,8 +1071,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			# Image is a ME Recovery Module of GUID 821D110C
 			if me_rec_guid == "0C111D82A3D0F74CAEF3E28088491704" :
-				param.multi = False # Disable param.multi to keep such compressed Engine Regions
-			
 				if param.extr_mea :
 					no_man_text = "NaN NaN_NaN_REC NaN NaN NaN" # For UEFI Strip (-extr)
 				elif param.print_msg :
@@ -1073,15 +1085,20 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			# Image is ME Fujitsu UMEM compressed
 			elif fuj_version != "NaN" :
-				param.multi = False # Disable param.multi to keep such compressed Engine Regions
 				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
 				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
+			# Image is Foxconn X58 Test?
+			elif reading[0:8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
+				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
+				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
+				
+				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
+			
 			# Image contains some Engine Flash Partition Table ($FPT)
 			elif fw_start_match is not None :
-				param.multi = False # Disable param.multi to keep such compressed Engine Regions
 				(start_fw_start_match, end_fw_start_match) = fw_start_match.span()
 				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
 				
@@ -1145,8 +1162,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				rgn_exist = True # Set Engine/$FPT detection boolean
 				
 				for r in fpt_matches:
-					fpt_ranges.append(r.span())  # Store all $FPT ranges
-					fpt_count += 1  # Count $FPT ranges
+					fpt_ranges.append(r.span()) # Store all $FPT ranges
+					fpt_count += 1 # Count $FPT ranges
 				
 				# Store ranges and start from 1st $FPT by default
 				(start_fw_start_match, end_fw_start_match) = fpt_ranges[0]
@@ -1160,12 +1177,19 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				while reading[start_fw_start_match + 0x2100:start_fw_start_match + 0x2104] == b'$FPT' : # next $FPT = previous + 0x2100
 					start_fw_start_match += 0x2100 # Adjust $FPT offset to the next header
 					fpt_count -= 1  # Clevo MERecovery + GbERecovery $FPT is ignored when reporting multiple firmware
+					
+				# Multiple MERecovery 0x1000 $FPT header bypass (example: SuperMicro)
+				while reading[start_fw_start_match + 0x1000:start_fw_start_match + 0x1004] == b'$FPT' : # next $FPT = previous + 0x1000
+					start_fw_start_match += 0x1000 # Adjust $FPT offset to the next header
+					fpt_count -= 1 # SuperMicro MERecovery $FPT is ignored when reporting multiple firmware
 				
 				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
 				
 				# Analyze $FPT header
 				fpt_step = start_fw_start_match + 0x20 # 0x20 $FPT entry size
 				fpt_part_num = int('%d' % fpt_hdr.NumPartitions)
+				fpt_version = int('%d' % fpt_hdr.Version)
+				fpt_length = int('%d' % fpt_hdr.Length)
 				
 				for i in range(0, fpt_part_num):
 					fpt_entry = get_struct(reading, fpt_step, FPT_Entry)
@@ -1329,25 +1353,25 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				# Trigger multiple $FPT message after MERecovery/SPS corrections
 				if fpt_count > 1 : multi_rgn = True
 				
-				if variant == "ME" and major == 2 :
-					fpt_start = start_fw_start_match
-					fpt_chk_byte = 0xB
-					fpt_chk_size = 0x20
-					fpt_chk_start = 0x0
-					fpt_pre_hdr = None
-				else :
-					fpt_start = start_fw_start_match - 0x10
-					fpt_chk_byte = 0x1B
-					fpt_chk_size = 0x30
-					fpt_chk_start = 0x0
-					if (variant == 'ME' and major >= 11) or (variant == 'TXE' and major >= 3) : fpt_chk_start = 0x10 # ROMB instructions excluded
+				fpt_pre_hdr = None
+				fpt_chk_start = 0x0
+				fpt_start = start_fw_start_match - 0x10
+				fpt_chk_byte = reading[start_fw_start_match + 0xB]
+				
+				if fpt_version == 32 and fpt_length == 48 :
 					fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
-				fpt_end = fpt_start + 0x1000  # 4KB size
+				elif fpt_version == 32 and fpt_length == 32 and ((variant == 'ME' and major >= 11) or (variant == 'TXE' and major >= 3) or (variant == 'SPS' and major >= 4)) :
+					fpt_chk_start = 0x10 # ROMB instructions excluded
+					fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
+				elif fpt_version == 16 and fpt_length == 32 :
+					fpt_start = start_fw_start_match
+				
+				fpt_end = fpt_start + 0x1000 # 4KB size
 				
 				# Check $FPT Checksum validity
 				# noinspection PyUnboundLocalVariable
 				fpt_chk_file = '0x%0.2X' % fpt_hdr.Checksum
-				chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_size]) - reading[fpt_start + fpt_chk_byte]
+				chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_start + fpt_length]) - fpt_chk_byte
 				fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
 				if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
 				
@@ -1729,11 +1753,23 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku = "AMT B0"
 					sku_db = "AMT_B0"
 				
+				# ME2-Only Fix 3: Detect ROMB RGN/EXTR image correctly (at $FPT v1 ROMB was before $FPT)
+				if rgn_exist and release == "Pre-Production" :
+					byp_pat = re.compile(br'\x24\x56\x45\x52\x02\x00\x00\x00', re.DOTALL) # $VER2... detection (ROM-Bypass)
+					byp_match = byp_pat.search(reading)
+					
+					if byp_match is not None :
+						release = "ROM-Bypass"
+						(byp_start, byp_end) = byp_match.span()
+						byp_size = fpt_start - (byp_start - 0x80)
+						eng_fw_end += byp_size
+						if 'Data in Engine region padding' in eng_size_text : eng_size_text = ''
+						
 				if minor >= 5 : platform = "Mobile"
 				else : platform = "Desktop"
 		
 			elif major == 3 : # Desktop ICH9x (All-Optional, QST) or ICH9DO (Q35, AMT): 3.0 & 3.1 & 3.2
-				if sku_me == "0E000000" :
+				if sku_me == "0E000000" or sku_me == "00000000" : # 00000000 for Pre-Alpha ROMB
 					sku = "AMT" # Active Management Technology --> Remote Control (Q35 only)
 					sku_db = "AMT"
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_3_AMT')
@@ -1754,7 +1790,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					err_stor.append(sku)
 
 				# ME3-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME3
-				me3_type_fix1 = 0
+				me3_type_fix1 = []
 				me3_type_fix2a = 0x10 * 'FF'
 				me3_type_fix2b = 0x10 * 'FF'
 				me3_type_fix3 = 0x10 * 'FF'
@@ -1786,13 +1822,25 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					elif sku == "ASF" and int(0x40000) < file_end < int(0xAF000): release = "ROM-Bypass"
 					elif sku == "QST" and file_end < int(0x2B000) : release = "ROM-Bypass"
 				
+				# ME3-Only Fix 3: Detect Pre-Alpha ($FPT v1) ROMB RGN/EXTR image correctly
+				if rgn_exist and fpt_version == 16 and release == "Pre-Production" :
+					byp_pat = byp_pat = re.compile(br'\x24\x56\x45\x52\x03\x00\x00\x00', re.DOTALL) # $VER3... detection (ROM-Bypass)
+					byp_match = byp_pat.search(reading)
+					
+					if byp_match is not None :
+						release = "ROM-Bypass"
+						(byp_start, byp_end) = byp_match.span()
+						byp_size = fpt_start - (byp_start - 0x80)
+						eng_fw_end += byp_size
+						if 'Data in Engine region padding' in eng_size_text : eng_size_text = ''
+				
 				platform = "Desktop"
 		
 			elif major == 4 : # Mobile ICH9M or ICH9M-E (AMT or TPM+AMT): 4.0 & 4.1 & 4.2 , xx00xx --> 4.0 , xx20xx --> 4.1 or 4.2
 				if sku_me == "AC200000" or sku_me == "AC000000" or sku_me == "04000000" : # 040000 for Pre-Alpha ROMB
 					sku = "AMT + TPM" # CA_ICH9_REL_ALL_SKUs_ (TPM + AMT)
 					sku_db = "ALL"
-				elif sku_me == "8C200000" or sku_me == "8C000000" or sku_me == "0C000000" : # 0C0000 for Pre-Alpha ROMB
+				elif sku_me == "8C200000" or sku_me == "8C000000" or sku_me == "0C000000" : # 0C000000 for Pre-Alpha ROMB
 					sku = "AMT" # CA_ICH9_REL_IAMT_ (AMT)
 					sku_db = "AMT"
 				elif sku_me == "A0200000" or sku_me == "A0000000" :
@@ -1922,15 +1970,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if release == "ROM-Bypass" :
 					err_rep -= 1
 					rec_missing = False
+					if 'Firmware size exceeds file' in eng_size_text : eng_size_text = ''
 				
 			elif major == 7 :
 			
 				# ME7.1 firmware had two SKUs (1.5MB or 5MB) for each platform: Cougar Point (6-series) or Patsburg (C600,X79)
-				# For each firmware we are interested in SKU, Minor version & Platform. SKU: 1.5MB is 701C , 5MB is 775C
-				# Minor version for 1.5MB: 7.0.x is 0001 , 7.1.x is 1001 & Minor version for 5MB: 7.0.x is EF0D , 7.1.x is FF0D
-				# For Apple MAC, Minor version for 1.5MB: 7.0.x is 0081 & 5MB is unknown
-				# Platform for 1.5MB: CPT is 0322 , PBG is 8322 & Platform for 5MB: CPT is 0A43 , PBG is 8A43
-				# After 7.1.50.1172 both platforms were merged into one firmware with the PBG SKUs so 1.5MB --> 8322 , 5MB --> 8A43
+				# After 7.1.50.1172 both platforms were merged into one firmware under the PBG SKU
 				# Firmware 7.1.21.1134 is PBG-exclusive according to documentation. All 7.1.21.x releases, if any more exist, seem to be PBG-only
 				# All firmware between 7.1.20.x and 7.1.41.x (excluding 7.1.21.x, 7.1.22.x & 7.1.20.1056) are CPT-only BUT with the PBG SKU
 				# So basically every firmware after 7.1.20.x has the PBG SKU but only after 7.1.50.x are the platforms truly merged (CPT+PBG)
@@ -2331,7 +2376,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					platform = "SPT"
 				
 				# 11.5 : Some weird in-between, dead branch
-				elif minor == 5 : platform = "SPT/KBP"
+				elif minor == 5 :
+					upd_found = True
+					
+					platform = "SPT/KBP"
 				
 				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
 				elif minor == 6 : platform = "SPT/KBP"
@@ -2961,7 +3009,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if err_rep > 0 : gen_msg(err_stor, col_r + "* Please report this issue!" + col_e, '')
 		
-		if eng_size_text != '' and not (major ==6 and release == "ROM-Bypass") : gen_msg(warn_stor, col_m + '%s' % eng_size_text + col_e, '')
+		if eng_size_text != '' : gen_msg(warn_stor, col_m + '%s' % eng_size_text + col_e, '')
 		
 		if fpt_chk_fail : gen_msg(warn_stor, col_m + "Warning: Wrong $FPT checksum %s, expected %s!" % (fpt_chk_file,fpt_chk_calc) + col_e, '')
 		
@@ -2975,7 +3023,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if me_rec_ffs or jhi_warn : gen_msg(warn_stor, col_m + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_e, 'del')
 			
-		if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_y + "Note: %s Firmware Update OEM ID detected!" % uuid_found + col_e, '')
+		if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_y + "Note: FWUpdate OEM ID detected!" + col_e, '')
 				
 		if multi_rgn : gen_msg(note_stor, col_y + "Note: Multiple (%d) Intel Engine Firmware detected in file!" % fpt_count + col_e, '')
 		

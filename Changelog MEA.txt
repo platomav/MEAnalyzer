@@ -1,3 +1,14 @@
+v1.10.1
+
+Improved detection of $FPT version and size
+Added ME2 & early ME3 ROM-Bypass support
+Added detection of SuperMicro $FPT MERecovery
+Added detection of Foxconn X58 ME region test
+Fixed crash when analyzing ME3 without EFFS
+Fixed issue which caused -multi to be disabled
+Various other code and text improvements
+Updated Engine Firmware Repository Database to r80
+
 v1.10.0
 
 Added support for TXE 3.x APL firmware
