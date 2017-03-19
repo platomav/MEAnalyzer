@@ -1,3 +1,10 @@
+v1.10.2
+
+PDM is now shown at all ME 11.x PCH-LP firmware
+Adjusted -multi to copy and not rename files with messages
+Adjusted -eker to also separate x86 Kernel to sub-sections
+Updated Engine Firmware Repository Database to r81
+
 v1.10.1
 
 Improved detection of $FPT version and size

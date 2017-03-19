@@ -6,13 +6,15 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.10.1'
+title = 'ME Analyzer v1.10.2'
 
 import os
 import re
 import sys
 import time
+import struct
 import ctypes
+import shutil
 import hashlib
 import inspect
 #import sqlite3
@@ -86,7 +88,7 @@ class MEA_Param :
 		for i in source :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
-			if i == '-multi' : self.multi = True # Checks multiple files, keeps those with messages and renames everything else.
+			if i == '-multi' : self.multi = True # Checks multiple files, copies those with messages to new folder.
 			if i == '-eker' : self.me11_ker_extr = True # Extraction of post-SKL FTPR > Kernel region.
 			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print post-SKL Kernel/FIT SKU analysis even when firmware is hash-known.
 			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
@@ -332,7 +334,7 @@ def mea_help() :
 	text = "\nUsage: MEA [FilePath] {Options}\n\n{Options}\n\n"
 	text += "-?      : Displays help & usage screen\n"
 	text += "-skip   : Skips options intro screen\n"
-	text += "-multi  : Scans multiple files and renames on messages\n"
+	text += "-multi  : Scans multiple files and copies on messages\n"
 	text += "-mass   : Scans all files of a given directory\n"
 	text += "-enuf   : Enables UEFIFind Engine GUID detection\n"
 	text += "-pdb    : Writes input firmware's DB entries to file\n"
@@ -409,10 +411,20 @@ def sha1_text(text) :
 
 # Must be called at the end of analysis to gather all available messages, if any
 def multi_drop() :
-	if err_stor or warn_stor or note_stor : # Any note, warning or error renames the file
+	if err_stor or warn_stor or note_stor : # Any note, warning or error copies the file
 		f.close()
-		new_multi_name = os.path.dirname(file_in) + os_dir + "__CHECK__" + os.path.basename(file_in)
-		os.rename(file_in, new_multi_name)
+		suffix = 0
+		
+		file_name = os.path.basename(file_in)
+		check_dir = mea_dir + os_dir + '__CHECK__' + os_dir
+		
+		if not os.path.isdir(check_dir) : os.mkdir(check_dir)
+		
+		while os.path.exists(check_dir + file_name) :
+			suffix += 1
+			file_name += '_%s' % suffix
+		
+		shutil.copyfile(file_in, check_dir + file_name)
 
 def db_open() :
 	fw_db = open(db_path, "r")
@@ -584,8 +596,35 @@ def ker_anl(fw_type) :
 		try :
 			with open(mea_dir + os_dir + 'ker_temp.bin', 'w+b') as ker_temp : ker_temp.write(ker_data)
 			if os.path.isfile(mea_dir + os_dir + ker_name) : os.remove(mea_dir + os_dir + ker_name)
-			os.rename(mea_dir + os_dir + 'ker_temp.bin', mea_dir + os_dir + ker_name)
+			new_ker_name = mea_dir + os_dir + ker_name
+			os.rename(mea_dir + os_dir + 'ker_temp.bin', new_ker_name)
 			print(col_y + "Extracted Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
+			
+			with open(new_ker_name, 'r+b') as ker_file :
+				counter = 0
+				hdr_size = 0
+				extr_off = []
+				
+				ker_read = ker_file.read()
+				while ker_read[hdr_size] in [0,64,128,192] and ker_read[hdr_size + 0x3] in [0,64,128,192] :
+					hdr_size += 4
+				hdr_data = ker_read[:hdr_size]
+				for step in range(0x0,hdr_size,0x4) :
+					extr_off.append(struct.unpack("<I", hdr_data[step:step + 0x3] + b'\x00')[0] + hdr_size)
+				
+				extr_len = len(extr_off)
+				for offset in extr_off :
+					counter += 1
+					if counter >= extr_len : next_offset = ker_file.seek(0,2) # Some alignment padding may also be kept
+					else : next_offset = extr_off[counter]
+		
+					part = ker_read[offset:next_offset]
+					ker_dir = mea_dir + os_dir + ker_name + '_Sections'
+		
+					if not os.path.isdir(ker_dir) : os.mkdir(ker_dir)
+					with open(ker_dir + os_dir + '%s.bin' % counter, "w+b") as out_file : out_file.write(part)
+					
+				print(col_y + "\nSeparated Kernel into %s sections" % counter + col_e)
 		except :
 			print(col_r + "Error: could not extract Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
 			if os.path.isfile(mea_dir + os_dir + 'ker_temp.bin') : os.remove(mea_dir + os_dir + 'ker_temp.bin')
@@ -655,7 +694,7 @@ def db_skl(variant) :
 	db_sku_chk = "NaN"
 	sku = "NaN"
 	sku_stp = "NaN"
-	sku_pdm = "UKPDM"
+	sku_pdm = "UPDM"
 	
 	for line in fw_db :
 		if len(line) < 2 or line[:3] == "***" :
@@ -666,7 +705,7 @@ def db_skl(variant) :
 				db_sku_chk = line_parts[2] # Store the SKU from DB for latter use
 				sku = sku_init + " " + line_parts[2] # Cel 2 is SKU
 				if line_parts[3] != "XX" : sku_stp = line_parts[3] # Cel 3 is PCH Stepping
-				if line_parts[4] in ['PDM','NOPDM','UKPDM'] : sku_pdm = line_parts[4] # Cel 4 is PDM
+				if 'YPDM' in line_parts[4] or 'NPDM' in line_parts[4] or 'UPDM' in line_parts[4] : sku_pdm = line_parts[4] # Cel 4 is PDM
 			elif variant == 'TXE' :
 				if line_parts[1] != "XX" : sku_stp = line_parts[1] # Cel 1 is PCH Stepping
 			break # Break loop at 1st rsa_hash match
@@ -1143,7 +1182,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			print("%s" % no_man_text)
 			if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 			
-		if param.multi : multi_drop() # All Messages here are not kept in arrays to allow param.multi deletion
+		if param.multi : multi_drop()
 		else: f.close()
 		
 		continue # Next input file
@@ -1683,7 +1722,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					print(col_y + "Note: This firmware was not found at the database, please report it!" + col_e)
 					note_stor.append(col_y + "Note: This firmware was not found at the database, please report it!" + col_e)
 				
-				if param.multi : multi_drop() # Some (not all) Messages here are not kept in arrays to allow param.multi deletion
+				if param.multi : multi_drop()
 				
 				if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 				
@@ -2359,20 +2398,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# 11.0 : Skylake , Sunrise Point
 				if minor == 0 :
-					
-					# Power Down Mitigation (PDM) is some 11.0 PCH-LP errata
-					# Hardcoded in FTPR > BUP, first appeared at 11.0.0.1183
-					# Cannot detect compression patterns to separate PDM/NOPDM
-					# PDM status can be seen at LSB of FW Status Register 3
-					if ' H' in sku :
-						pdm_status = 'NaN'
-					else :
-						if sku_pdm == 'PDM' : pdm_status = 'Yes'
-						elif sku_pdm == 'NOPDM' : pdm_status = 'No'
-						else : pdm_status = 'Unknown'
-						
-						sku_db += '_%s' % sku_pdm
-				
 					platform = "SPT"
 				
 				# 11.5 : Some weird in-between, dead branch
@@ -2382,13 +2407,29 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					platform = "SPT/KBP"
 				
 				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
-				elif minor == 6 : platform = "SPT/KBP"
+				elif minor == 6 :
+					platform = "SPT/KBP"
 				
 				# 11.x : Unknown
 				else :
 					sku = col_r + "Error" + col_e + ", unknown ME 11.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
+				
+				# Power Down Mitigation (PDM) is an SPT-LP C0 erratum, first fixed at ~11.0.0.1183
+				# Hardcoded in FTPR > BUP, cannot detect compression patterns to separate PDM/NOPDM
+				# Assumed fixed at KBP-LP A0 but 11.6 has PDM firmware for KBL-upgraded SPT-LP C0
+				# 11.0 PDM firmware is tagged accordingly at separate binaries (trustworthy)
+				# 11.6 PDM firmware tags cannot be trusted, two Kits (SPT/different & KBP/copy)
+				# PDM status can be seen at LSB of FW Status Register 3, not trustworthy at 11.6
+				if ' H' in sku :
+					pdm_status = 'NaN'
+				else :
+					if 'YPDM' in sku_pdm : pdm_status = 'Yes'
+					elif 'NPDM' in sku_pdm : pdm_status = 'No'
+					else : pdm_status = 'Unknown'
+						
+					sku_db += '_%s' % sku_pdm
 				
 				if ('Error' in sku) or param.me11_ker_disp: me11_ker_anl = True
 				
@@ -2880,6 +2921,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			new_dir_name = os.path.join(os.path.dirname(file_in), name_db + '.bin')
 			f.close()
 			if not os.path.exists(new_dir_name) : os.rename(file_name, new_dir_name)
+			elif os.path.basename(file_in) == name_db + '.bin' : pass
+			else : print(col_r + 'Error: ' + col_e + 'A file with the same name already exists!')
+			
 			continue # Next input file
 		
 		# UEFI Bios Updater Pre-Menu Integration (must be after processing but before message printing)
@@ -2895,7 +2939,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					name_db = "%s_%s_%s_%s" % (fw_ver(), rel_db, type_db, rsa_hash)
 				else :
 					# noinspection PyUnboundLocalVariable
-					if variant == 'ME' and major == 11 and (sku_db == 'CON_X' or sku_db == 'COR_X') and sku_stp == 'NaN' and sku_pdm == 'NaN' : sku_db += "_XX_UKPDM"
+					if variant == 'ME' and major == 11 and (sku_db == 'CON_X' or sku_db == 'COR_X') and sku_stp == 'NaN' and sku_pdm == 'NaN' : sku_db += "_XX_UPDM"
 					name_db = "%s_%s_%s_%s_%s" % (fw_ver(), sku_db, rel_db, type_db, rsa_hash)
 				
 			if fuj_rgn_exist : name_db = "%s_UMEM" % name_db
@@ -2947,7 +2991,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 
 				if ((variant == "ME" and major >= 8) or variant == "TXE") and not wcod_found : print("VCN:      %s" % vcn)
 
-				if [variant,major,minor,wcod_found] == ['ME',11,0,False] and pdm_status != 'NaN' :
+				if [variant,major,wcod_found] == ['ME',11,False] and pdm_status != 'NaN' :
 					# noinspection PyUnboundLocalVariable
 					print("PDM:      %s" % pdm_status)
 

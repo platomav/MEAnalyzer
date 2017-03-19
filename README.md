@@ -56,7 +56,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 
 * -?      : Displays help & usage screen
 * -skip   : Skips options intro screen
-* -multi  : Scans multiple files and renames on messages
+* -multi  : Scans multiple files and copies on messages
 * -mass   : Scans all files of a given directory
 * -enuf   : Enables UEFIFind Engine GUID detection
 * -pdb    : Writes input firmware's DB entries to file
@@ -101,7 +101,7 @@ To freeze ME Analyzer, you can use whatever you like. The following are verified
 
 PyInstaller can freeze ME Analyzer at all three platforms, it is simple to run and gets updated often.
 
-1. Make sure you have Python 3.5+ installed
+1. Make sure you have Python 3.5 or 3.6 installed
 2. Use pip to install colorama module
 3. Use pip to install pyinstaller module
 4. Open a command prompt and execute:
