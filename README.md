@@ -10,7 +10,7 @@ Intel Engine Firmware Analysis Tool
 ME Analyzer is a tool which can show various details about Intel Engine Firmware (Management Engine, Trusted Execution Engine, Service Platform Services) images. It can be used to identify whether the firmware is updated, healthy, what Release, Type, SKU it is etc.
 
 ####**A1. ME Analyzer Features**
-
+ 
 - Supports all Engine firmware generations (ME 1 - 11, TXE 1 - 3 & SPS 1 - 4)
 - Supports all types of file images (Engine Regions, SPI/BIOS images etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
