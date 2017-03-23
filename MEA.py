@@ -2276,10 +2276,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						
 				match_1_h = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x15')).search(ker_sku)
 				match_1_lp = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x11')).search(ker_sku)
-						
+				
 				match_2_h = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x50')).search(ker_sku)
 				match_2_lp = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x11')).search(ker_sku)
-						
+				
 				match_3_h = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x0A')).search(ker_sku)
 				match_3_lp = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x08')).search(ker_sku)
 						
