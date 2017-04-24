@@ -6,18 +6,16 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.10.2'
+title = 'ME Analyzer v1.11.0'
 
 import os
 import re
 import sys
-import time
 import struct
 import ctypes
 import shutil
 import hashlib
 import inspect
-#import sqlite3
 import binascii
 import tempfile
 import colorama
@@ -120,6 +118,7 @@ class FPT_Pre_Header(ctypes.LittleEndianStructure) :
 		# 0x10
 	]
 
+# noinspection PyTypeChecker
 class FPT_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -140,6 +139,7 @@ class FPT_Header(ctypes.LittleEndianStructure) :
 		# 0x20
 	]
 
+# noinspection PyTypeChecker
 class FPT_Entry(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -153,7 +153,8 @@ class FPT_Entry(ctypes.LittleEndianStructure) :
 		("Flags",			uint32_t),		# 0x4C
 		# 0x20
 	]
-	
+
+# noinspection PyTypeChecker
 class MN2_Manifest(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -188,6 +189,7 @@ class MN2_Manifest(ctypes.LittleEndianStructure) :
 		# 0x290
 	]
 
+# noinspection PyTypeChecker
 class MN2_Manifest_CPD_Cont(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -203,7 +205,8 @@ class MN2_Manifest_CPD_Cont(ctypes.LittleEndianStructure) :
 		("Unknown40_44", 	uint32_t),  	# 0x40
 		# 0x44
 	]
-	
+
+# noinspection PyTypeChecker
 class MME_Header_Old(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -221,7 +224,8 @@ class MME_Header_Old(ctypes.LittleEndianStructure) :
 		("Unk4C_50",		uint32_t),		# 0x4C
 		# 0x50
 	]
-	
+
+# noinspection PyTypeChecker
 class MME_Header_New(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -241,7 +245,8 @@ class MME_Header_New(ctypes.LittleEndianStructure) :
 		("Unk5C",			uint32_t),		# 0x5C
 		# 0x60
 	]
-	
+
+# noinspection PyTypeChecker
 class MCP_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -257,7 +262,8 @@ class MCP_Header(ctypes.LittleEndianStructure) :
 		("Unknown40_44", 	uint32_t),  	# 0x40 (01000000)
 		# 0x44
 	]
-	
+
+# noinspection PyTypeChecker
 class CPD_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -268,6 +274,7 @@ class CPD_Header(ctypes.LittleEndianStructure) :
 		# 0x10
 	]
 
+# noinspection PyTypeChecker
 class CPD_Entry(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -277,7 +284,8 @@ class CPD_Entry(ctypes.LittleEndianStructure) :
 		("Flags",			uint32_t),		# 0x14
 		# 0x18
 	]
-	
+
+# noinspection PyTypeChecker
 class CPD_Entry_Details(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
@@ -373,37 +381,17 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 	sys.exit(-1)
 
 def mea_exit(code=0) :
+	"""
 	try :
 		c.close()
 		conn.close() # Close DB connection
 	except :
 		pass
+	"""
 	colorama.deinit() # Stop Colorama
 	if param.ubu_mea_pre or param.ubu_mea or param.extr_mea or param.print_msg : sys.exit(code)
 	input("\nPress enter to exit")
 	sys.exit(code)
-
-'''
-def mc_upd_chk(mc_dates):
-	mc_latest = True
-	
-	if mc_dates is not None:
-		for date in mc_dates:
-			dd = date[0][2:4]
-			mm = date[0][:2]
-			yyyy = date[0][4:8]
-			
-			if year < yyyy or (year == yyyy and month < mm or (month == mm and day < dd)):
-				mc_latest = False
-				break # No need for more loops
-	
-	if mc_latest:
-		mc_upd = col_g + 'Latest' + col_e
-	else:
-		mc_upd = col_r + 'Outdated' + col_e
-	
-	return mc_upd
-'''
 
 # Calculate SHA-1 hash of text
 def sha1_text(text) :
@@ -487,13 +475,13 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
 			if fd_bytes == 'FFFFFFFFFFFF' : return 2 # Unlocked FD
 			else : return 1 # Locked FD
-		elif (variant == 'ME' and major > 10) : # CPU/BIOS, ME, GBE, EC check
+		elif variant == 'ME' and major > 10 : # CPU/BIOS, ME, GBE, EC check
 			fd_bytes = reading[end_fd_match + 0x6D:end_fd_match + 0x70] + reading[end_fd_match + 0x71:end_fd_match + 0x74] \
 					   + reading[end_fd_match + 0x75:end_fd_match + 0x78] + reading[end_fd_match + 0x7D:end_fd_match + 0x80]
 			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
 			if fd_bytes == 'FFFFFFFFFFFFFFFFFFFFFFFF' : return 2 # Unlocked FD
 			else : return 1 # Locked FD
-		elif (variant == 'TXE' and major > 2) :
+		elif variant == 'TXE' and major > 2 :
 			fd_bytes = reading[end_fd_match + 0x6D:end_fd_match + 0x70] + reading[end_fd_match + 0x71:end_fd_match + 0x74]
 			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
 			if fd_bytes == 'FFFFFFFFFFFF' : return 2 # Unlocked FD
@@ -508,10 +496,9 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 		else :
 			return False,0,0 # FD found, ME Region missing
 		
-def fw_ver() :
+def fw_ver(major,minor,hotfix,build) :
 	if variant == "SPS" :
-		if sub_sku != "NaN" : version = "%s.%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku) # xx.xx.xx.xxx.y
-		else : version = "%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build)) # xx.xx.xx.xxx
+		version = "%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build)) # xx.xx.xx.xxx
 	else :
 		version = "%s.%s.%s.%s" % (major, minor, hotfix, build)
 	
@@ -568,7 +555,7 @@ def vcn_skl(start_man_match, variant) :
 		(start_vcn_match, end_vcn_match) = me11_vcn_match.span()
 		
 		if variant == "TXE" : vcn = reading[start_man_match + end_vcn_match:start_man_match + end_vcn_match + 0x1] # TXE 3.x
-		else : vcn = reading[start_man_match + end_vcn_match + 0x24:start_man_match + end_vcn_match + 0x25] # ME 11.x & SPS 4.x
+		else : vcn = reading[start_man_match + end_vcn_match + 0x24:start_man_match + end_vcn_match + 0x25] # ME 11.x
 		vcn = int(binascii.b2a_hex(vcn[::-1]), 16)
 		
 		return vcn
@@ -588,7 +575,6 @@ def ker_anl(fw_type) :
 		if release == "Production" : rel_db = "PRD"
 		elif release == "Pre-Production" : rel_db = "PRE"
 		elif release == "ROM-Bypass" : rel_db = "BYP"
-		if variant == "SPS" : ker_name = "%s.%s.%s.%s_%s.bin" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db)
 		else : ker_name = "%s.%s.%s.%s_%s_%s.bin" % (major, minor, hotfix, build, sku_db, rel_db)
 	
 	if fw_type == "extr" :
@@ -669,7 +655,7 @@ def krod_anl() :
 			oemid_check = str_split_as_bytes(oemid_check)
 			
 			# Checks only first two OEMID parts to avoid possible EFFS 0x40 checksum before the other three
-			if any(id in oemid_check for id in (' 6F 6E 65 4C 6F 76 ', ' 05 04 00 00 00 00 ', ' 06 04 00 00 00 00 ')) :
+			if any(uuid in oemid_check for uuid in (' 6F 6E 65 4C 6F 76 ', ' 05 04 00 00 00 00 ', ' 06 04 00 00 00 00 ')) :
 				# 4C656E6F-766F-0000-0000-000000000000, 00000405-0000-0000-0000-000000000000, 00000406-0000-0000-0000-000000000000
 				uuid_found = "Lenovo"
 			elif ' 22 36 85 68 D3 EE ' in oemid_check :
@@ -758,8 +744,8 @@ def msg_rep() :
 	elif param.alt_msg_echo and param.hid_find : print("") # When both -hid and -aecho, aecho prefered due to Rule 2
 	
 	if param.hid_find : # Parameter -hid always prints a message whether the error/warning/note arrays are empty or not
-		if me_rec_ffs : print(col_y + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver()) + col_e)
-		elif jhi_warn : print(col_y + "MEA: Found Intel %s IPT-DAL Module %s_NaN_IPT in file!" % (variant, fw_ver()) + col_e)
+		if me_rec_ffs : print(col_y + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver(major,minor,hotfix,build)) + col_e)
+		elif jhi_warn : print(col_y + "MEA: Found Intel %s IPT-DAL Module %s_NaN_IPT in file!" % (variant, fw_ver(major,minor,hotfix,build)) + col_e)
 		else : print(col_y + "MEA: Found Intel %s Firmware %s in file!" % (variant, name_db) + col_e)
 		
 		if err_stor or warn_stor or note_stor : print("") # Separates -hid from -msg output (only when messages exist, Rule 1 compliant)
@@ -787,19 +773,6 @@ def mass_scan(f_path) :
 	input('\nFound %s file(s)\n\nPress enter to start' % len(mass_files))
 	
 	return mass_files
-
-# Setup DB Tables
-def create_tables():
-	c.execute('CREATE TABLE IF NOT EXISTS MEA(revision INTEGER, developer INTEGER, date INTEGER)')
-	c.execute('CREATE TABLE IF NOT EXISTS RSA(variant TEXT, pkey BLOB)')
-	c.execute('CREATE TABLE IF NOT EXISTS ME1(major INTEGER, minor INTEGER, hotfix INTEGER)')
-	c.execute('CREATE TABLE IF NOT EXISTS ME(major INTEGER, minor INTEGER, hotfix INTEGER, build INTEGER, sku TEXT, rel INTEGER, type TEXT, hash BLOB)')
-	c.execute('CREATE TABLE IF NOT EXISTS TXE(major INTEGER, minor INTEGER, hotfix INTEGER, build INTEGER, sku TEXT, rel INTEGER, type TEXT, hash BLOB)')
-	c.execute('CREATE TABLE IF NOT EXISTS SPS(major INTEGER, minor INTEGER, hotfix INTEGER, build INTEGER, sku TEXT, rel INTEGER, type TEXT, hash BLOB)')
-	
-	conn.commit()
-	
-	return
 	
 # Get script location
 mea_dir = get_script_dir()
@@ -888,7 +861,7 @@ if depend_db :
 		print(col_r + "\nError: MEA.db file is corrupted!" + col_e)
 		mea_exit(1)
 	
-	create_tables()
+	#create_tables()
 	'''
 else :
 	print(col_r + "\nError: MEA.dat file is missing!" + col_e)
@@ -907,22 +880,19 @@ for file_in in source :
 	upd_rslt = ""
 	found_guid = ""
 	uuid_found = ""
-	err_sps_sku = ""
 	me2_type_fix = ""
 	me2_type_exp = ""
+	name_db_hash = ""
 	eng_size_text = ""
 	sku = "NaN"
 	pvpc = "NaN"
 	sku_db = "NaN"
 	rel_db = "NaN"
-	sub_sku = "NaN"
 	type_db = "NaN"
 	sku_stp = "NaN"
 	txe_sub = "NaN"
 	platform = "NaN"
 	sku_init = "NaN"
-	sps_serv = "NaN"
-	opr_mode = "NaN"
 	txe_sub_db = "NaN"
 	fuj_version = "NaN"
 	no_man_text = "NaN"
@@ -1097,7 +1067,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			# ME Region is Unknown
 			else :
-				no_man_text = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware\n\n" + col_r + "Please report this issue!" + col_e
+				no_man_text = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware"
 				text_ubu_pre = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
@@ -1143,15 +1113,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				if fpt_hdr.FitBuild != 0 and fpt_hdr.FitBuild != 65535 :
 					fitc_ver = "%s.%s.%s.%s" % (fpt_hdr.FitMajor, fpt_hdr.FitMinor, fpt_hdr.FitHotfix, fpt_hdr.FitBuild)
-					no_man_text = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s\n\n" % fitc_ver) + col_r + \
-					"Please report this issue!" + col_e
+					no_man_text = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
 					text_ubu_pre = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
 					
 					if param.extr_mea : no_man_text = "NaN %s_NaN_FPT %s NaN NaN" % (fitc_ver, fitc_ver) # For UEFI Strip (-extr)
 				
 				else :
-					no_man_text = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table\n\n" + col_r + \
-					"Please report this issue!" + col_e
+					no_man_text = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table"
 					text_ubu_pre = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table"
 					
 					if param.extr_mea : no_man_text = "NaN NaN_NaN_FPT NaN NaN NaN" # For UEFI Strip (-extr)
@@ -1241,10 +1209,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if p_name in [b'\xFF\xFF\xFF\xFF', b''] :
 						p_name = '----' # If appears, wrong NumPartitions
 						fpt_num_diff -= 1 # Check for less $FPT Entries
-					elif p_name == b'\xE0\x15': p_name = '----'  # ME8 (E0150020)
+					elif p_name == b'\xE0\x15': p_name = '----' # ME8 (E0150020)
 					else : p_name = p_name.decode('utf-8', 'ignore')
 					
-					if p_owner in [b'\xFF\xFF\xFF\xFF', b''] : p_owner = '----'  # Missing
+					if p_owner in [b'\xFF\xFF\xFF\xFF', b''] : p_owner = '----' # Missing
 					else : p_owner = p_owner.decode('utf-8', 'ignore')
 					
 					if p_offset in [4294967295, 0] : p_offset_print = '----------'
@@ -1261,9 +1229,17 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					p_names_store.append(p_name) # For ME2 CODE after RCVY
 					if (p_name == 'CODE' and 'RCVY' not in p_names_store) or p_name in ['RCVY', 'FTPR', 'IGRT'] :
 						rec_rgn_start = start_fw_start_match + p_offset
-						# Only if offset exists at file (counter-example: MERecovery, sole $FPT etc)
-						if rec_rgn_start < file_end : man_match = man_pat.search(reading[rec_rgn_start:])
-						else : rec_rgn_start = 0
+						# Only if partition exists at file (counter-example: MERecovery, sole $FPT etc)
+						if rec_rgn_start + p_size < file_end :
+							man_match_init = man_match # Backup initial Manifest
+							man_match = man_pat.search(reading[rec_rgn_start:rec_rgn_start + p_size])
+							
+							# If partition is wrong, fall back to initial Manifest (Intel ME Capsule image)
+							if man_match is None :
+								man_match = man_match_init
+								rec_rgn_start = 0
+						else :
+							rec_rgn_start = 0
 					
 					# Check for FWUpdate ISHC bug compatibility (fixed at 11.6.10.1196)
 					if p_name == 'ISHC' and p_offset == 0 and p_size == 0 : fwupd_ishc_bug = True
@@ -1583,6 +1559,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if mod_align > 0 : eng_fw_end = p_end_last + 0x1000 - mod_align
 					else : eng_fw_end = p_end_last
 				
+				# Detect SPS 4 extra data after Engine payload size ($BIS)
+				if variant == 'SPS' : sps4_bis_match = (re.compile(br'\x24\x42\x49\x53\x00')).search(reading)
+				else : sps4_bis_match = None
+				
 				# SPI image with FD
 				if fd_rgn_exist :
 					# noinspection PyTypeChecker
@@ -1593,7 +1573,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					elif eng_fw_end < me_fd_size :
 						if reading[fpt_start + eng_fw_end:fpt_start + eng_fw_end + padd_size_fd] != padd_size_fd * b'\xFF' :
 							# Extra data at Engine FD region padding
-							eng_size_text = col_m + 'Warning: Data in Engine region padding, possible data corruption!' + col_e
+							if sps4_bis_match is not None : eng_size_text = ''
+							else : eng_size_text = col_m + 'Warning: Data in Engine region padding, possible data corruption!' + col_e
 					
 					if fwupd_ishc_bug : fwupd_ishc_bug = False # FWUpdate is expected to use bare Engine regions only
 				# Bare Engine Region
@@ -1601,6 +1582,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					# noinspection PyTypeChecker
 					padd_size_file = file_end - eng_fw_end
 					
+					# noinspection PyTypeChecker
 					if eng_fw_end > file_end :
 						eng_size_text = 'Warning: Firmware size exceeds file, possible data loss!'
 					elif eng_fw_end < file_end :
@@ -1609,7 +1591,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							eng_size_text = 'Warning: File size exceeds firmware, unneeded padding!'
 						else :
 							# Extra padding has data
-							eng_size_text = 'Warning: File size exceeds firmware, data in padding!'
+							if sps4_bis_match is not None : eng_size_text = ''
+							else : eng_size_text = 'Warning: File size exceeds firmware, data in padding!'
 				# Image w/o FD or non-bare Engine Region
 				elif fwupd_ishc_bug :
 					fwupd_ishc_bug = False
@@ -1699,30 +1682,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku_me = reading[start_sku_match + 8:start_sku_match + 0x10]
 					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper()
 			
-			if major == 1 and me1_match is not None : # Desktop ICH7: Tekoa 82573E only
-				db_maj,db_min,db_hot,db_bld = check_upd('Latest_AMT_1_TEKOA')
-				if minor < db_min or (minor == db_min and hotfix < db_hot) : upd_found = True
-				
-				name_db = "%s.%s.%s_AMT1" % (major, minor, hotfix) # AMT1 is required to avoid false positives
-			
-				fw_db = db_open()
-				for line in fw_db :
-					if name_db in line : fw_in_db_found = "Yes" # Known firmware, nothing new
-				fw_db.close()
-			
-				print("Firmware: Intel AMT")
+			if major == 1 and me1_match is not None : # Desktop ICH7: Tekoa GbE 82573E
+				print("Family:   AMT")
 				print("Version:  %s.%s.%s" % (major, minor, hotfix))
-				print("Platform: GbE 82573E")
-
-				if upd_found : print("Latest:   " + col_r + "No" + col_e)
-				else : print("Latest:   " + col_g + "Yes" + col_e)
-			
-				if fw_in_db_found == "No" :
-					print("")
-					print(col_y + "Note: This firmware was not found at the database, please report it!" + col_e)
-					note_stor.append(col_y + "Note: This firmware was not found at the database, please report it!" + col_e)
-				
-				if param.multi : multi_drop()
 				
 				if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 				
@@ -1857,6 +1819,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					# min size(QST, UPD) is 0x2B8CC so 0x40000 safe min for ASF ROMB
 					# min size(ASF, UPD) is 0xB0904 so 0xAF000 safe max for ASF ROMB
 					# min size(QST, UPD) is 0x2B8CC so 0x2B000 safe max for QST ROMB
+					# noinspection PyTypeChecker
 					if sku == "AMT" and int(0x100000) < file_end < int(0x185000): release = "ROM-Bypass"
 					elif sku == "ASF" and int(0x40000) < file_end < int(0xAF000): release = "ROM-Bypass"
 					elif sku == "QST" and file_end < int(0x2B000) : release = "ROM-Bypass"
@@ -2370,7 +2333,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# Adjust Production PCH Stepping, if not found at DB
 				if sku_stp == 'NaN' :
-					if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or minor in [5,6] :
+					if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or minor in [5,6,7] :
 						if ' LP' in sku : sku_stp = 'C0'
 						elif ' H' in sku : sku_stp = 'D0'
 				
@@ -2398,17 +2361,25 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# 11.0 : Skylake , Sunrise Point
 				if minor == 0 :
+					upd_found = True # 11.6 upgradable
+					
 					platform = "SPT"
 				
 				# 11.5 : Some weird in-between, dead branch
 				elif minor == 5 :
-					upd_found = True
+					upd_found = True # 11.6 upgradable
 					
 					platform = "SPT/KBP"
 				
 				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
 				elif minor == 6 :
+					#upd_found = True # 11.7 upgradable ???
+				
 					platform = "SPT/KBP"
+				
+				# 11.7 : Skylake/Kabylake/Unknown , Sunrise/Union/Unknown Point
+				elif minor == 7 :
+					platform = "SPT/KBP/xxx"
 				
 				# 11.x : Unknown
 				else :
@@ -2469,7 +2440,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if sku_init == "Consumer" : sku_db = "CON_X"
 					elif sku_init == "Corporate" : sku_db = "COR_X"
 			
-			# Report unknown ME Major version (ME 1.x exits before this check)
+			# Report unknown ME Major version (AMT 1.x exits before this check)
 			elif major < 1 or major > 11 :
 				unk_major = True
 				sku = col_r + "Error" + col_e + ", unknown ME SKU due to unknown Major version!" + col_r + " *" + col_e
@@ -2612,19 +2583,21 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				if fw_type == 'Update' : fw_type = "Region, Extracted" # TXE3 PRD & PRE in IFWI/BIOS, BYP in TXE Region
 				
-				if minor == 0 :
-					
-					db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
+				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
+
+				# Single/No SKU for TXE3, Rev only
+				if sku_stp == "NaN" : sku_db = "XX"
+				else : sku_db = sku_stp
+				
+				# Simultaneous branches
+				if minor in [0,2] :
+					db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_3%s' % minor)
+					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					
 					# Adjust SoC Stepping if not from DB
-					if sku_stp == "NaN" :
+					if minor == 0 and sku_stp == "NaN" :
 						if release == "Production" : sku_stp = 'Bx' # PRD
 						else : sku_stp = 'Ax' # PRE, BYP
-
-					sku_db = sku_stp # Single/No SKU for TXE3, Rev only
-					
-					db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_30')
-					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
 				else :
 					sku = col_r + "Error" + col_e + ", unknown TXE 3.x Minor version!" + col_r + " *" + col_e
@@ -2638,90 +2611,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				sku = col_r + "Error" + col_e + ", unknown TXE SKU due to unknown Major version" + col_r + " *" + col_e
 				err_rep += 1
 				err_stor.append(sku)
-
-		elif variant == "SPS" : # Server Platform Services
-			
-			if sku_match is not None :
-				sku_sps = reading[start_sku_match + 8:start_sku_match + 0xC]
-				sku_sps = binascii.b2a_hex(sku_sps).decode('utf-8').upper() # Hex value with Little Endianess
-			
-			opr2_pat = re.compile(br'\x4F\x50\x52\x32\xFF\xFF\xFF\xFF') # OPR2 detection for SPS2,3,4 (the 4xFF force FPT area only)
-			opr2_match = opr2_pat.search(reading)
-			
-			cod2_pat = re.compile(br'\x43\x4F\x44\x32\xFF\xFF\xFF\xFF') # COD2 detection for SPS1 (the 4xFF force FPT area only)
-			cod2_match = cod2_pat.search(reading)
-			
-			if not rgn_exist :
-				# REC detection always first, FTPR Manifest
-				if major == 1 :
-					sps1_rec_pat = re.compile(br'\x45\x70\x73\x52\x65\x63\x6F\x76\x65\x72\x79') # EpsRecovery detection
-					sps1_rec_match = sps1_rec_pat.search(reading)
-					if sps1_rec_match is not None : fw_type = "Recovery"
-					else : fw_type = "Operational"
-				elif major < 4 :
-					mme_pat = re.compile(br'\x24\x4D\x4D\x45') # $MME detection
-					mme_match = mme_pat.findall(reading)
-					if len(mme_match) == 1 : fw_type = "Recovery" # SPSRecovery , FTPR for SPS2,3 (only $MMEBUP section)
-					elif len(mme_match) > 1 : fw_type = "Operational" # SPSOperational , OPR1/OPR2 for SPS2,3 or COD1/COD2 for SPS1 regions
-				else :
-					norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading) # SPSRecovery, $CPD + [0x8] + FTPR
-					if norgn_sps_match is not None : fw_type = "Recovery"
-					else :
-						norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x4F\x50\x52\x00', re.DOTALL)).search(reading) # SPSOperational, $CPD + [0x8] + OPR.
-						if norgn_sps_match is not None : fw_type = "Operational"
-			else :
-				if opr2_match is not None or cod2_match is not None :
-					sub_sku = "1" # xx.xx.xxx.1
-					opr_mode = "Dual OPR"
-				else :
-					sub_sku = "0" # xx.xx.xxx.0
-					opr_mode = "Single OPR"
-			
-			if major == 1 :
-				if sku_sps != "08000000" : # All SPS 1 firmware have the same SKU.
-					sku = col_r + "Error" + col_e + ", unknown SPS 1 SKU!" + col_r + " *" + col_e
-					err_sps_sku = "Yes"
-					err_rep += 1
-					err_stor.append(sku)
-					
-			elif major == 2 :
-				if sku_sps != "2FE40100" : # All SPS 2 & 3 firmware have the same SKU.
-					sku = col_r + "Error" + col_e + ", unknown SPS 2 SKU!" + col_r + " *" + col_e
-					err_sps_sku = "Yes"
-					err_rep += 1
-					err_stor.append(sku)
-			
-			elif major == 3 :
-				if sku_sps != "2FE40100" : # All SPS 2 & 3 firmware have the same SKU.
-					sku = col_r + "Error" + col_e + ", unknown SPS 3 SKU!" + col_r + " *" + col_e
-					err_sps_sku = "Yes"
-					err_rep += 1
-					err_stor.append(sku)
-				
-				if rgn_exist :
-					nm_sien_match = (re.compile(br'\x4F\x75\x74\x6C\x65\x74\x20\x54\x65\x6D\x70')).search(reading) # "Outlet Temp" detection (NM only)
-					if nm_sien_match is not None : sps_serv = "Node Manager" # NM
-					else : sps_serv = "Silicon Enabling" # SiEn
-				
-			elif major == 4 :
-				# SKU is at Kernel
-				if fw_type != "Operational" : vcn = vcn_skl(start_man_match, variant) # VCN only at FTPR (REC)
-				
-				if param.me11_ker_extr and fw_type not in ['Operational','Recovery'] :
-					ker_start,ker_end = ker_anl('anl') # Detect Kernel offsets
-					ker_anl('extr') # Kernel Extraction
-			
-			elif major > 4 :
-				unk_major = True
-				sku = col_r + "Error" + col_e + ", unknown SPS SKU due to unknown Major version" + col_r + " *" + col_e
-				err_rep += 1
-				err_stor.append(sku)
 		
 		# Region Type detection (Stock or Extracted)
-		if rgn_exist : # SPS 1-3 have their own Firmware Types
-			if variant == "SPS" and major < 4 :
-				fw_type = "Region" # SPS is built manually so EXTR
-			elif variant == "ME" and (1 < major < 8) :
+		if rgn_exist :
+			if variant == "ME" and (1 < major < 8) :
 				# Check 1, FOVD section
 				if (major > 2 and not fovd_clean("new")) or (major == 2 and not fovd_clean("old")) :
 					fw_type = "Region, Extracted"
@@ -2796,12 +2689,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		# ME Firmware non Partial Update without $SKU
 		if sku_match is None and fw_type != "Partial Update" and not me_rec_ffs :
-			if (variant == "ME" and 1 < major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4) :
+			if (variant == "ME" and 1 < major < 11) or (variant == "TXE" and major < 3) :
 				sku_missing = True
 				err_rep += 1
 		
 		# OEM FWUpdate UUID Detection, RGN & EXTR only
-		if fw_type != "Update" and ((variant == "ME" and major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4)) : # post-SKL have their own checks
+		if fw_type != "Update" and ((variant == "ME" and major < 11) or (variant == "TXE" and major < 3)) : # post-SKL have their own checks
 			uuid_pat_1 = re.compile(br'\x6F\x6E\x65\x4C\x6F\x76\x00\x00') # Lenovo OEM UUID 1 (4C656E6F766F --> Lenovo)
 			uuid_match_1 = uuid_pat_1.search(reading)
 			uuid_pat_2 = re.compile(br'\x22\x36\x85\x68\xD3\xEE') # Dell OEM UUID
@@ -2816,14 +2709,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		elif release == "Pre-Production" : rel_db = "PRE"
 		elif release == "ROM-Bypass" : rel_db = "BYP"
 		
-		if variant == "SPS" and (fw_type == "Region" or fw_type == "Region, Stock" or fw_type == "Region, Extracted") : # SPS --> Region (EXTR at DB)
-			fw_type = "Region"
-			type_db = "EXTR"
-		elif fw_type == "Region, Extracted" : type_db = "EXTR"
+		if fw_type == "Region, Extracted" : type_db = "EXTR"
 		elif fw_type == "Region, Stock" or fw_type == "Region" : type_db = "RGN"
 		elif fw_type == "Update" : type_db = "UPD"
-		elif fw_type == "Operational" : type_db = "OPR"
-		elif fw_type == "Recovery" : type_db = "REC"
 		elif fw_type == "Unknown" : type_db = "UNK"
 		
 		# Create firmware DB names
@@ -2831,58 +2719,16 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			name_db = "%s.%s.%s.%s_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db) # The re-created filename without extension
 			name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_hash) # The equivalent "clean" RGN filename
 			name_db_extr = "%s.%s.%s.%s_%s_%s_EXTR_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_hash) # The equivalent "dirty" EXTR filename
-		elif variant == "SPS" :
-			if sub_sku == "NaN" :
-				name_db = "%s.%s.%s.%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, type_db)
-				name_db_rgn = "%s.%s.%s.%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent RGN filename
-				name_db_extr = "%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR filename
-				name_db_0_extr = "%s.%s.%s.%s.0_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR 0 filename
-				name_db_1_extr = "%s.%s.%s.%s.1_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR 1 filename
-			else :
-				name_db = "%s.%s.%s.%s.%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, type_db)
-				name_db_rgn = "%s.%s.%s.%s.%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, rsa_hash) # The equivalent RGN filename
-				name_db_extr = "%s.%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, rsa_hash) # The equivalent EXTR filename
-		name_db_hash = name_db + '_' + rsa_hash
+			name_db_hash = name_db + '_' + rsa_hash
 		
 		if param.db_print_new :
-			'''
-			db_action = False
-			
-			command1 = "SELECT * FROM %s WHERE major=? AND minor=? AND hotfix=? AND build=? AND sku=? AND rel=? AND type=? AND hash=?" % variant
-			command2 = "INSERT INTO %s (major,minor,hotfix,build,sku,rel,type,hash) VALUES (?,?,?,?,?,?,?,?)" % variant
-			
-			if variant == 'ME' or variant == 'TXE' :
-				fw_at_db = (c.execute(command1, (major, minor, hotfix, build, sku_db, rel_db, type_db, rsa_hash,))).fetchone()
-					
-				if fw_at_db is None :
-					c.execute(command2, (major, minor, hotfix, build, sku_db, rel_db, type_db, rsa_hash))
-					
-					db_action = True
-				
-			elif variant == 'SPS' :
-				fw_at_db = (c.execute(command1, (major, minor, hotfix, build, sub_sku, rel_db, type_db, rsa_hash,))).fetchone()
-				
-				if fw_at_db is None :
-					c.execute(command2, (major, minor, hotfix, build, sub_sku, rel_db, type_db, rsa_hash))
-					
-					db_action = True
-				
-			if db_action :
-				c.execute('UPDATE MEA SET date=?', (int(time.time()),))
-				
-				conn.commit()
-				
-				print(col_g + "Added %s" % name_db + col_e)
-				
-			'''
-			
 			with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
 			continue # Next input file
 		
 		# Search Engine database for firmware
 		fw_db = db_open()
-		if not wcod_found : # Must not be Partial Update
-			if (((variant == "ME" or variant == "TXE") and sku_db != "NaN") or err_sps_sku == "") and rel_db != "NaN" and type_db != "NaN" : # Search database only if SKU, Release & Type are known
+		if not wcod_found and variant != 'SPS' : # Must not be Partial Update, SPS not supported
+			if sku_db != "NaN" and rel_db != "NaN" and type_db != "NaN" : # Search database only if SKU, Release & Type are known
 				for line in fw_db :
 					if len(line) < 2 or line[:3] == "***" :
 						continue # Skip empty lines or comments
@@ -2895,28 +2741,20 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							(major == 6 and sku == "Ignition"))) or variant == "TXE") : # Only for ME8 and up or ME7 non-PRD or ME6.0 IGN
 							# noinspection PyUnboundLocalVariable
 							if (name_db_rgn in line) or (name_db_extr in line) : rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
-						# noinspection PyUnboundLocalVariable
-						if (type_db == "OPR" or type_db == "REC") and ((name_db_0_extr in line) or (name_db_1_extr in line)) : rgn_over_extr_found = True # Same EXTR found at DB, OPR/REC disregarded
 				fw_db.close()
 			# If SKU and/or Release and/or Type are NaN (unknown), the database will not be searched but rare firmware will be reported (Partial Update excluded)
 		else :
 			can_search_db = False # Do not search DB for Partial Update images
 		
 		# Check if firmware is updated, Production only
-		if variant == "SPS" :
-			if release == "Production" and err_rep == 0 and fw_type != "Operational" and fw_type != "Recovery" : # Does not display if there is any error or firmware is OPR/REC
-				if upd_found :
-					upd_rslt = "Latest:   " + col_r + "No" + col_e
-				elif not upd_found :
-					upd_rslt = "Latest:   " + col_g + "Yes" + col_e
-		elif release == "Production" and err_rep == 0 and not wcod_found : # Does not display if there is any error or firmware is Partial Update
+		if release == "Production" and err_rep == 0 and not wcod_found : # Does not display if there is any error or firmware is Partial Update
 			if variant == "TXE" and major == 0 : pass # Exclude TXE v0.x
 			else :
 				if upd_found : upd_rslt = "Latest:   " + col_r + "No" + col_e
 				elif not upd_found : upd_rslt = "Latest:   " + col_g + "Yes" + col_e
 		
 		# Rename input file based on the DB structured name
-		if param.give_db_name :
+		if param.give_db_name and variant in ['ME','TXE'] :
 			file_name = file_in
 			new_dir_name = os.path.join(os.path.dirname(file_in), name_db + '.bin')
 			f.close()
@@ -2935,38 +2773,30 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		# UEFI Strip Integration (must be after Printed Messages)
 		elif param.extr_mea :
 			if fw_in_db_found == "No" and not rgn_over_extr_found and not wcod_found : 
-				if variant == "SPS" :
-					name_db = "%s_%s_%s_%s" % (fw_ver(), rel_db, type_db, rsa_hash)
-				else :
-					# noinspection PyUnboundLocalVariable
-					if variant == 'ME' and major == 11 and (sku_db == 'CON_X' or sku_db == 'COR_X') and sku_stp == 'NaN' and sku_pdm == 'NaN' : sku_db += "_XX_UPDM"
-					name_db = "%s_%s_%s_%s_%s" % (fw_ver(), sku_db, rel_db, type_db, rsa_hash)
+				# noinspection PyUnboundLocalVariable
+				if variant == 'ME' and major == 11 and (sku_db == 'CON_X' or sku_db == 'COR_X') and sku_stp == 'NaN' and sku_pdm == 'NaN' : sku_db += "_XX_UPDM"
+				if variant != 'SPS' : name_db = "%s_%s_%s_%s_%s" % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, rsa_hash) # Not supported
+				else : name_db = "%s_%s" % (fw_ver(major,minor,hotfix,build), rel_db)
 				
 			if fuj_rgn_exist : name_db = "%s_UMEM" % name_db
 	
 			date_extr = date.replace('/','-')
 			
-			if me_rec_ffs : print("%s %s_NaN_REC %s NaN %s" % (variant, fw_ver(), fw_ver(), date_extr))
-			elif jhi_warn : print("%s %s_NaN_IPT %s NaN %s" % (variant, fw_ver(), fw_ver(), date_extr))
-			else : print("%s %s %s %s %s" % (variant, name_db, fw_ver(), sku_db, date_extr))
+			if me_rec_ffs : print("%s %s_NaN_REC %s NaN %s" % (variant, fw_ver(major,minor,hotfix,build), fw_ver(major,minor,hotfix,build), date_extr))
+			elif jhi_warn : print("%s %s_NaN_IPT %s NaN %s" % (variant, fw_ver(major,minor,hotfix,build), fw_ver(major,minor,hotfix,build), date_extr))
+			else : print("%s %s %s %s %s" % (variant, name_db, fw_ver(major,minor,hotfix,build), sku_db, date_extr))
 			
 			mea_exit(0)
 		
 		# Print MEA Messages
 		elif variant == "SPS" and not param.print_msg :
 			print("Family:   %s" % variant)
-			if sub_sku != "NaN" : print("Version:  %s.%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku)) # xx.xx.xx.xxx.y
-			else : print("Version:  %s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build))) # xx.xx.xx.xxx
-			print("Release:  %s" % release)
-			if sps_serv != "NaN" : print("Service:  %s" % sps_serv)
-			print("Type:     %s" % fw_type)
-			if opr_mode != "NaN" : print("Mode:     %s" % opr_mode)
-			if err_sps_sku != "" : print("SKU:      %s" % sku) # only if SKU is not "standard"
-			if major == 4 and vcn > 0 : print("VCN:      %s" % vcn) # Only for SPS4 (new format-based)
+			print("Version:  %s" % fw_ver(major,minor,hotfix,build))
+			if release != 'Production' : print("Release:  %s" % release)
 			print("Date:     %s" % date)
-			if fitc_ver_found : print("FIT Ver:  %s.%s.%s.%s" % ("{0:02d}".format(fitc_major), "{0:02d}".format(fitc_minor), "{0:02d}".format(fitc_hotfix), "{0:03d}".format(fitc_build)))
+			if fitc_ver_found : print("FIT Ver:  %s" % fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build))
 			if rgn_exist : print('Size:     0x%X' % eng_fw_end)
-			#if upd_rslt != "" : print(upd_rslt)
+			print("\nIntel SPS firmware is not supported")
 		elif not param.print_msg :
 			print("Family:   %s" % variant)
 			print("Version:  %s.%s.%s.%s" % (major, minor, hotfix, build))
@@ -3061,15 +2891,15 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if fpt_num_fail : gen_msg(warn_stor, col_m + "Warning: Wrong $FPT entry count %s, expected %s!" % (fpt_num_file,fpt_num_calc) + col_e, '')
 		
-		if fuj_rgn_exist : gen_msg(warn_stor, col_m + "Warning: Fujitsu Intel Engine Firmware detected!" + col_e, '')
+		if fuj_rgn_exist : gen_msg(warn_stor, col_m + "Warning: Fujitsu Intel Engine firmware detected!" + col_e, '')
 		
-		if [fwupd_ishc_bug,release,major,minor] == [True,'Production',11,0] : gen_msg(warn_stor, col_m + "Warning: This firmware requires FWUpdate 11.6.10.1196 or newer!" + col_e, '')
+		if [fwupd_ishc_bug,release,major,minor] == [True,'Production',11,0] : gen_msg(warn_stor, col_m + "Warning: This firmware requires FWUpdate >= 11.6.10.1196" + col_e, '')
 		
 		if me_rec_ffs or jhi_warn : gen_msg(warn_stor, col_m + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_e, 'del')
 			
-		if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_y + "Note: FWUpdate OEM ID detected!" + col_e, '')
+		#if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_y + "Note: FWUpdate OEM ID detected!" + col_e, '')
 				
-		if multi_rgn : gen_msg(note_stor, col_y + "Note: Multiple (%d) Intel Engine Firmware detected in file!" % fpt_count + col_e, '')
+		if multi_rgn : gen_msg(note_stor, col_y + "Note: Multiple (%d) Intel Engine firmware detected in file!" % fpt_count + col_e, '')
 		
 		if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" : gen_msg(note_stor, col_g + "Note: This firmware was not found at the database, please report it!" + col_e, '')
 		
