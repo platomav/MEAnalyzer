@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.11.0'
+title = 'ME Analyzer v1.11.1'
 
 import os
 import re
@@ -87,8 +87,8 @@ class MEA_Param :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
 			if i == '-multi' : self.multi = True # Checks multiple files, copies those with messages to new folder.
-			if i == '-eker' : self.me11_ker_extr = True # Extraction of post-SKL FTPR > Kernel region.
-			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print post-SKL Kernel/FIT SKU analysis even when firmware is hash-known.
+			if i == '-eker' : self.me11_ker_extr = True # Separation of ME x86 compressed Huffman modules into chunks.
+			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print ME x86 Kernel/FIT SKU verbose analysis.
 			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
 			if i == '-enuf' : self.enable_uf = True # Enables UEFIFind Engine GUID Detection.
 			if i == '-dbname' : self.give_db_name = True # Rename input file based on DB structured name.
@@ -346,8 +346,10 @@ def mea_help() :
 	text += "-mass   : Scans all files of a given directory\n"
 	text += "-enuf   : Enables UEFIFind Engine GUID detection\n"
 	text += "-pdb    : Writes input firmware's DB entries to file\n"
-	text += "-dfpt   : Displays details about the $FPT header\n"
-	text += "-dbname : Renames input file based on DB name"
+	text += "-dbname : Renames input file based on DB name\n"
+	text += "-dfpt   : Shows info about the $FPT header (Research)\n"
+	text += "-dker   : Shows verbose info for ME 11+ SKU (Research)\n"
+	text += "-eker   : Splits ME 11+ Huffman modules in chunks (Research)"
 	
 	if mea_os == 'win32' :
 		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
@@ -381,13 +383,6 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 	sys.exit(-1)
 
 def mea_exit(code=0) :
-	"""
-	try :
-		c.close()
-		conn.close() # Close DB connection
-	except :
-		pass
-	"""
 	colorama.deinit() # Stop Colorama
 	if param.ubu_mea_pre or param.ubu_mea or param.extr_mea or param.print_msg : sys.exit(code)
 	input("\nPress enter to exit")
@@ -570,12 +565,13 @@ def ker_anl(fw_type) :
 	
 	if ftpr_match is not None :
 		(start_ftpr_match, end_ftpr_match) = ftpr_match.span()
-		ker_start = int.from_bytes(reading[end_ftpr_match + 0x54:end_ftpr_match + 0x57], 'little') + start_ftpr_match # 5,B (Kernel,BUP)
-		ker_end = int.from_bytes(reading[end_ftpr_match + 0x84:end_ftpr_match + 0x87], 'little') + start_ftpr_match # 8,E (Kernel,BUP)
+		ker_start = int.from_bytes(reading[end_ftpr_match + 0x54:end_ftpr_match + 0x57], 'little') + start_ftpr_match # 5 = Kernel, B = BUP etc
+		ker_end = int.from_bytes(reading[end_ftpr_match + 0x84:end_ftpr_match + 0x87], 'little') + start_ftpr_match # 8 = Kernel, E = BUP etc
 		if release == "Production" : rel_db = "PRD"
 		elif release == "Pre-Production" : rel_db = "PRE"
 		elif release == "ROM-Bypass" : rel_db = "BYP"
-		else : ker_name = "%s.%s.%s.%s_%s_%s.bin" % (major, minor, hotfix, build, sku_db, rel_db)
+		
+		ker_name = "%s.%s.%s.%s_%s_%s.bin" % (major, minor, hotfix, build, sku_db, rel_db)
 	
 	if fw_type == "extr" :
 		ker_data = reading[ker_start:ker_end]
@@ -584,7 +580,7 @@ def ker_anl(fw_type) :
 			if os.path.isfile(mea_dir + os_dir + ker_name) : os.remove(mea_dir + os_dir + ker_name)
 			new_ker_name = mea_dir + os_dir + ker_name
 			os.rename(mea_dir + os_dir + 'ker_temp.bin', new_ker_name)
-			print(col_y + "Extracted Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
+			print(col_y + "Stored Huffman compressed module from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
 			
 			with open(new_ker_name, 'r+b') as ker_file :
 				counter = 0
@@ -592,8 +588,7 @@ def ker_anl(fw_type) :
 				extr_off = []
 				
 				ker_read = ker_file.read()
-				while ker_read[hdr_size] in [0,64,128,192] and ker_read[hdr_size + 0x3] in [0,64,128,192] :
-					hdr_size += 4
+				while ker_read[hdr_size + 0x3] in [0,64,128,192] : hdr_size += 4
 				hdr_data = ker_read[:hdr_size]
 				for step in range(0x0,hdr_size,0x4) :
 					extr_off.append(struct.unpack("<I", hdr_data[step:step + 0x3] + b'\x00')[0] + hdr_size)
@@ -601,19 +596,25 @@ def ker_anl(fw_type) :
 				extr_len = len(extr_off)
 				for offset in extr_off :
 					counter += 1
-					if counter >= extr_len : next_offset = ker_file.seek(0,2) # Some alignment padding may also be kept
+					if counter >= extr_len : next_offset = ker_file.seek(0,2) # Some EOF padding may also be kept
 					else : next_offset = extr_off[counter]
 		
 					part = ker_read[offset:next_offset]
 					ker_dir = mea_dir + os_dir + ker_name + '_Sections'
-		
+					
 					if not os.path.isdir(ker_dir) : os.mkdir(ker_dir)
+					
+					if counter == 1 : # Store Huffman compressed module header at file once
+						with open(ker_dir + os_dir + '0_Header.bin', "w+b") as out_file : out_file.write(hdr_data)
+					
 					with open(ker_dir + os_dir + '%s.bin' % counter, "w+b") as out_file : out_file.write(part)
 					
-				print(col_y + "\nSeparated Kernel into %s sections" % counter + col_e)
+				print(col_y + "\nSeparated Huffman compressed module into %s sections" % counter + col_e)
 		except :
-			print(col_r + "Error: could not extract Kernel from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
+			print(col_r + "Error: could not store Huffman compressed module from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
 			if os.path.isfile(mea_dir + os_dir + 'ker_temp.bin') : os.remove(mea_dir + os_dir + 'ker_temp.bin')
+		
+		print(col_y + '\n\nAdjust "ker_start" and "ker_end" offsets at "ker_anl" function manually!' + col_e)
 		
 		return 'continue'
 		
@@ -622,7 +623,6 @@ def ker_anl(fw_type) :
 def krod_anl() :
 	me11_sku_match = (re.compile(br'\x4B\x52\x4F\x44')).finditer(reading) # KROD detection
 
-	uuid_found = ''
 	sku_check = "NaN"
 	me11_sku_ranges = []
 	
@@ -638,34 +638,11 @@ def krod_anl() :
 			# PCH H Dx is signified by 147/176.xx versions (147.41, 147.49, 147.52, 176.11 --> 11.6.0.1126 & up)
 			# PCH LP Bx is signified by 128/129.xx versions (128.26, 129.03, 129.24, 129.62)
 			# PCH LP Cx is signified by 130.xx versions (130.49, 130.52)
-			'''
-			pch_init_pat = (re.compile(br'\x28\xA9')).search(reading[start_sku_match:]) # (© detection (very bad pattern)
-			if pch_init_pat is not None:
-				(start_pch_init, end_pch_init) = pch_init_pat.span()
-				pch_init_off = end_pch_init + start_sku_match
-				pch_init_major = int(binascii.b2a_hex(reading[pch_init_off - 0x23:pch_init_off - 0x22]), 16)
-				pch_init_minor = int(binascii.b2a_hex(reading[pch_init_off - 0x24:pch_init_off - 0x23]), 16)
-				pch_init_ver = "%s.%s" % (pch_init_major, pch_init_minor)
-				print(pch_init_ver)
-			'''
-			
-			# FWUpdate OEMID is close to KROD
-			oemid_check = reading[end_sku_match : end_sku_match + 0x30]
-			oemid_check = binascii.b2a_hex(oemid_check).decode('utf-8').upper()
-			oemid_check = str_split_as_bytes(oemid_check)
-			
-			# Checks only first two OEMID parts to avoid possible EFFS 0x40 checksum before the other three
-			if any(uuid in oemid_check for uuid in (' 6F 6E 65 4C 6F 76 ', ' 05 04 00 00 00 00 ', ' 06 04 00 00 00 00 ')) :
-				# 4C656E6F-766F-0000-0000-000000000000, 00000405-0000-0000-0000-000000000000, 00000406-0000-0000-0000-000000000000
-				uuid_found = "Lenovo"
-			elif ' 22 36 85 68 D3 EE ' in oemid_check :
-				# 68853622-EED3-4E83-8A86-6CDE315F6B78
-				uuid_found = "Dell"
 			
 			sku_check = krod_fit_sku(start_sku_match)
 			me11_sku_ranges.pop(len(me11_sku_ranges)-1)
 
-	return uuid_found, sku_check, me11_sku_ranges
+	return sku_check, me11_sku_ranges
 
 def krod_fit_sku(start_sku_match) :
 	sku_check = reading[start_sku_match - 0x100 : start_sku_match]
@@ -745,7 +722,6 @@ def msg_rep() :
 	
 	if param.hid_find : # Parameter -hid always prints a message whether the error/warning/note arrays are empty or not
 		if me_rec_ffs : print(col_y + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver(major,minor,hotfix,build)) + col_e)
-		elif jhi_warn : print(col_y + "MEA: Found Intel %s IPT-DAL Module %s_NaN_IPT in file!" % (variant, fw_ver(major,minor,hotfix,build)) + col_e)
 		else : print(col_y + "MEA: Found Intel %s Firmware %s in file!" % (variant, name_db) + col_e)
 		
 		if err_stor or warn_stor or note_stor : print("") # Separates -hid from -msg output (only when messages exist, Rule 1 compliant)
@@ -851,18 +827,7 @@ depend_uf = os.path.isfile(uf_path)
 
 # Connect to DB, if it exists
 if depend_db :
-	'''
-	conn = sqlite3.connect(mea_dir + os_dir + 'MEA.db')
-	c = conn.cursor()
-	
-	try :
-		c.execute('PRAGMA quick_check')
-	except :
-		print(col_r + "\nError: MEA.db file is corrupted!" + col_e)
-		mea_exit(1)
-	
-	#create_tables()
-	'''
+	pass
 else :
 	print(col_r + "\nError: MEA.dat file is missing!" + col_e)
 	mea_exit(1)
@@ -879,7 +844,6 @@ for file_in in source :
 	sku_txe = ""
 	upd_rslt = ""
 	found_guid = ""
-	uuid_found = ""
 	me2_type_fix = ""
 	me2_type_exp = ""
 	name_db_hash = ""
@@ -905,7 +869,6 @@ for file_in in source :
 	man_match = None
 	me1_match = None
 	me11_vcn_match = None
-	jhi_warn = False
 	uf_error = False
 	multi_rgn = False
 	upd_found = False
@@ -1622,16 +1585,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					# noinspection PyUnboundLocalVariable
 					byp_x86 = fpt_pre_hdr.ROMB_Instr_0 # Check x86 Engine ROM-Bypass Instruction 0
 					if not fpt_romb_used and byp_x86 == 0 : fpt_romb_found = False # x86 Engine ROMB depends on $FPT Offset/Size + Instructions
-				
-			jhi_medal_match = (re.compile(br'\x24\x4D\x44\x4C\x4D\x65\x64\x61\x6C')).search(reading) # TXE IPT-DAL Applet Module Detection
-			if jhi_medal_match is not None :
-				variant = "TXE" # Only TXE? Who cares...
-				can_search_db = False
-				jhi_warn = True
 			
-			# PRD/PRE/BYP must be after ME-REC/IPT-DAL Module Release Detection
+			# PRD/PRE/BYP must be after ME-REC Module Release Detection
 			if me_rec_ffs : release = "ME Recovery Module"
-			elif jhi_warn : release = "IPT-DAL Applet Module"
 			elif fpt_romb_found : release = "ROM-Bypass"
 			elif rel_signed == "Production" : release = "Production"
 			elif rel_signed == "Debug" : release = "Pre-Production"
@@ -2221,7 +2177,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku_init = "Consumer"
 					sku_init_db = "CON"
 				
-				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
+				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
 				vcn = vcn_skl(start_man_match, variant) # Detect VCN
 				
@@ -2272,42 +2228,48 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						
 					while fit_platform == "NaN" :
 						
-						if any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = "SPT-H Q170"
-						elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = "SPT-H Q150"
-						elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = "SPT-H B150"
-						elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 02 D1 02 67 ')) : fit_platform = "SPT-H H170"
-						elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = "SPT-H Z170"
-						elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = "SPT-H H110"
-						elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = "SPT-H QM170"
-						elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = "SPT-H HM170"
-						elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = "SPT-H No Emulation"
-						elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = "SPT-H C236"
-						elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = "SPT-H CM236"
-						elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = "SPT-H C232"
-						elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = "SPT-H QMS180"
-						elif any(s in sku_check for s in (' 32 01 01 80 00 ',' 02 D1 02 32 ')) : fit_platform = "SPT-H QMU185"
-						elif any(s in sku_check for s in (' 93 01 01 80 00 ',' 02 D1 02 93 ')) : fit_platform = "SPT-H QM175"
-						elif any(s in sku_check for s in (' 94 01 01 80 00 ',' 02 D1 02 94 ')) : fit_platform = "SPT-H HM175"
-						elif any(s in sku_check for s in (' 95 01 01 80 00 ',' 02 D1 02 95 ')) : fit_platform = "SPT-H CM238"
-						elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = "PCH-C620 LBG 1G"
-						elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = "PCH-C620 LBG 2"
-						elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = "PCH-C620 LBG 4"
-						elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = "PCH-C620 LBG No Emulation"
-						elif any(s in sku_check for s in (' 31 01 03 80 00 ',' 02 D1 02 31 ')) : fit_platform = "KBP-H Z270"
-						elif any(s in sku_check for s in (' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = "KBP-H X299"
-						elif any(s in sku_check for s in (' 2D 01 03 80 00 ',' 02 D1 02 2D ')) : fit_platform = "KBP-H Q270"
-						elif any(s in sku_check for s in (' 2E 01 03 80 00 ',' 02 D1 02 2E ')) : fit_platform = "KBP-H Q250"
-						elif any(s in sku_check for s in (' 30 01 03 80 00 ',' 02 D1 02 30 ')) : fit_platform = "KBP-H H270"
-						elif any(s in sku_check for s in (' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = "KBP-H C422"
-						elif any(s in sku_check for s in (' 2F 01 03 80 00 ',' 02 D1 02 2F ')) : fit_platform = "KBP-H B250"
-						elif any(s in sku_check for s in (' 2C 01 03 80 00 ',' 02 D1 02 2C ')) : fit_platform = "KBP-H No Emulation"
-						elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "SPT-LP Premium U"
-						elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "SPT-LP Premium Y"
+						# 3rd byte of 1st pattern is SKU Category from 0+ (ex: 91 01 04 80 00 --> 5th, 91 01 03 80 00 --> 4th)
+						if any(s in sku_check for s in (' 2C 01 03 80 00 ',' 02 D1 02 2C ')) : fit_platform = "PCH-H No Emulation KBL"
+						elif any(s in sku_check for s in (' 2D 01 03 80 00 ',' 02 D1 02 2D ')) : fit_platform = "PCH-H Q270"
+						elif any(s in sku_check for s in (' 2E 01 03 80 00 ',' 02 D1 02 2E ')) : fit_platform = "PCH-H Q250"
+						elif any(s in sku_check for s in (' 2F 01 03 80 00 ',' 02 D1 02 2F ')) : fit_platform = "PCH-H B250"
+						elif any(s in sku_check for s in (' 30 01 03 80 00 ',' 02 D1 02 30 ')) : fit_platform = "PCH-H H270"
+						elif any(s in sku_check for s in (' 31 01 03 80 00 ',' 02 D1 02 31 ')) : fit_platform = "PCH-H Z270"
+						elif any(s in sku_check for s in (' 32 01 01 80 00 ',' 02 D1 02 32 ')) : fit_platform = "PCH-H QMU185"
+						elif any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = "PCH-H Q170"
+						elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = "PCH-H Q150"
+						elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = "PCH-H B150"
+						elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 02 D1 02 67 ')) : fit_platform = "PCH-H H170"
+						elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = "PCH-H Z170"
+						elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = "PCH-H H110"
+						elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = "PCH-H QM170"
+						elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = "PCH-H HM170"
+						elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = "PCH-H No Emulation SKL"
+						elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = "PCH-H C236"
+						elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = "PCH-H CM236"
+						elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = "PCH-H C232"
+						elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = "PCH-H QMS180"
+						elif any(s in sku_check for s in (' 71 00 01 80 00 ',' 02 D1 02 71 ')) : fit_platform = "PCH-H QMS185"
+						elif any(s in sku_check for s in (' 90 01 04 80 00 ',' 02 D1 02 90 ')) : fit_platform = "PCH-BSF No Emulation"
+						elif any(s in sku_check for s in (' 91 01 04 80 00 ',' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = "PCH-C422" # moved at 11.7
+						elif any(s in sku_check for s in (' 92 01 04 80 00 ',' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = "PCH-X299" # moved at 11.7
+						elif any(s in sku_check for s in (' 93 01 01 80 00 ',' 02 D1 02 93 ')) : fit_platform = "PCH-H QM175"
+						elif any(s in sku_check for s in (' 94 01 01 80 00 ',' 02 D1 02 94 ')) : fit_platform = "PCH-H HM175"
+						elif any(s in sku_check for s in (' 95 01 01 80 00 ',' 02 D1 02 95 ')) : fit_platform = "PCH-H CM238"
+						elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = "PCH-C62x C621"
+						elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = "PCH-C62x C622"
+						elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = "PCH-C62x C624"
+						elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = "PCH-C62x No Emulation"
+						elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U SKL"
+						elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y SKL"
 						elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = "PCH-LP No Emulation"
 						elif any(s in sku_check for s in (' 04 00 00 80 00 ',' 02 B0 02 04 ',' 02 D0 02 04 ')) : fit_platform = "PCH-LP Base U KBL"
 						elif any(s in sku_check for s in (' 05 00 00 80 00 ',' 02 B0 02 05 ',' 02 D0 02 05 ')) : fit_platform = "PCH-LP Premium U KBL"
 						elif any(s in sku_check for s in (' 06 00 00 80 00 ',' 02 B0 02 06 ',' 02 D0 02 06 ')) : fit_platform = "PCH-LP Premium Y KBL"
-						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "SPT-LP Base U"
+						elif any(s in sku_check for s in (' 07 00 00 80 00 ',' 02 B0 02 07 ',' 02 D0 02 07 ')) : fit_platform = "PCH-LP Base U KBL-R"
+						elif any(s in sku_check for s in (' 08 00 00 80 00 ',' 02 B0 02 08 ',' 02 D0 02 08 ')) : fit_platform = "PCH-LP Premium U KBL-R"
+						elif any(s in sku_check for s in (' 09 00 00 80 00 ',' 02 B0 02 09 ',' 02 D0 02 09 ')) : fit_platform = "PCH-LP Premium Y KBL-R"
+						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = "PCH-LP Base U SKL" # last, weak pattern
 						elif me11_sku_ranges :
 							(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
 							sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
@@ -2361,25 +2323,20 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# 11.0 : Skylake , Sunrise Point
 				if minor == 0 :
-					upd_found = True # 11.6 upgradable
+					upd_found = True # 11.7 upgradable
 					
 					platform = "SPT"
 				
-				# 11.5 : Some weird in-between, dead branch
-				elif minor == 5 :
-					upd_found = True # 11.6 upgradable
+				# 11.5 : Skylake/Kabylake-LP, Sunrise/Union Point
+				# 11.6 : Skylake/Kabylake, Sunrise/Union Point
+				elif minor in [5,6] :
+					upd_found = True # 11.7 upgradable
 					
 					platform = "SPT/KBP"
 				
-				# 11.6 : Skylake/Kabylake , Sunrise/Union Point
-				elif minor == 6 :
-					#upd_found = True # 11.7 upgradable ???
-				
-					platform = "SPT/KBP"
-				
-				# 11.7 : Skylake/Kabylake/Unknown , Sunrise/Union/Unknown Point
+				# 11.7 : Skylake/Kabylake/Kabylake Refresh, Sunrise/Union Point
 				elif minor == 7 :
-					platform = "SPT/KBP/xxx"
+					platform = "SPT/KBP"
 				
 				# 11.x : Unknown
 				else :
@@ -2579,7 +2536,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			elif major == 3 :
 				vcn = vcn_skl(start_man_match, variant) # Detect VCN
 				
-				uuid_found,sku_check,me11_sku_ranges = krod_anl() # Detect OEMID and FIT SKU
+				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
 				if fw_type == 'Update' : fw_type = "Region, Extracted" # TXE3 PRD & PRE in IFWI/BIOS, BYP in TXE Region
 				
@@ -2693,17 +2650,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				sku_missing = True
 				err_rep += 1
 		
-		# OEM FWUpdate UUID Detection, RGN & EXTR only
-		if fw_type != "Update" and ((variant == "ME" and major < 11) or (variant == "TXE" and major < 3)) : # post-SKL have their own checks
-			uuid_pat_1 = re.compile(br'\x6F\x6E\x65\x4C\x6F\x76\x00\x00') # Lenovo OEM UUID 1 (4C656E6F766F --> Lenovo)
-			uuid_match_1 = uuid_pat_1.search(reading)
-			uuid_pat_2 = re.compile(br'\x22\x36\x85\x68\xD3\xEE') # Dell OEM UUID
-			uuid_match_2 = uuid_pat_2.search(reading)
-			#uuid_pat_3 = re.compile(br'(\x06|x05)\x04\x00\x00\x00\x00\x00\x00') # Lenovo OEM UUID 2 --> Disabled due to false positives
-			#uuid_match_3 = uuid_pat_3.search(reading)
-			if uuid_match_1 is not None : uuid_found = "Lenovo"
-			elif uuid_match_2 is not None : uuid_found = "Dell"
-		
 		# Check database for unknown firmware, all firmware filenames have this stucture: Major.Minor.Hotfix.Build_SKU_Release_Type.bin
 		if release == "Production" : rel_db = "PRD"
 		elif release == "Pre-Production" : rel_db = "PRE"
@@ -2783,7 +2729,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			date_extr = date.replace('/','-')
 			
 			if me_rec_ffs : print("%s %s_NaN_REC %s NaN %s" % (variant, fw_ver(major,minor,hotfix,build), fw_ver(major,minor,hotfix,build), date_extr))
-			elif jhi_warn : print("%s %s_NaN_IPT %s NaN %s" % (variant, fw_ver(major,minor,hotfix,build), fw_ver(major,minor,hotfix,build), date_extr))
 			else : print("%s %s %s %s %s" % (variant, name_db, fw_ver(major,minor,hotfix,build), sku_db, date_extr))
 			
 			mea_exit(0)
@@ -2802,7 +2747,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			print("Version:  %s.%s.%s.%s" % (major, minor, hotfix, build))
 			print("Release:  %s" % release)
 			
-			if not me_rec_ffs and not jhi_warn : # The following should not appear when ME-REC/IPT-DAL modules are loaded
+			if not me_rec_ffs : # The following should not appear when ME-REC modules are loaded
 				
 				print("Type:     %s" % fw_type)
 
@@ -2830,9 +2775,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				print("Date:     %s" % date)
 				
 				if ((variant == "ME" and major <= 10) or variant == "TXE") and fitc_ver_found:
-					print("FITC Ver: %s.%s.%s.%s" % (fitc_major, fitc_minor, fitc_hotfix, fitc_build))
+					print("FITC Ver: %s" % fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build))
 				elif variant == "ME" and major > 10 and fitc_ver_found:
-					print("FIT Ver:  %s.%s.%s.%s" % (fitc_major, fitc_minor, fitc_hotfix, fitc_build))
+					print("FIT Ver:  %s" % fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build))
 				
 				if fit_platform != "NaN" :
 					if variant == "ME" and major == 11 : print("FIT SKU:  %s" % fit_platform)
@@ -2850,12 +2795,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					print("")
 					if me7_blist_1_build != 0 :
 						# noinspection PyUnboundLocalVariable
-						print("Blist 1:  <= %s.%s.%s.%s" % (7, me7_blist_1_minor, me7_blist_1_hotfix, me7_blist_1_build))
+						print("Blist 1:  <= 7.%s.%s.%s" % (me7_blist_1_minor, me7_blist_1_hotfix, me7_blist_1_build))
 					else :
 						print("Blist 1:  Empty")
 					if me7_blist_2_build != 0 :
 						# noinspection PyUnboundLocalVariable
-						print("Blist 2:  <= %s.%s.%s.%s" % (7, me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build))
+						print("Blist 2:  <= 7.%s.%s.%s" % (me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build))
 					else :
 						print("Blist 2:  Empty")
 			elif me_rec_ffs :
@@ -2863,9 +2808,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				del err_stor[:]
 				print("Date:     %s" % date)
 				print("GUID:     821D110C-D0A3-4CF7-AEF3-E28088491704")
-			elif jhi_warn :
-				err_rep = 0
-				print("Date:     %s" % date)
 				
 		# General MEA Messages (must be Errors > Warnings > Notes)
 		if unk_major : gen_msg(err_stor, col_r + "Error: unknown Intel Engine Major version! *" + col_e, '')
@@ -2895,9 +2837,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if [fwupd_ishc_bug,release,major,minor] == [True,'Production',11,0] : gen_msg(warn_stor, col_m + "Warning: This firmware requires FWUpdate >= 11.6.10.1196" + col_e, '')
 		
-		if me_rec_ffs or jhi_warn : gen_msg(warn_stor, col_m + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_e, 'del')
-			
-		#if uuid_found != "" or uuid_found == "Unknown" : gen_msg(note_stor, col_y + "Note: FWUpdate OEM ID detected!" + col_e, '')
+		if me_rec_ffs : gen_msg(warn_stor, col_m + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_e, 'del')
 				
 		if multi_rgn : gen_msg(note_stor, col_y + "Note: Multiple (%d) Intel Engine firmware detected in file!" % fpt_count + col_e, '')
 		

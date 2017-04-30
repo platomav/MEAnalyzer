@@ -1,3 +1,10 @@
+v1.11.1
+
+Improved support for ME 11.7 (KBL Refresh) firmware
+Improved separation of ME 11 Huffman modules (-eker)
+Removed FWUpdate OEMID and IPT-DAL module detection
+Updated Engine Firmware Repository Database to r85
+
 v1.11.0
 
 Added support for ME 11.7 firmware

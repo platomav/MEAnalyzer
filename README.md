@@ -23,7 +23,6 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)
 - Detection of multiple Engine regions in input file, number only
 - Detection of special Engine firmware BIOS GUIDs via UEFIFind
-- Detection of common FWUpdate OEMIDs at Engine region & SPI images
 - Detection of unique mobile Apple Macintosh Engine firmware SKUs
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to analyze multiple files by drag & drop or by input path
@@ -60,8 +59,10 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -mass   : Scans all files of a given directory
 * -enuf   : Enables UEFIFind Engine GUID detection
 * -pdb    : Writes input firmware's DB entries to file
-* -dfpt   : Displays details about the $FPT header
 * -dbname : Renames input file based on DB name
+* -dfpt   : Shows info about the $FPT header (Research)
+* -dker   : Shows verbose info about ME 11+ SKU (Research)
+* -eker   : Splits ME 11+ Huffman modules in chunks (Research)
 
 The following are Windows specific:
 
