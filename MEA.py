@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.11.1'
+title = 'ME Analyzer v1.11.2'
 
 import os
 import re
@@ -2069,28 +2069,25 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				# ME8-Only Fix: SVN location
 				# noinspection PyUnboundLocalVariable
 				svn = mn2_ftpr_hdr.SVN_8
+				
+				platform = "PPT"
 			
 			elif major == 9 :
 				if minor == 0 :
 					if sku_me == "E09911C113220000" :
 						sku = "1.5MB"
 						sku_db = "1.5MB"
-						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_90_15MB')
-						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					elif sku_me == "EFD9FFCD0A430000" :
 						sku = "5MB"
 						sku_db = "5MB"
-						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_90_5MB')
-						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_r + "Error" + col_e + ", unknown ME 9.0 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
 					
-					# Ignore: 9.0.50.x (9.1 Alpha)
-					if hotfix == 50 : upd_found = True
+					upd_found = True # 9.1 upgradable
 					
-					platform = "LynxPoint"
+					platform = "LPT"
 					
 				elif minor == 1 :
 					if sku_me == "E09911D113220000" :
@@ -2107,9 +2104,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						sku = col_r + "Error" + col_e + ", unknown ME 9.1 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
-					platform = "LynxPoint"
 					
-				elif minor == 5 or minor == 6 :
+					platform = "LPT/WPT"
+					
+				elif minor in [5,6] :
 					if sku_me == "609A11B113220000" :
 						sku = "1.5MB"
 						sku_db = "1.5MB"
@@ -2134,7 +2132,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					# https://bugs.freedesktop.org/show_bug.cgi?id=90002
 					if minor == 6 : upd_found = True
 					
-					platform = "LynxPoint LP"
+					platform = "LPT-LP"
 				else :
 					sku = col_r + "Error" + col_e + ", unknown ME 9.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
@@ -2161,7 +2159,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						sku = col_r + "Error" + col_e + ", unknown ME 10.0 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
-					platform = "Broadwell LP"
+					platform = "WPT-LP"
 				else :
 					sku = col_r + "Error" + col_e + ", unknown ME 10.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
@@ -2250,16 +2248,16 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = "PCH-H C232"
 						elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = "PCH-H QMS180"
 						elif any(s in sku_check for s in (' 71 00 01 80 00 ',' 02 D1 02 71 ')) : fit_platform = "PCH-H QMS185"
-						elif any(s in sku_check for s in (' 90 01 04 80 00 ',' 02 D1 02 90 ')) : fit_platform = "PCH-BSF No Emulation"
-						elif any(s in sku_check for s in (' 91 01 04 80 00 ',' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = "PCH-C422" # moved at 11.7
-						elif any(s in sku_check for s in (' 92 01 04 80 00 ',' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = "PCH-X299" # moved at 11.7
+						elif any(s in sku_check for s in (' 90 01 04 80 00 ',' 02 D1 02 90 ')) : fit_platform = "PCH-H No Emulation BSF"
+						elif any(s in sku_check for s in (' 91 01 04 80 00 ',' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = "PCH-H C422" # moved at 11.7
+						elif any(s in sku_check for s in (' 92 01 04 80 00 ',' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = "PCH-H X299" # moved at 11.7
 						elif any(s in sku_check for s in (' 93 01 01 80 00 ',' 02 D1 02 93 ')) : fit_platform = "PCH-H QM175"
 						elif any(s in sku_check for s in (' 94 01 01 80 00 ',' 02 D1 02 94 ')) : fit_platform = "PCH-H HM175"
 						elif any(s in sku_check for s in (' 95 01 01 80 00 ',' 02 D1 02 95 ')) : fit_platform = "PCH-H CM238"
-						elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = "PCH-C62x C621"
-						elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = "PCH-C62x C622"
-						elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = "PCH-C62x C624"
-						elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = "PCH-C62x No Emulation"
+						elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = "PCH-H C621"
+						elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = "PCH-H C622"
+						elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = "PCH-H C624"
+						elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = "PCH-H No Emulation LBG"
 						elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = "PCH-LP Premium U SKL"
 						elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = "PCH-LP Premium Y SKL"
 						elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = "PCH-LP No Emulation"
@@ -2328,15 +2326,24 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					platform = "SPT"
 				
 				# 11.5 : Skylake/Kabylake-LP, Sunrise/Union Point
-				# 11.6 : Skylake/Kabylake, Sunrise/Union Point
-				elif minor in [5,6] :
+				elif minor == 5 :
 					upd_found = True # 11.7 upgradable
+					
+					platform = "SPT/KBP"
+				
+				# 11.6 : Skylake/Kabylake, Sunrise/Union Point
+				elif minor == 6 :
+					#upd_found = True # 11.7 upgradable
 					
 					platform = "SPT/KBP"
 				
 				# 11.7 : Skylake/Kabylake/Kabylake Refresh, Sunrise/Union Point
 				elif minor == 7 :
 					platform = "SPT/KBP"
+				
+				# 11.20 : Purley, Lewisburg
+				elif minor == 20 :
+					platform = "LBG"
 				
 				# 11.x : Unknown
 				else :
@@ -2348,8 +2355,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				# Hardcoded in FTPR > BUP, cannot detect compression patterns to separate PDM/NOPDM
 				# Assumed fixed at KBP-LP A0 but 11.6 has PDM firmware for KBL-upgraded SPT-LP C0
 				# 11.0 PDM firmware is tagged accordingly at separate binaries (trustworthy)
-				# 11.6 PDM firmware tags cannot be trusted, two Kits (SPT/different & KBP/copy)
-				# PDM status can be seen at LSB of FW Status Register 3, not trustworthy at 11.6
+				# 11.6-7 PDM firmware tags cannot be trusted, two Kits (SPT/different & KBP/copy)
+				# PDM status can be seen at LSB of FW Status Register 3, not trustworthy at 11.6-7
 				if ' H' in sku :
 					pdm_status = 'NaN'
 				else :
@@ -2762,9 +2769,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					elif wcod_found : pass
 					else : print("Rev:      Unknown")
 				
-				if ((variant == "ME" and major >= 8) or variant == "TXE") and svn > 1 : print("SVN:      %s" % svn)
-
-				if ((variant == "ME" and major >= 8) or variant == "TXE") and not wcod_found : print("VCN:      %s" % vcn)
+				if ((variant == "ME" and major >= 8) or variant == "TXE") and not wcod_found :
+					print("SVN:      %s" % svn)
+					print("VCN:      %s" % vcn)
 
 				if [variant,major,wcod_found] == ['ME',11,False] and pdm_status != 'NaN' :
 					# noinspection PyUnboundLocalVariable

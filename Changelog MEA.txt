@@ -1,3 +1,9 @@
+v1.11.2
+
+Added support for future ME 11.x firmware
+Applied various small fixes and improvements
+Updated Engine Firmware Repository Database to r86
+
 v1.11.1
 
 Improved support for ME 11.7 (KBL Refresh) firmware

@@ -1,6 +1,8 @@
 # ME Analyzer
 Intel Engine Firmware Analysis Tool
 
+[ME Analyzer News Feed](https://twitter.com/platomaniac)
+
 [ME Analyzer Discussion Topic](http://www.win-raid.com/t840f39-ME-Analyzer-Intel-Engine-Firmware-Analysis-Tool.html#msg14803)
 
 ![](https://i.imgur.com/M29aJqF.png)
