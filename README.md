@@ -5,6 +5,8 @@ Intel Engine Firmware Analysis Tool
 
 [ME Analyzer Discussion Topic](http://www.win-raid.com/t840f39-ME-Analyzer-Intel-Engine-Firmware-Analysis-Tool.html#msg14803)
 
+[![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
+
 ![](https://i.imgur.com/M29aJqF.png)
 
 ## **A. About ME Analyzer**

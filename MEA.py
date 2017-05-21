@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.11.2'
+title = 'ME Analyzer v1.12.0'
 
 import os
 import re
@@ -111,10 +111,10 @@ class MEA_Param :
 class FPT_Pre_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
-		("ROMB_Instr_0",	uint32_t),		# 0x00 (x86 ROMB Instruction 0)
-		("ROMB_Instr_1",	uint32_t),		# 0x04 (x86 ROMB Instruction 1)
-		("ROMB_Instr_2",	uint32_t),		# 0x08 (x86 ROMB Instruction 2)
-		("ROMB_Instr_3",	uint32_t),		# 0x0C (x86 ROMB Instruction 3)
+		("ROMB_Instr_0",	uint32_t),		# 0x00
+		("ROMB_Instr_1",	uint32_t),		# 0x04
+		("ROMB_Instr_2",	uint32_t),		# 0x08
+		("ROMB_Instr_3",	uint32_t),		# 0x0C
 		# 0x10
 	]
 
@@ -122,20 +122,20 @@ class FPT_Pre_Header(ctypes.LittleEndianStructure) :
 class FPT_Header(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
-		("Tag",				char*4),		# 0x10 (Pre+)
-		("NumPartitions",	uint32_t),		# 0x14
-		("Version",			uint8_t),		# 0x18
-		("EntryType",		uint8_t),		# 0x19
-		("Length",			uint8_t),		# 0x1A
-		("Checksum",		uint8_t),		# 0x1B
-		("FlashCycleLife",	uint16_t),		# 0x1C
-		("FlashCycleLimit",	uint16_t),		# 0x1E
-		("UMASize",			uint32_t),		# 0x20
-		("Flags",			uint32_t),		# 0x24
-		("FitMajor",		uint16_t),		# 0x28
-		("FitMinor",		uint16_t),		# 0x2A
-		("FitHotfix",		uint16_t),		# 0x2C
-		("FitBuild",		uint16_t),		# 0x2E
+		("Tag",				char*4),		# 0x00
+		("NumPartitions",	uint32_t),		# 0x04
+		("Version",			uint8_t),		# 0x08
+		("EntryType",		uint8_t),		# 0x09
+		("Length",			uint8_t),		# 0x0A
+		("Checksum",		uint8_t),		# 0x0B
+		("FlashCycleLife",	uint16_t),		# 0x0C
+		("FlashCycleLimit",	uint16_t),		# 0x0E
+		("UMASize",			uint32_t),		# 0x10
+		("Flags",			uint32_t),		# 0x14
+		("FitMajor",		uint16_t),		# 0x18
+		("FitMinor",		uint16_t),		# 0x1A
+		("FitHotfix",		uint16_t),		# 0x1C
+		("FitBuild",		uint16_t),		# 0x1E
 		# 0x20
 	]
 
@@ -143,14 +143,14 @@ class FPT_Header(ctypes.LittleEndianStructure) :
 class FPT_Entry(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
-		("Name",			char*4),		# 0x30 (1st)
-		("Owner",			char*4),		# 0x34
-		("Offset",			uint32_t),		# 0x38
-		("Size",			uint32_t),		# 0x3C
-		("StartTokens",		uint32_t),		# 0x40
-		("MaxTokens",		uint32_t),		# 0x44
-		("ScratchSectors",	uint32_t),		# 0x48
-		("Flags",			uint32_t),		# 0x4C
+		("Name",			char*4),		# 0x00
+		("Owner",			char*4),		# 0x04
+		("Offset",			uint32_t),		# 0x08
+		("Size",			uint32_t),		# 0x0C
+		("StartTokens",		uint32_t),		# 0x10
+		("MaxTokens",		uint32_t),		# 0x14
+		("ScratchSectors",	uint32_t),		# 0x18
+		("Flags",			uint32_t),		# 0x1C
 		# 0x20
 	]
 
@@ -158,52 +158,33 @@ class FPT_Entry(ctypes.LittleEndianStructure) :
 class MN2_Manifest(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
-		("ModuleType",		uint16_t),		# 0x00
-		("ModuleSubType",	uint16_t),		# 0x02
+		("Type",			uint32_t),		# 0x00
 		("HeaderLength",	uint32_t),		# 0x04 (*4)
 		("HeaderVersion",	uint32_t),		# 0x08
 		("Flags",			uint32_t),		# 0x0C
-		("ModuleVendor",	uint32_t),		# 0x10
+		("VEN_ID",			uint32_t),		# 0x10 (0x8086)
 		("Day",				uint8_t),		# 0x14
 		("Month",			uint8_t),		# 0x15
 		("Year",			uint16_t),		# 0x16
 		("Size",			uint32_t),		# 0x18 (*4)
 		("Tag",				char*4),		# 0x1C
-		("NumModules",		uint32_t),		# 0x20
+		("NumModules",		uint32_t),		# 0x20 (Reserved at $CPD)
 		("Major",			uint16_t),		# 0x24
 		("Minor",			uint16_t),		# 0x26
 		("Hotfix",			uint16_t),		# 0x28
 		("Build",			uint16_t),		# 0x2A
-		("SVN_9",			uint8_t),		# 0x2C
-		("Unk2D_30",		uint8_t*3),		# 0x2D
-		("SVN_8",			uint8_t),		# 0x30
-		("Unk31_34",		uint8_t*3),		# 0x31
-		("VCN",				uint8_t),		# 0x34
-		("Unk35_78",		uint8_t*16),	# 0x35
+		("SVN_9",			uint8_t),		# 0x2C (ME9+)
+		("Reserved0",		uint8_t*3),		# 0x2D
+		("SVN_8",			uint8_t),		# 0x30 (ME8, Reserved at $CPD)
+		("Reserved1",		uint8_t*3),		# 0x31
+		("VCN",				uint8_t),		# 0x34 (ME8-10, Reserved at $CPD)
+		("Reserved2",		uint8_t*16),	# 0x35
 		("KeySize",			uint32_t),		# 0x78
 		("ScratchSize",		uint32_t),		# 0x7C
 		("RsaPubKey",		uint32_t*64),	# 0x80
 		("RsaPubExp",		uint32_t),		# 0x180
 		("RsaSig",			uint32_t*64),	# 0x184
-		("PartitionName",	char*12),		# 0x284
-		# 0x290
-	]
-
-# noinspection PyTypeChecker
-class MN2_Manifest_CPD_Cont(ctypes.LittleEndianStructure) :
-	_pack_ = 1
-	_fields_ = [
-		("Unknown00_04",	uint32_t),		# 0x00 Size?
-		("HeaderSize",		uint32_t),		# 0x04 (from Unknown00_04)
-		("PartitionName",	char*4),		# 0x08
-		("PartitionSize",	uint32_t),		# 0x0C
-		("Hash",			uint8_t*32),	# 0x10
-		("Unknown30_34",	uint32_t),		# 0x30
-		("Unknown34_38",	uint32_t),  	# 0x34
-		("Unknown38_3C", 	uint32_t),  	# 0x38
-		("Unknown3C_40", 	uint32_t),  	# 0x3C
-		("Unknown40_44", 	uint32_t),  	# 0x40
-		# 0x44
+		# 0x284
 	]
 
 # noinspection PyTypeChecker
@@ -269,7 +250,10 @@ class CPD_Header(ctypes.LittleEndianStructure) :
 	_fields_ = [
 		("Tag",				char*4),		# 0x00
 		("NumModules",		uint32_t),		# 0x04
-		("Flags",			uint32_t),		# 0x08
+		("HeaderVersion",	uint8_t),		# 0x08
+		("EntryVersion",	uint8_t),		# 0x09
+		("HeaderLength",	uint8_t),		# 0x0A
+		("Checksum",		uint8_t),		# 0x0B
 		("PartitionName",	char*4),		# 0x0C
 		# 0x10
 	]
@@ -279,23 +263,332 @@ class CPD_Entry(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Offset_CPD",		uint32_t),		# 0x0C (from $CPD)
+		("Offset_CPD",		uint8_t*3),		# 0x0C (from $CPD)
+		("Compression",		uint8_t),		# 0x0F
 		("Size",			uint32_t),		# 0x10
-		("Flags",			uint32_t),		# 0x14
+		("Reserved",		uint32_t),		# 0x14
 		# 0x18
 	]
 
 # noinspection PyTypeChecker
-class CPD_Entry_Details(ctypes.LittleEndianStructure) :
+class CPD_Ext_00(ctypes.LittleEndianStructure) : # System Info
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("MinUMASize",		uint32_t),		# 0x08
+		("ChipsetVersion",	uint32_t),		# 0x0C
+		("IMGDefaultHash",	uint32_t*8),	# 0x10
+		("PageableUMASize",	uint32_t),		# 0x30
+		("Reserved0",		uint64_t),		# 0x34
+		("Reserved1",		uint32_t),		# 0x3C
+		# 0x40
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_00_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*4),		# 0x00
+		("Version",			uint32_t),		# 0x04
+		("UserID",			uint16_t),		# 0x08
+		("Reserved",		uint16_t),		# 0x0A
+		# 0x0C
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_01(ctypes.LittleEndianStructure) : # Init Script
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("Reserved",		uint32_t),		# 0x08
+		("ModuleCount",		uint32_t),		# 0x0C
+		# 0x10
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_01_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("PartitionName",	char*4),		# 0x00
+		("ModuleName",		char*12),		# 0x0C
+		("InitFlowFlags",	uint32_t),		# 0x10
+		("BootTypeFlags",	uint32_t),		# 0x14
+		# 0x18
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_02(ctypes.LittleEndianStructure) : # Feature Permissions
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("FeatureCount",	uint32_t),		# 0x08
+		# 0x0C
+	]
+
+# noinspection PyTypeChecker
+class CPD_Ext_02_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("UserID",			uint16_t),		# 0x00
+		("Reserved",		uint16_t),		# 0x02
+		# 0x04
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_03(ctypes.LittleEndianStructure) : # Partition Info
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("PartitionName",	char*4),		# 0x08
+		("PartitionSize",	uint32_t),		# 0x0C
+		("Hash",			uint32_t*8),	# 0x10
+		("VCN",				uint32_t),		# 0x30
+		("PartitionVer",	uint32_t),  	# 0x34
+		("DataFormatVer", 	uint32_t),  	# 0x38
+		("InstanceID", 		uint32_t),  	# 0x3C
+		("Flags", 			uint32_t),  	# 0x40
+		("Reserved", 		uint32_t*5),  	# 0x40
+		# 0x58
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_03_Mod(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Unknown04_08",	uint32_t),		# 0x0C
-		("Unknown08_0C",	uint32_t),		# 0x10
-		("Hash",			uint8_t*32),	# 0x14
+		("Type",			uint8_t),		# 0x0C (0 Process, 1 Shared Library, 2 Data)
+		("Compression",		uint8_t),		# 0x0D (0 Uncompressed, 1 Huffman, 2 LZMA)
+		("Reserved",		uint16_t),		# 0x0E
+		("MetadataSize",	uint32_t),		# 0x10
+		("MetadataHash",	uint32_t*8),	# 0x14
 		# 0x34
 	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_04(ctypes.LittleEndianStructure) : # Shared Lib
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("ContextSize",		uint32_t),		# 0x08
+		("TotAlocVirtSpc",	uint32_t),		# 0x0C
+		("CodeBaseAddress",	uint32_t),		# 0x10
+		("TLSSize",			uint32_t),		# 0x14
+		("Reserved",		uint32_t),		# 0x18
+		# 0x1C
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_05(ctypes.LittleEndianStructure) : # Process Manifest
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("Flags",			uint32_t),		# 0x08
+		("CodeBaseAddress",	uint32_t),		# 0x0C
+		("CodeSizeUncomp",	uint32_t),		# 0x10
+		("CM0HeapSize",		uint32_t),		# 0x14
+		("BSSSize",			uint32_t),		# 0x18
+		("DefaultHeapSize",	uint32_t),		# 0x1C
+		("MainThreadEntry",	uint32_t),		# 0x20
+		("AllowedSysCalls",	uint32_t*3),	# 0x24
+		("UserID",			uint16_t),		# 0x30
+		("Reserved0",		uint32_t),		# 0x32
+		("Reserved1",		uint16_t),		# 0x36
+		("Reserved2",		uint64_t),		# 0x38
+		("GroupID",			uint16_t*3),	# 0x40
+		# 0x46
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_06(ctypes.LittleEndianStructure) : # Threads
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		# 0x08
+	]
+		
+# noinspection PyTypeChecker
+class CPD_Ext_06_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("StackSize",		uint32_t),		# 0x00
+		("Flags",			uint32_t),		# 0x04
+		("SchedulPolicy",	uint32_t),		# 0x08
+		("Reserved",		uint32_t),		# 0x0C
+		# 0x10
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_07(ctypes.LittleEndianStructure) : # Device IDs
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		# 0x08
+	]
 
+# noinspection PyTypeChecker
+class CPD_Ext_07_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("DeviceID",		uint32_t),		# 0x00
+		("Reserved",		uint32_t),		# 0x04
+		# 0x08
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_08(ctypes.LittleEndianStructure) : # MMIO Ranges
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		# 0x8
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_08_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("BaseAddress",		uint32_t),		# 0x00
+		("SizeLimit",		uint32_t),		# 0x04
+		("Flags",			uint32_t),		# 0x08
+		# 0x0C
+	]
+
+# noinspection PyTypeChecker
+class CPD_Ext_09(ctypes.LittleEndianStructure) : # Special File Producer
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("MajorNumber",		uint16_t),		# 0x08
+		("Flags",			uint16_t),		# 0x0A
+		# 0x0C
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_09_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*12),		# 0x00
+		("AccessMode",		uint16_t),		# 0x0C
+		("UserID",			uint16_t),		# 0x0E
+		("GroupID",			uint16_t),		# 0x10
+		("MinorNumber",		uint8_t),		# 0x12
+		("Reserved0",		uint8_t),		# 0x13
+		("Reserved1",		uint32_t),		# 0x14
+		# 0x18
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("Compression",		uint8_t),		# 0x08 (0 Uncompressed, 1 Huffman, 2 LZMA, ? Encrypted)
+		("Reserved0",		uint8_t),		# 0x09
+		("Reserved1",		uint8_t),		# 0x0A
+		("Reserved2",		uint8_t),		# 0x0B
+		("SizeUncomp",		uint32_t),		# 0x0C
+		("SizeComp",		uint32_t),		# 0x10 (LZMA only)
+		("DEV_ID",			uint16_t),		# 0x10
+		("VEN_ID",			uint16_t),		# 0x10 (0x8086)
+		("Hash",			uint32_t*8),	# 0x14
+		# 0x38
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0B(ctypes.LittleEndianStructure) : # Locked Ranges
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		# 0x08
+	]
+
+# noinspection PyTypeChecker
+class CPD_Ext_0B_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("RangeBase",		uint32_t),		# 0x00
+		("RangeSize",		uint32_t),		# 0x04
+		# 0x08
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0C(ctypes.LittleEndianStructure) : # Client System Info
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("FWSKUCaps",		uint32_t),		# 0x08
+		("FWSKUCapsReserv",	uint32_t*7),	# 0x0C
+		("FWSKUAttrib",		uint64_t),		# 0x28
+		# 0x30
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0D(ctypes.LittleEndianStructure) : # User Info (vfs)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		# 0x8
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0D_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("UserID",			uint16_t),		# 0x00
+		("Reserved",		uint16_t),		# 0x02
+		("NVStorageQuota",	uint32_t),		# 0x04
+		("RAMStorageQuota",	uint32_t),		# 0x08
+		("WOPQuota",		uint32_t),		# 0x0C
+		("WorkingDir",		uint32_t*9),	# 0x10
+		# 0x44
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0F(ctypes.LittleEndianStructure) : # Package Info (TXE)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("PartitionName",	char*4),		# 0x08
+		("VCN",				uint32_t),		# 0x0C
+		("SVN",				uint32_t),		# 0x10
+		("Unknown14_18",	uint32_t),		# 0x14 # Need TXE3 XML for the rest
+		("Unknown18_1C",	uint32_t),  	# 0x18
+		("Unknown1C_20", 	uint32_t),  	# 0x1C
+		("Unknown20_24", 	uint32_t),  	# 0x20
+		("Unknown24_28", 	uint32_t),  	# 0x24
+		("Unknown28_2C", 	uint32_t),  	# 0x28
+		("Unknown2C_30", 	uint32_t),  	# 0x2C
+		("Unknown30_34", 	uint32_t),  	# 0x30
+		# 0x34
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0F_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*12),		# 0x00
+		("Type",			uint8_t),		# 0x0C (0 Process, 1 Shared Library, 2 Data)
+		("Compression",		uint8_t),		# 0x0D (0 Uncompressed, 1 Huffman, 2 LZMA)
+		("Reserved",		uint16_t),		# 0x0E
+		("MetadataSize",	uint32_t),		# 0x10
+		("MetadataHash",	uint32_t*8),	# 0x14
+		# 0x34
+	]
+	
 # Inspired from Igor Skochinsky's me_unpack
 def get_struct(str_, off, struct):
 	my_struct = struct()
@@ -529,8 +822,10 @@ def switch_guid (guid, transform) :
 def fovd_clean (fovdtype) :
 	fovd_match = None
 	fovd_data = b''
+	
 	if fovdtype == "new" : fovd_match = (re.compile(br'\x46\x4F\x56\x44\x4B\x52\x49\x44')).search(reading) # FOVDKRID detection
 	elif fovdtype == "old" : fovd_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44')).search(reading) # NVKRKRID detection
+	
 	if fovd_match is not None :
 		(start_fovd_match, end_fovd_match) = fovd_match.span()
 		fovd_start = int.from_bytes(reading[end_fovd_match:end_fovd_match + 0x4], 'little')
@@ -544,29 +839,48 @@ def fovd_clean (fovdtype) :
 	else : return True
 	
 def vcn_skl(start_man_match, variant) :
-	me11_vcn_pat = re.compile(br'\xFF\xFF\xFF\xFF........................................\x46\x54\x50\x52') # FF*4 + [0x28] + FTPR detection
-	me11_vcn_match = me11_vcn_pat.search(reading[start_man_match:]) # After FTPR $MN2 for performance and to avoid $CPD FTPR
-	if me11_vcn_match is not None :
-		(start_vcn_match, end_vcn_match) = me11_vcn_match.span()
+	vcn = 'NaN'
+	
+	mn2_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
+	if mn2_hdr.Tag == b'$MN2' : # Sanity check
+		ext_offset = start_man_match - 0x1B + mn2_hdr.HeaderLength * 4
 		
-		if variant == "TXE" : vcn = reading[start_man_match + end_vcn_match:start_man_match + end_vcn_match + 0x1] # TXE 3.x
-		else : vcn = reading[start_man_match + end_vcn_match + 0x24:start_man_match + end_vcn_match + 0x25] # ME 11.x
-		vcn = int(binascii.b2a_hex(vcn[::-1]), 16)
+		cpd_match = (re.compile(br'\x24\x43\x50\x44')).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD" detection
+		(start_cpd_match, end_cpd_match) = cpd_match.span()
 		
-		return vcn
+		cpd_offset = start_man_match - 0x500 + start_cpd_match
+		
+		cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
+		if cpd_hdr.Tag == b'$CPD' : # Sanity check
+			
+			cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10, CPD_Entry)
+			if cpd_entry_hdr.Name == b'FTPR.man' : # Sanity check
+		
+				while int.from_bytes(reading[ext_offset:ext_offset + 0x4], 'little') not in [3,15] :
+					if ext_offset > start_man_match - 0x1B + cpd_entry_hdr.Size : break
+					ext_offset += int.from_bytes(reading[ext_offset + 0x4:ext_offset + 0x8], 'little')
+				else :
+					if variant == 'TXE' : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_0F)
+					else : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_03)
+					
+					vcn = ext_hdr.VCN
+	
+	return vcn
 
-def ker_anl(fw_type) :
-	ftpr_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading) # "$CPD [0x8] FTPR" detection
+def ker_anl(fw_type, start_man_match) :
+	cpd_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD [0x8] FTPR" detection
 	
 	ker_start = 0x0
 	ker_end = 0x0
 	rel_db = "NaN"
 	ker_name = "NaN"
 	
-	if ftpr_match is not None :
-		(start_ftpr_match, end_ftpr_match) = ftpr_match.span()
-		ker_start = int.from_bytes(reading[end_ftpr_match + 0x54:end_ftpr_match + 0x57], 'little') + start_ftpr_match # 5 = Kernel, B = BUP etc
-		ker_end = int.from_bytes(reading[end_ftpr_match + 0x84:end_ftpr_match + 0x87], 'little') + start_ftpr_match # 8 = Kernel, E = BUP etc
+	if cpd_match is not None :
+		(start_cpd_match, end_cpd_match) = cpd_match.span()
+		start_cpd_match += start_man_match - 0x500
+		end_cpd_match += start_man_match - 0x500
+		ker_start = int.from_bytes(reading[end_cpd_match + 0x54:end_cpd_match + 0x57], 'little') + start_cpd_match # 5 = Kernel, B = BUP etc
+		ker_end = int.from_bytes(reading[end_cpd_match + 0x84:end_cpd_match + 0x87], 'little') + start_cpd_match # 8 = Kernel, E = BUP etc
 		if release == "Production" : rel_db = "PRD"
 		elif release == "Pre-Production" : rel_db = "PRE"
 		elif release == "ROM-Bypass" : rel_db = "BYP"
@@ -1427,7 +1741,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MN2' :
 						
 						mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
-						man_ven = '%X' % mn2_hdr.ModuleVendor
+						man_ven = '%X' % mn2_hdr.VEN_ID
 						
 						if man_ven == '8086' : # Sanity check
 							man_num = mn2_hdr.NumModules
@@ -1450,9 +1764,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MAN' :
 							
 						mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
-						man_ven = '%X' % mn2_hdr.ModuleVendor
+						man_ven = '%X' % mn2_hdr.VEN_ID
 						
-						if man_ven == '8086':  # Sanity check
+						if man_ven == '8086': # Sanity check
 							man_num = mn2_hdr.NumModules
 							man_len = mn2_hdr.HeaderLength * 4
 							mod_start = p_end_last + man_len + 0xC
@@ -1463,8 +1777,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 								mme_tag = mme_mod.Tag
 								
 								if mme_tag == b'$MME': # Sanity check
-									mod_size_all += mme_mod.Size  # Append all $MOD ($MME Code) sizes
-									p_end_last = mod_start + 0x50 + 0xC + mod_size_all  # Last $MME + $MME size + $SKU + all $MOD sizes
+									mod_size_all += mme_mod.Size # Append all $MOD ($MME Code) sizes
+									p_end_last = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU + all $MOD sizes
 								
 									mod_start += 0x50
 								else :
@@ -1479,32 +1793,32 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
 						cpd_num = cpd_hdr.NumModules
 						
-						# Calculate partition size by the Extended $CPD (MN2_Manifest_CPD_Cont) header
-						# PartitionSize of CPD_Cont is always 0x0A at TXE3+ so check $CPD entries instead
+						# Calculate partition size by the $MN2 Extension 03 (CPD_Ext_03)
+						# PartitionSize of CPD_Ext_03 is always 0x0A at TXE3+ so check $CPD entries instead
 						mn2_start = p_end_last + 0x10 + cpd_num * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
 						mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
 						if mn2_hdr.Tag == b'$MN2' : # Sanity check
 							man_len = mn2_hdr.HeaderLength * 4
-							mn2_hdr_cont = get_struct(reading, mn2_start + man_len, MN2_Manifest_CPD_Cont)
+							cpd_ext_03 = get_struct(reading, mn2_start + man_len, CPD_Ext_03)
 							
-							# ISHC size at $FPT can be larger than MN2_Manifest_CPD_Cont.PartitionSize because
+							# ISHC size at $FPT can be larger than CPD_Ext_03.PartitionSize because
 							# it's the last charted region and thus 1K pre-alligned by Intel at the $FPT header
-							if mn2_hdr_cont.PartitionName == cpd_hdr.PartitionName : # Sanity check
-								p_end_last_cont = mn2_hdr_cont.PartitionSize
+							if cpd_ext_03.PartitionName == cpd_hdr.PartitionName : # Sanity check
+								p_end_last_cont = cpd_ext_03.PartitionSize
 							else :
 								break # main "while" loop
 						else :
 							break # main "while" loop
 							
 						# Calculate partition size by the $CPD entries (TXE3+, 2nd check for ME11+)
-						for entry in range(1, cpd_num, 2) :  # Skip 1st .man module, check only .met
+						for entry in range(1, cpd_num, 2) : # Skip 1st .man module, check only .met
 							cpd_entry_hdr = get_struct(reading, p_end_last + 0x10 + entry * 0x18, CPD_Entry)
 							cpd_entry_name = cpd_entry_hdr.Name
 								
 							if b'.met' not in cpd_entry_name and b'.man' not in cpd_entry_name : # Sanity check
-								cpd_entry_offset = cpd_entry_hdr.Offset_CPD
+								cpd_entry_offset = int.from_bytes(cpd_entry_hdr.Offset_CPD, byteorder='little', signed=False)
 								cpd_entry_size = cpd_entry_hdr.Size
-									
+								
 								# Store last entry (max CPD offset)
 								if cpd_entry_offset > cpd_offset_last :
 									cpd_offset_last = cpd_entry_offset
@@ -2179,7 +2493,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				vcn = vcn_skl(start_man_match, variant) # Detect VCN
 				
-				ker_start,ker_end,rel_db = ker_anl('anl') # Kernel Analysis for all 11.x
+				ker_start,ker_end,rel_db = ker_anl('anl', start_man_match) # Kernel Analysis for all 11.x
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
@@ -2396,7 +2710,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# Kernel Extraction for all 11.x
 				if param.me11_ker_extr :
-					ker_anl('extr')
+					ker_anl('extr', start_man_match)
 					continue # Next input file
 				
 				# UEFIStrip Fix for all 11.x
