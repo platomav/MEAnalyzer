@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.12.0'
+title = 'ME Analyzer v1.12.1'
 
 import os
 import re
@@ -492,7 +492,7 @@ class CPD_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
-		("Compression",		uint8_t),		# 0x08 (0 Uncompressed, 1 Huffman, 2 LZMA, ? Encrypted)
+		("Compression",		uint8_t),		# 0x08 (0 Uncompressed, 1 Huffman, 2 LZMA)
 		("Reserved0",		uint8_t),		# 0x09
 		("Reserved1",		uint8_t),		# 0x0A
 		("Reserved2",		uint8_t),		# 0x0B
@@ -557,6 +557,28 @@ class CPD_Ext_0D_Mod(ctypes.LittleEndianStructure) :
 	]
 	
 # noinspection PyTypeChecker
+class CPD_Ext_0E(ctypes.LittleEndianStructure) : # Key Manifest (TXE)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("Unknown08_0C",	uint32_t),		# 0x08
+		("Unknown0C_24",	uint32_t*6),	# 0x0C
+		# 0x24
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_0E_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Unknown00_04",	uint32_t),		# 0x00
+		("Unknown04_20",	uint32_t*7),	# 0x04
+		("Unknown20_24",	uint32_t*7),	# 0x20
+		("Unknown24_44",	uint32_t*7),	# 0x24 (SHA256 Hash)
+		# 0x44
+	]
+	
+# noinspection PyTypeChecker
 class CPD_Ext_0F(ctypes.LittleEndianStructure) : # Package Info (TXE)
 	_pack_ = 1
 	_fields_ = [
@@ -564,15 +586,9 @@ class CPD_Ext_0F(ctypes.LittleEndianStructure) : # Package Info (TXE)
 		("Size",			uint32_t),		# 0x04
 		("PartitionName",	char*4),		# 0x08
 		("VCN",				uint32_t),		# 0x0C
-		("SVN",				uint32_t),		# 0x10
-		("Unknown14_18",	uint32_t),		# 0x14 # Need TXE3 XML for the rest
-		("Unknown18_1C",	uint32_t),  	# 0x18
-		("Unknown1C_20", 	uint32_t),  	# 0x1C
-		("Unknown20_24", 	uint32_t),  	# 0x20
-		("Unknown24_28", 	uint32_t),  	# 0x24
-		("Unknown28_2C", 	uint32_t),  	# 0x28
-		("Unknown2C_30", 	uint32_t),  	# 0x2C
-		("Unknown30_34", 	uint32_t),  	# 0x30
+		("UsageBitmap",		uint32_t*4),	# 0x10
+		("SVN",				uint32_t),		# 0x20
+		("Reserved",		uint32_t*4),  	# 0x24
 		# 0x34
 	]
 	
@@ -581,12 +597,57 @@ class CPD_Ext_0F_Mod(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Type",			uint8_t),		# 0x0C (0 Process, 1 Shared Library, 2 Data)
-		("Compression",		uint8_t),		# 0x0D (0 Uncompressed, 1 Huffman, 2 LZMA)
-		("Reserved",		uint16_t),		# 0x0E
+		("Type",			uint8_t),		# 0x0C (0 Process, 1 Shared Library, 2 Data, 3 TBD)
+		("HashAlgorithm",	uint8_t),		# 0x0D (0 Reserved, 1 SHA1, 2 SHA256)
+		("HashSize",		uint16_t),		# 0x0E (0x20, only SHA256 for BXT)
 		("MetadataSize",	uint32_t),		# 0x10
 		("MetadataHash",	uint32_t*8),	# 0x14
 		# 0x34
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_12(ctypes.LittleEndianStructure) : # ??? (TXE)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("ModuleCount",		uint32_t),		# 0x08
+		("Reserved",		uint32_t*4),	# 0x0C
+		# 0x1C
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_12_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Unknown00_04",	uint32_t),		# 0x00
+		("Unknown04_08",	uint32_t),		# 0x04
+		("Unknown08_0C",	uint32_t),		# 0x08
+		("Unknown0C_10",	uint32_t),		# 0x0C
+		("Unknown10_18",	uint32_t*2),	# 0x10 (FFFFFFFFFFFFFFFF)
+		("Unknown18_1C",	uint32_t),		# 0x18
+		("Unknown1C_20",	uint32_t),		# 0x1C
+		("Unknown20_28",	uint32_t*2),	# 0x20 (FFFFFFFFFFFFFFFF)
+		("Unknown28_2C",	uint32_t),		# 0x28
+		("Unknown2C_30",	uint32_t),		# 0x2C
+		("Unknown30_38",	uint32_t*2),	# 0x30 (FFFFFFFFFFFFFFFF)
+		# 0x38
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_15(ctypes.LittleEndianStructure) : # Secure Token (TXE, no sample)
+	_pack_ = 1
+	_fields_ = [
+		("Unknown00_04",	uint32_t),		# 0x00
+		# 0x??
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_15_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("Unknown00_04",	uint32_t),		# 0x00
+		# 0x??
 	]
 	
 # Inspired from Igor Skochinsky's me_unpack
@@ -846,24 +907,25 @@ def vcn_skl(start_man_match, variant) :
 		ext_offset = start_man_match - 0x1B + mn2_hdr.HeaderLength * 4
 		
 		cpd_match = (re.compile(br'\x24\x43\x50\x44')).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD" detection
-		(start_cpd_match, end_cpd_match) = cpd_match.span()
+		if cpd_match is not None :
+			(start_cpd_match, end_cpd_match) = cpd_match.span()
 		
-		cpd_offset = start_man_match - 0x500 + start_cpd_match
+			cpd_offset = start_man_match - 0x500 + start_cpd_match
 		
-		cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
-		if cpd_hdr.Tag == b'$CPD' : # Sanity check
+			cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
+			if cpd_hdr.Tag == b'$CPD' : # Sanity check
 			
-			cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10, CPD_Entry)
-			if cpd_entry_hdr.Name == b'FTPR.man' : # Sanity check
+				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10, CPD_Entry)
+				if cpd_entry_hdr.Name == b'FTPR.man' : # Sanity check
 		
-				while int.from_bytes(reading[ext_offset:ext_offset + 0x4], 'little') not in [3,15] :
-					if ext_offset > start_man_match - 0x1B + cpd_entry_hdr.Size : break
-					ext_offset += int.from_bytes(reading[ext_offset + 0x4:ext_offset + 0x8], 'little')
-				else :
-					if variant == 'TXE' : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_0F)
-					else : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_03)
+					while int.from_bytes(reading[ext_offset:ext_offset + 0x4], 'little') not in [3,15] :
+						if ext_offset > start_man_match - 0x1B + cpd_entry_hdr.Size : break
+						ext_offset += int.from_bytes(reading[ext_offset + 0x4:ext_offset + 0x8], 'little')
+					else :
+						if variant == 'TXE' : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_0F)
+						else : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_03)
 					
-					vcn = ext_hdr.VCN
+						vcn = ext_hdr.VCN
 	
 	return vcn
 
@@ -1610,7 +1672,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			day = '%0.2X' % mn2_ftpr_hdr.Day
 			month = '%0.2X' % mn2_ftpr_hdr.Month
 			year = '%0.4X' % mn2_ftpr_hdr.Year
-			date = "%s/%s/%s" % (day, month, year)
+			date = "%s-%s-%s" % (year, month, day)
 			
 			# Detect Firmware Variant (ME, TXE or SPS)
 			variant = db_pkey()
@@ -2635,20 +2697,16 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# 11.0 : Skylake , Sunrise Point
 				if minor == 0 :
-					upd_found = True # 11.7 upgradable
-					
 					platform = "SPT"
 				
 				# 11.5 : Skylake/Kabylake-LP, Sunrise/Union Point
 				elif minor == 5 :
-					upd_found = True # 11.7 upgradable
+					upd_found = True # Dead branch
 					
 					platform = "SPT/KBP"
 				
 				# 11.6 : Skylake/Kabylake, Sunrise/Union Point
 				elif minor == 6 :
-					#upd_found = True # 11.7 upgradable
-					
 					platform = "SPT/KBP"
 				
 				# 11.7 : Skylake/Kabylake/Kabylake Refresh, Sunrise/Union Point
@@ -3046,11 +3104,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				else : name_db = "%s_%s" % (fw_ver(major,minor,hotfix,build), rel_db)
 				
 			if fuj_rgn_exist : name_db = "%s_UMEM" % name_db
-	
-			date_extr = date.replace('/','-')
 			
-			if me_rec_ffs : print("%s %s_NaN_REC %s NaN %s" % (variant, fw_ver(major,minor,hotfix,build), fw_ver(major,minor,hotfix,build), date_extr))
-			else : print("%s %s %s %s %s" % (variant, name_db, fw_ver(major,minor,hotfix,build), sku_db, date_extr))
+			if me_rec_ffs : print("%s %s_NaN_REC %s NaN %s" % (variant, fw_ver(major,minor,hotfix,build), fw_ver(major,minor,hotfix,build), date))
+			else : print("%s %s %s %s %s" % (variant, name_db, fw_ver(major,minor,hotfix,build), sku_db, date))
 			
 			mea_exit(0)
 		

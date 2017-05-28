@@ -1,3 +1,10 @@
+v1.12.1
+
+Added & improved ME/TXE x86 $CPD Extensions
+Date now follows ISO8601 YYYY-MM-DD format
+Fixed crash at ME/TXE x86 VCN detection
+Updated Engine Firmware Repository Database to r88
+
 v1.12.0
 
 Added 14 ME/TXE x86 $CPD Extensions
