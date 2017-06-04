@@ -65,7 +65,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -pdb    : Writes input firmware's DB entries to file
 * -dbname : Renames input file based on DB name
 * -dfpt   : Shows info about the $FPT header (Research)
-* -dker   : Shows verbose info about ME 11+ SKU (Research)
+* -dsku   : Shows verbose info about ME 11+ SKU (Research)
 * -eker   : Splits ME 11+ Huffman modules in chunks (Research)
 
 The following are Windows specific:

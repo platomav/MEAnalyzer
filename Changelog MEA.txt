@@ -1,3 +1,16 @@
+v1.13.0
+
+Added ME 11.x Slim H/LP SKU detection & support
+Added proper ME/TXE x86 $CPD Extension parsing
+Added support for ME 11.10 (SKL/KBL-X, BSF) firmware
+Added support for ME 11.20 (Purley, LBG) firmware
+Added ME 11.x Lewisburg support detection field
+Improved ME x86 SKU Type & SKU Platform detection
+Improved ME 11+ SKU verbose info display (-dsku)
+Improved ME 11.x SKU detection based on Kernel
+Fixed bug at TXE 3.x SoC Stepping detection
+Updated Engine Firmware Repository Database to r89
+
 v1.12.1
 
 Added & improved ME/TXE x86 $CPD Extensions

@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.12.1'
+title = 'ME Analyzer v1.13.0'
 
 import os
 import re
@@ -56,7 +56,7 @@ class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-hid','-adir','-aecho','-eker','-dker','-pdb','-enuf','-dbname','-mass','-dfpt']
+		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-hid','-adir','-aecho','-eker','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
 
 		self.win = ['-ubupre','-ubu','-extr','-msg','-hid','-aecho','-adir'] # Windows only
 		
@@ -76,7 +76,7 @@ class MEA_Param :
 		self.hid_find = False
 		self.alt_msg_echo = False
 		self.me11_ker_extr = False
-		self.me11_ker_disp = False
+		self.me11_sku_disp = False
 		self.fpt_disp = False
 		self.db_print_new = False
 		self.enable_uf = False
@@ -88,7 +88,7 @@ class MEA_Param :
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
 			if i == '-multi' : self.multi = True # Checks multiple files, copies those with messages to new folder.
 			if i == '-eker' : self.me11_ker_extr = True # Separation of ME x86 compressed Huffman modules into chunks.
-			if i == '-dker' : self.me11_ker_disp = True # Forces MEA to print ME x86 Kernel/FIT SKU verbose analysis.
+			if i == '-dsku' : self.me11_sku_disp = True # Forces MEA to print ME x86 Debug SKU detection.
 			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
 			if i == '-enuf' : self.enable_uf = True # Enables UEFIFind Engine GUID Detection.
 			if i == '-dbname' : self.give_db_name = True # Rename input file based on DB structured name.
@@ -119,7 +119,7 @@ class FPT_Pre_Header(ctypes.LittleEndianStructure) :
 	]
 
 # noinspection PyTypeChecker
-class FPT_Header(ctypes.LittleEndianStructure) :
+class FPT_Header(ctypes.LittleEndianStructure) : # Flash Partition Table
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				char*4),		# 0x00
@@ -245,7 +245,7 @@ class MCP_Header(ctypes.LittleEndianStructure) :
 	]
 
 # noinspection PyTypeChecker
-class CPD_Header(ctypes.LittleEndianStructure) :
+class CPD_Header(ctypes.LittleEndianStructure) : # Code Partition Directory
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				char*4),		# 0x00
@@ -314,7 +314,7 @@ class CPD_Ext_01_Mod(ctypes.LittleEndianStructure) :
 		("PartitionName",	char*4),		# 0x00
 		("ModuleName",		char*12),		# 0x0C
 		("InitFlowFlags",	uint32_t),		# 0x10
-		("BootTypeFlags",	uint32_t),		# 0x14
+		("BootTypeFlags",	uint32_t),		# 0x14 (0 Normal, 1 HAP, 2 HMRFPO, 3 Temp Disable, 4 Recovery, 5 Safe Mode, 6 FW Update, 7:31 Reserved)
 		# 0x18
 	]
 	
@@ -702,7 +702,7 @@ def mea_help() :
 	text += "-pdb    : Writes input firmware's DB entries to file\n"
 	text += "-dbname : Renames input file based on DB name\n"
 	text += "-dfpt   : Shows info about the $FPT header (Research)\n"
-	text += "-dker   : Shows verbose info for ME 11+ SKU (Research)\n"
+	text += "-dsku   : Shows verbose info for ME 11+ SKU (Research)\n"
 	text += "-eker   : Splits ME 11+ Huffman modules in chunks (Research)"
 	
 	if mea_os == 'win32' :
@@ -898,36 +898,67 @@ def fovd_clean (fovdtype) :
 		if fovd_data == b'\xFF' * fovd_size : return True
 		else : return False
 	else : return True
-	
-def vcn_skl(start_man_match, variant) :
-	vcn = 'NaN'
+
+# Analyze Engine x86 $CPD Extensions
+# noinspection PyUnusedLocal
+def ext_anl(start_man_match, variant) :
+	vcn = -1
+	fw_0C_lbg = -1
+	fw_0C_sku1 = -1
+	fw_0C_sku2 = -1
+	ext_tag_all = list(range(16)) # $CPD Extensions 00-0F
 	
 	mn2_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
 	if mn2_hdr.Tag == b'$MN2' : # Sanity check
-		ext_offset = start_man_match - 0x1B + mn2_hdr.HeaderLength * 4
-		
+	
 		cpd_match = (re.compile(br'\x24\x43\x50\x44')).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD" detection
 		if cpd_match is not None :
 			(start_cpd_match, end_cpd_match) = cpd_match.span()
 		
 			cpd_offset = start_man_match - 0x500 + start_cpd_match
-		
 			cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
-			if cpd_hdr.Tag == b'$CPD' : # Sanity check
 			
-				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10, CPD_Entry)
-				if cpd_entry_hdr.Name == b'FTPR.man' : # Sanity check
-		
-					while int.from_bytes(reading[ext_offset:ext_offset + 0x4], 'little') not in [3,15] :
-						if ext_offset > start_man_match - 0x1B + cpd_entry_hdr.Size : break
-						ext_offset += int.from_bytes(reading[ext_offset + 0x4:ext_offset + 0x8], 'little')
-					else :
-						if variant == 'TXE' : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_0F)
-						else : ext_hdr = get_struct(reading, ext_offset, CPD_Ext_03)
-					
-						vcn = ext_hdr.VCN
+			if cpd_hdr.Tag == b'$CPD' and cpd_hdr.PartitionName == b'FTPR' : # Sanity checks
+				cpd_num = cpd_hdr.NumModules
+				
+				# Calculate total Manifest & Metadata size via the $CPD entries
+				for entry in range(0, cpd_num, 2) : # Check only .man & .met
+					cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
+					cpd_entry_offset = cpd_offset + int.from_bytes(cpd_entry_hdr.Offset_CPD, byteorder='little', signed=False)
+					cpd_entry_size = cpd_entry_hdr.Size
+					cpd_entry_name = cpd_entry_hdr.Name
+						
+					if cpd_entry_name == b'FTPR.man' : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at FTPR.man
+					elif b'.met' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset
+					else : break # Sanity check, "for" loop
+						
+					# Analyze all Extensions found inside $CPD Entry
+					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Extension Tag
+					while ext_tag in ext_tag_all :
+						
+						if [ext_tag,variant] == [3,'ME'] :
+							ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_03)
+							vcn = ext_hdr.VCN
+						elif [ext_tag,variant] == [15,'TXE'] :
+							ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
+							vcn = ext_hdr.VCN
+						elif ext_tag == 12 :
+							ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0C)
+							fw_sku_attr = format(ext_hdr.FWSKUAttrib, '032b') # 32 bits (LE)
+							fw_0C_cse = int(fw_sku_attr[28:32], 2) # CSE Size * 0.5MB (0)
+							fw_0C_sku1 = int(fw_sku_attr[25:28], 2) # SKU Type (0 COR, 1 CON, 2 SLM)
+							fw_0C_lbg = int(fw_sku_attr[24], 2) # Lewisburg support (0 11.x, 1 11.20)
+							fw_0C_m3 = int(fw_sku_attr[23], 2) # M3 support (0 CON & SLM, 1 COR)
+							fw_0C_m0 = int(fw_sku_attr[22], 2) # M0 support (1 CON & SLM & COR)
+							fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 <= 11.0.0.1202 H/LP, 0 >= 11.0.0.1205 H, 1 >= 11.0.0.1205 LP)
+							fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
+							fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
+							
+						cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+						if cpd_ext_offset > cpd_entry_offset + cpd_entry_size : break # Stop Extension scanning at the end of $CPD Entry
+						ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
 	
-	return vcn
+	return vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2
 
 def ker_anl(fw_type, start_man_match) :
 	cpd_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD [0x8] FTPR" detection
@@ -1241,6 +1272,7 @@ for file_in in source :
 	fw_in_db_found = "No"
 	pos_sku_ker = "Unknown"
 	pos_sku_fit = "Unknown"
+	pos_sku_ext = "Unknown"
 	byp_match = None
 	man_match = None
 	me1_match = None
@@ -1255,7 +1287,7 @@ for file_in in source :
 	sku_missing = False
 	rec_missing = False
 	fd_rgn_exist = False
-	me11_ker_anl = False
+	me11_sku_anl = False
 	me11_ker_msg = False
 	can_search_db = True
 	fpt_chk_fail = False
@@ -1498,7 +1530,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if binascii.b2a_hex(reading[:0x10]).decode('utf-8').upper() == "0C111D82A3D0F74CAEF3E28088491704" : me_rec_ffs = True
 		
-		if param.multi and param.me11_ker_disp : param.me11_ker_disp = False # dker not allowed with param.multi unless actual SKU error occurs
+		if param.multi and param.me11_sku_disp : param.me11_sku_disp = False # dker not allowed with param.multi unless actual SKU error occurs
 		
 		if me1_match is None : # All except AMT 1.x
 			fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
@@ -2543,17 +2575,31 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			elif major == 11 :
 				
-				me11_sku_init_match = (re.compile(br'\x4C\x4F\x43\x4C\x6D\x65\x62\x78')).search(reading) # LOCLmebx detection
-				if me11_sku_init_match is not None :
-					sku_init = "Corporate"
-					sku_init_db = "COR"
-				else :
-					sku_init = "Consumer"
-					sku_init_db = "CON"
-				
 				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
-				vcn = vcn_skl(start_man_match, variant) # Detect VCN
+				vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl(start_man_match, variant) # Detect VCN & SKU Attributes
+				
+				# Set SKU Type via Extension 0C Attributes
+				if fw_0C_sku1 == 0 :
+					sku_init = 'Corporate' # 0 Corporate/Intel (1272K MFS)
+					sku_init_db = 'COR'
+				elif fw_0C_sku1 == 1 : # 1 Consumer/Intel (400K MFS)
+					sku_init = 'Consumer'
+					sku_init_db = 'CON'
+				elif fw_0C_sku1 == 2 : # 2 Slim/Apple (256K MFS)
+					sku_init = 'Slim'
+					sku_init_db = 'SLM'
+				
+				# Set SKU Platform via Extension 0C Attributes (>= 11.0.0.1205)
+				if (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1205))) or minor > 0 :
+					if fw_0C_sku2 == 0 : pos_sku_ext = 'H'
+					elif fw_0C_sku2 == 1 : pos_sku_ext = 'LP'
+				else : pos_sku_ext = 'Invalid'
+				
+				# Set Lewisburg support via Extension 0C Attributes
+				if fw_0C_lbg == 0 : lbg_support = 'No'
+				elif fw_0C_lbg == 1 : lbg_support = 'Yes'
+				else : lbg_support = 'Unknown'
 				
 				ker_start,ker_end,rel_db = ker_anl('anl', start_man_match) # Kernel Analysis for all 11.x
 				
@@ -2589,13 +2635,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				match_7_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x84\x46')).search(ker_sku)
 					
 				match_8_h = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x2A')).search(ker_sku)
-				#match_8_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\xXX')).search(ker_sku)
+				match_8_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x22')).search(ker_sku)
 						
 				match_9_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xA1')).search(ker_sku)
 				match_9_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
 							
 				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h,match_9_h)) : pos_sku_ker = "H"
-				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_9_lp)) : pos_sku_ker = "LP"
+				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_8_lp,match_9_lp)) : pos_sku_ker = "LP"
 				
 				# FIT Platform SKU for all 11.x
 				if sku_check != "NaN" :
@@ -2654,22 +2700,25 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if '-LP' in fit_platform : pos_sku_fit = "LP"
 				elif '-H' in fit_platform : pos_sku_fit = "H"
 				
-				if pos_sku_ker == "Unknown" : # SKU not retreived from Kernel Analysis
-					if sku == "NaN" : # SKU not retreived from manual DB entry
-						if pos_sku_fit == "NaN" : # SKU not retreived from FIT Platform SKU
-							sku = col_r + "Error" + col_e + ", unknown ME %s.%s %s SKU!" % (major,minor,sku_init) + col_r + " *" + col_e
-							err_rep += 1
-							err_stor.append(sku)
+				if pos_sku_ext in ['Unknown','Invalid'] : # SKU not retreived from Extension 0C
+					if pos_sku_ker == 'Unknown' : # SKU not retreived from Kernel
+						if sku == 'NaN' : # SKU not retreived from manual MEA DB entry
+							if pos_sku_fit == 'Unknown' : # SKU not retreived from Flash Image Tool
+								sku = col_r + 'Error' + col_e + ', unknown ME %s.%s %s SKU!' % (major,minor,sku_init) + col_r + ' *' + col_e
+								err_rep += 1
+								err_stor.append(sku)
+							else :
+								sku = sku_init + ' ' + pos_sku_fit # SKU retreived from Flash Image Tool
 						else :
-							sku = sku_init + ' ' + pos_sku_fit # SKU retreived from FIT Platform SKU
+							pass # SKU retreived from manual MEA DB entry
 					else :
-						pass # SKU retreived from manual DB entry
+						sku = sku_init + ' ' + pos_sku_ker # SKU retreived from Kernel
 				else :
-					sku = sku_init + ' ' + pos_sku_ker # SKU retreived from Kernel Analysis
+					sku = sku_init + ' ' + pos_sku_ext # SKU retreived from Extension 0C
 				
 				# Adjust Production PCH Stepping, if not found at DB
 				if sku_stp == 'NaN' :
-					if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or minor in [5,6,7] :
+					if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or 20 > minor > 0 :
 						if ' LP' in sku : sku_stp = 'C0'
 						elif ' H' in sku : sku_stp = 'D0'
 				
@@ -2683,6 +2732,11 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if sku_stp == "NaN" : sku_db = "CON_LP_XX"
 					else : sku_db = "CON_LP" + "_" + sku_stp
 					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_CONLP' % minor))
+					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+				elif sku == "Slim LP" :
+					if sku_stp == "NaN" : sku_db = "SLM_LP_XX"
+					else : sku_db = "SLM_LP" + "_" + sku_stp
+					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_SLMLP' % minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				elif sku == "Corporate H" :
 					if sku_stp == "NaN" : sku_db = "COR_H_XX"
@@ -2712,6 +2766,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				# 11.7 : Skylake/Kabylake/Kabylake Refresh, Sunrise/Union Point
 				elif minor == 7 :
 					platform = "SPT/KBP"
+					
+				# 11.10 : Skylake-X/Kabylake-X, Basin Falls
+				elif minor == 10 :
+					platform = "BSF"
 				
 				# 11.20 : Purley, Lewisburg
 				elif minor == 20 :
@@ -2738,31 +2796,16 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						
 					sku_db += '_%s' % sku_pdm
 				
-				if ('Error' in sku) or param.me11_ker_disp: me11_ker_anl = True
+				if ('Error' in sku) or param.me11_sku_disp: me11_sku_anl = True
 				
-				# Kernel Analysis for all 11.x
-				if me11_ker_anl :
-						
-					if pos_sku_ker == pos_sku_fit :
-						if pos_sku_ker == "Unknown" :
-							err_stor_ker.append(col_m + "\nWarning: the SKU cannot be determined by Kernel & FIT:" + col_e + "\n\n	" + col_r + "Avoid flash" + col_e)
-						else :
-							err_stor_ker.append(col_m + "\nBased on Kernel & FIT, the SKU could be:"  + col_e + "\n\n	%s %s" % (sku_init, pos_sku_ker))
-						if db_sku_chk not in ["NaN",pos_sku_ker] :
-							err_stor_ker.append(col_m + "\nWarning: Kernel & FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, db_sku_chk) + col_e)
-					elif pos_sku_ker == "Unknown" and pos_sku_fit != "Unknown" :
-						err_stor_ker.append(col_m + "\nBased on FIT only, the SKU could be:"  + col_e + "\n\n	%s %s" % (sku_init, pos_sku_fit) + col_e)
-						if db_sku_chk not in ["NaN",pos_sku_fit] :
-							err_stor_ker.append(col_m + "\nWarning: FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_fit, db_sku_chk) + col_e)
-					elif pos_sku_fit == "Unknown" and pos_sku_ker != "Unknown" :
-						err_stor_ker.append(col_m + "\nBased on Kernel only, the SKU could be:"  + col_e + "\n\n	%s %s" % (sku_init, pos_sku_ker) + col_e)
-						if db_sku_chk not in ["NaN",pos_sku_ker] :
-							err_stor_ker.append(col_m + "\nWarning: Kernel (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, db_sku_chk) + col_e)
-					elif pos_sku_ker != pos_sku_fit :
-						err_stor_ker.append(col_m + "\nWarning: Kernel (%s) & FIT (%s) SKU mismatch:" % (pos_sku_ker,pos_sku_fit) + col_e + "\n\n	" + col_r + "Avoid flash" + col_e)
-						if db_sku_chk not in ["NaN",pos_sku_ker,pos_sku_fit] :
-							err_stor_ker.append(col_m + "\nWarning: Kernel (%s) & FIT (%s) & Database (%s) SKU mismatch!" % (pos_sku_ker, pos_sku_fit, db_sku_chk) + col_e)
-							
+				# Debug SKU detection for all 11.x
+				if me11_sku_anl :
+					
+					err_stor_ker.append(col_m + '\nSKU from Kernel:' + col_e + ' %s' % pos_sku_ker)
+					err_stor_ker.append(col_m + 'SKU from Extension 0C:' + col_e + ' %s' % pos_sku_ext)
+					err_stor_ker.append(col_m + 'SKU from Flash Image Tool:' + col_e + ' %s' % pos_sku_fit)
+					err_stor_ker.append(col_m + 'SKU from ME Analyzer Database:' + col_e + ' %s' % db_sku_chk)
+					
 					me11_ker_msg = True
 					for i in range(len(err_stor_ker)) : err_stor.append(err_stor_ker[i]) # For -msg
 				
@@ -2772,9 +2815,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					continue # Next input file
 				
 				# UEFIStrip Fix for all 11.x
-				if param.extr_mea and sku != "Consumer H" and sku != "Consumer LP" and sku != "Corporate H" and sku != "Corporate LP" :
+				if param.extr_mea and sku != 'Consumer H' and sku != 'Consumer LP' and sku != 'Corporate H' and sku != 'Corporate LP' and sku != 'Slim LP' :
 					if sku_init == "Consumer" : sku_db = "CON_X"
 					elif sku_init == "Corporate" : sku_db = "COR_X"
+					elif sku_init == "Slim" : sku_db = "SLM_X"
 			
 			# Report unknown ME Major version (AMT 1.x exits before this check)
 			elif major < 1 or major > 11 :
@@ -2913,17 +2957,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				platform = "BSW/CHT"
 				
 			elif major == 3 :
-				vcn = vcn_skl(start_man_match, variant) # Detect VCN
+				vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl(start_man_match, variant) # Detect VCN & SKU Attributes
 				
 				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
 				if fw_type == 'Update' : fw_type = "Region, Extracted" # TXE3 PRD & PRE in IFWI/BIOS, BYP in TXE Region
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
-
-				# Single/No SKU for TXE3, Rev only
-				if sku_stp == "NaN" : sku_db = "XX"
-				else : sku_db = sku_stp
 				
 				# Simultaneous branches
 				if minor in [0,2] :
@@ -2939,6 +2979,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku = col_r + "Error" + col_e + ", unknown TXE 3.x Minor version!" + col_r + " *" + col_e
 					err_rep += 1
 					err_stor.append(sku)
+					
+				# Single/No SKU for TXE3, Rev only
+				if sku_stp == "NaN" : sku_db = "XX"
+				else : sku_db = sku_stp
 				
 				platform = "Apollo Lake"
 			
@@ -3142,11 +3186,14 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if ((variant == "ME" and major >= 8) or variant == "TXE") and not wcod_found :
 					print("SVN:      %s" % svn)
 					print("VCN:      %s" % vcn)
-
-				if [variant,major,wcod_found] == ['ME',11,False] and pdm_status != 'NaN' :
+				
+				# noinspection PyUnboundLocalVariable
+				if [variant,major,wcod_found] == ['ME',11,False] and pdm_status != 'NaN' : print("PDM:      %s" % pdm_status)
+				
+				if [variant,major] == ['ME',11] :
 					# noinspection PyUnboundLocalVariable
-					print("PDM:      %s" % pdm_status)
-
+					print("LBG:      %s" % lbg_support)
+				
 				if pvpc != "NaN" and wcod_found is False : print("PV:       %s" % pvpc)
 				
 				print("Date:     %s" % date)
