@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.13.0'
+title = 'ME Analyzer v1.13.1'
 
 import os
 import re
@@ -155,7 +155,7 @@ class FPT_Entry(ctypes.LittleEndianStructure) :
 	]
 
 # noinspection PyTypeChecker
-class MN2_Manifest(ctypes.LittleEndianStructure) :
+class MN2_Manifest(ctypes.LittleEndianStructure) : # Manifest ($MAN/$MN2)
 	_pack_ = 1
 	_fields_ = [
 		("Type",			uint32_t),		# 0x00
@@ -228,7 +228,7 @@ class MME_Header_New(ctypes.LittleEndianStructure) :
 	]
 
 # noinspection PyTypeChecker
-class MCP_Header(ctypes.LittleEndianStructure) :
+class MCP_Header(ctypes.LittleEndianStructure) : # Multi Chip Package
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				char*4),		# 0x00
@@ -906,16 +906,20 @@ def ext_anl(start_man_match, variant) :
 	fw_0C_lbg = -1
 	fw_0C_sku1 = -1
 	fw_0C_sku2 = -1
+	cpd_offset = -1
 	ext_tag_all = list(range(16)) # $CPD Extensions 00-0F
 	
 	mn2_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
 	if mn2_hdr.Tag == b'$MN2' : # Sanity check
-	
-		cpd_match = (re.compile(br'\x24\x43\x50\x44')).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD" detection
-		if cpd_match is not None :
-			(start_cpd_match, end_cpd_match) = cpd_match.span()
 		
-			cpd_offset = start_man_match - 0x500 + start_cpd_match
+		# Scan backwards for FTPR $CPD (<500 bytes, compatible with both RGN --> $FPT & UPD --> 0x0)
+		for offset in range(start_man_match + 2,0,-4): # Start from MN2 (no $) to catch $CPD at 1, before "for" break at 0
+			if b'$CPD' in reading[offset-1:offset-1+4] :
+				cpd_offset = offset-1 # Catch UPD $CPD at offset 0 (offset-1 = 1-1 = 0)
+				break # Stop at first detected $CPD, FTPR 
+		
+		# FTPR $CPD detected
+		if cpd_offset > -1 :
 			cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
 			
 			if cpd_hdr.Tag == b'$CPD' and cpd_hdr.PartitionName == b'FTPR' : # Sanity checks
@@ -2639,7 +2643,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						
 				match_9_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xA1')).search(ker_sku)
 				match_9_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
-							
+				
 				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h,match_9_h)) : pos_sku_ker = "H"
 				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_8_lp,match_9_lp)) : pos_sku_ker = "LP"
 				
@@ -2749,21 +2753,21 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_CORLP' % minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				
-				# 11.0 : Skylake , Sunrise Point
+				# 11.0 : Skylake, Sunrise Point
 				if minor == 0 :
 					platform = "SPT"
 				
-				# 11.5 : Skylake/Kabylake-LP, Sunrise/Union Point
+				# 11.5 : Kabylake-LP, Union Point
 				elif minor == 5 :
 					upd_found = True # Dead branch
 					
-					platform = "SPT/KBP"
+					platform = "KBP"
 				
 				# 11.6 : Skylake/Kabylake, Sunrise/Union Point
 				elif minor == 6 :
 					platform = "SPT/KBP"
 				
-				# 11.7 : Skylake/Kabylake/Kabylake Refresh, Sunrise/Union Point
+				# 11.7 : Skylake/Kabylake/Kabylake-R, Sunrise/Union Point
 				elif minor == 7 :
 					platform = "SPT/KBP"
 					
@@ -2771,7 +2775,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				elif minor == 10 :
 					platform = "BSF"
 				
-				# 11.20 : Purley, Lewisburg
+				# 11.20 : Skylake-SP, Lewisburg
 				elif minor == 20 :
 					platform = "LBG"
 				
@@ -2966,7 +2970,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
 				# Simultaneous branches
-				if minor in [0,2] :
+				if minor in [0,2] : # 2 is "Slim" ???
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_TXE_3%s' % minor)
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					
@@ -2974,6 +2978,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if minor == 0 and sku_stp == "NaN" :
 						if release == "Production" : sku_stp = 'Bx' # PRD
 						else : sku_stp = 'Ax' # PRE, BYP
+					elif minor == 2 and sku_stp == "NaN" :
+						if release == "Production" : sku_stp = 'Cx' # PRD (Joule_C0-X64-Release)
 				
 				else :
 					sku = col_r + "Error" + col_e + ", unknown TXE 3.x Minor version!" + col_r + " *" + col_e
@@ -3188,10 +3194,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					print("VCN:      %s" % vcn)
 				
 				# noinspection PyUnboundLocalVariable
-				if [variant,major,wcod_found] == ['ME',11,False] and pdm_status != 'NaN' : print("PDM:      %s" % pdm_status)
-				
-				if [variant,major] == ['ME',11] :
-					# noinspection PyUnboundLocalVariable
+				if [variant,major,wcod_found] == ['ME',11,False] :
+					if pdm_status != 'NaN' : print("PDM:      %s" % pdm_status)
 					print("LBG:      %s" % lbg_support)
 				
 				if pvpc != "NaN" and wcod_found is False : print("PV:       %s" % pvpc)

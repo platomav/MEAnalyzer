@@ -1,3 +1,8 @@
+v1.13.1
+
+Fixed bug at ME/TXE x86 $CPD Extension parsing
+Updated Engine Firmware Repository Database to r90
+
 v1.13.0
 
 Added ME 11.x Slim H/LP SKU detection & support
