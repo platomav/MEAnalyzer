@@ -1,3 +1,14 @@
+v1.14.0
+
+Added accurate ME/TXE x86 $CPD Module size detection
+Added ME x86 FTPR Module Storing & Separation (-emod)
+Improved $CPD Entry structure, added OffsetAttrib
+Improved $CPD Extension 0A structure, added Encryption
+Fixed issue in CPD Extension man/met scanning range
+Fixed issue in which MERecovery was checked at DB
+Applied various other small fixes and improvements
+Updated Engine Firmware Repository Database to r91
+
 v1.13.1
 
 Fixed bug at ME/TXE x86 $CPD Extension parsing

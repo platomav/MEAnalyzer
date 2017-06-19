@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.13.1'
+title = 'ME Analyzer v1.14.0'
 
 import os
 import re
@@ -56,7 +56,7 @@ class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-hid','-adir','-aecho','-eker','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
+		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-hid','-adir','-aecho','-emod','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
 
 		self.win = ['-ubupre','-ubu','-extr','-msg','-hid','-aecho','-adir'] # Windows only
 		
@@ -75,7 +75,7 @@ class MEA_Param :
 		self.alt_dir = False
 		self.hid_find = False
 		self.alt_msg_echo = False
-		self.me11_ker_extr = False
+		self.me11_mod_extr = False
 		self.me11_sku_disp = False
 		self.fpt_disp = False
 		self.db_print_new = False
@@ -87,7 +87,7 @@ class MEA_Param :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
 			if i == '-multi' : self.multi = True # Checks multiple files, copies those with messages to new folder.
-			if i == '-eker' : self.me11_ker_extr = True # Separation of ME x86 compressed Huffman modules into chunks.
+			if i == '-emod' : self.me11_mod_extr = True # Storing & Separation of ME x86 modules.
 			if i == '-dsku' : self.me11_sku_disp = True # Forces MEA to print ME x86 Debug SKU detection.
 			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
 			if i == '-enuf' : self.enable_uf = True # Enables UEFIFind Engine GUID Detection.
@@ -263,9 +263,8 @@ class CPD_Entry(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Offset_CPD",		uint8_t*3),		# 0x0C (from $CPD)
-		("Compression",		uint8_t),		# 0x0F
-		("Size",			uint32_t),		# 0x10
+		("OffsetAttrib",	uint32_t),		# 0x0C (LE --> 0:24 Offset from $CPD, 25 Compressed No/Yes, 26:31 Reserved)
+		("Size",			uint32_t),		# 0x10 (Uncompressed for LZMA/Huffman, Compressed at CPD_Ext_0A instead)
 		("Reserved",		uint32_t),		# 0x14
 		# 0x18
 	]
@@ -314,7 +313,7 @@ class CPD_Ext_01_Mod(ctypes.LittleEndianStructure) :
 		("PartitionName",	char*4),		# 0x00
 		("ModuleName",		char*12),		# 0x0C
 		("InitFlowFlags",	uint32_t),		# 0x10
-		("BootTypeFlags",	uint32_t),		# 0x14 (0 Normal, 1 HAP, 2 HMRFPO, 3 Temp Disable, 4 Recovery, 5 Safe Mode, 6 FW Update, 7:31 Reserved)
+		("BootTypeFlags",	uint32_t),		# 0x14 (LE --> 0 Normal, 1 HAP, 2 HMRFPO, 3 Temp Disable, 4 Recovery, 5 Safe Mode, 6 FW Update, 7:31 Reserved)
 		# 0x18
 	]
 	
@@ -361,8 +360,8 @@ class CPD_Ext_03_Mod(ctypes.LittleEndianStructure) :
 	_fields_ = [
 		("Name",			char*12),		# 0x00
 		("Type",			uint8_t),		# 0x0C (0 Process, 1 Shared Library, 2 Data)
-		("Compression",		uint8_t),		# 0x0D (0 Uncompressed, 1 Huffman, 2 LZMA)
-		("Reserved",		uint16_t),		# 0x0E
+		("Compression",		uint8_t),		# 0x0D (0 Uncompressed --> always, 1 Huffman, 2 LZMA)
+		("Reserved",		uint16_t),		# 0x0E (FFFF)
 		("MetadataSize",	uint32_t),		# 0x10
 		("MetadataHash",	uint32_t*8),	# 0x14
 		# 0x34
@@ -493,11 +492,11 @@ class CPD_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
 		("Compression",		uint8_t),		# 0x08 (0 Uncompressed, 1 Huffman, 2 LZMA)
-		("Reserved0",		uint8_t),		# 0x09
-		("Reserved1",		uint8_t),		# 0x0A
-		("Reserved2",		uint8_t),		# 0x0B
+		("Encryption",		uint8_t),		# 0x09 (0 No, 1 Yes)
+		("Reserved0",		uint8_t),		# 0x0A
+		("Reserved1",		uint8_t),		# 0x0B
 		("SizeUncomp",		uint32_t),		# 0x0C
-		("SizeComp",		uint32_t),		# 0x10 (LZMA only)
+		("SizeComp",		uint32_t),		# 0x10 (LZMA & Huffman w/o EOM alignment)
 		("DEV_ID",			uint16_t),		# 0x10
 		("VEN_ID",			uint16_t),		# 0x10 (0x8086)
 		("Hash",			uint32_t*8),	# 0x14
@@ -703,7 +702,7 @@ def mea_help() :
 	text += "-dbname : Renames input file based on DB name\n"
 	text += "-dfpt   : Shows info about the $FPT header (Research)\n"
 	text += "-dsku   : Shows verbose info for ME 11+ SKU (Research)\n"
-	text += "-eker   : Splits ME 11+ Huffman modules in chunks (Research)"
+	text += "-emod   : Stores and Separates ME 11+ modules (Research)"
 	
 	if mea_os == 'win32' :
 		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
@@ -899,135 +898,187 @@ def fovd_clean (fovdtype) :
 		else : return False
 	else : return True
 
-# Analyze Engine x86 $CPD Extensions
+# Analyze Engine x86 FTPR $CPD Offset & Extensions
 # noinspection PyUnusedLocal
 def ext_anl(start_man_match, variant) :
 	vcn = -1
+	cpd_num = -1
 	fw_0C_lbg = -1
 	fw_0C_sku1 = -1
 	fw_0C_sku2 = -1
 	cpd_offset = -1
+	cpd_mod_attr = []
 	ext_tag_all = list(range(16)) # $CPD Extensions 00-0F
 	
 	mn2_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
 	if mn2_hdr.Tag == b'$MN2' : # Sanity check
 		
-		# Scan backwards for FTPR $CPD (<500 bytes, compatible with both RGN --> $FPT & UPD --> 0x0)
+		# Scan backwards for FTPR $CPD (should be <= 500B, works with both RGN --> $FPT & UPD --> 0x0)
 		for offset in range(start_man_match + 2,0,-4): # Start from MN2 (no $) to catch $CPD at 1, before "for" break at 0
-			if b'$CPD' in reading[offset-1:offset-1+4] :
+			if b'$CPD' in reading[offset -1:offset -1 + 4] and b'FTPR' in reading[offset -1 + 0xC:offset -1 + 0x10] :
 				cpd_offset = offset-1 # Catch UPD $CPD at offset 0 (offset-1 = 1-1 = 0)
-				break # Stop at first detected $CPD, FTPR 
+				break # Stop at first detected FTPR $CPD
 		
 		# FTPR $CPD detected
 		if cpd_offset > -1 :
 			cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
+			cpd_num = cpd_hdr.NumModules
 			
-			if cpd_hdr.Tag == b'$CPD' and cpd_hdr.PartitionName == b'FTPR' : # Sanity checks
-				cpd_num = cpd_hdr.NumModules
+			# Analyze FTPR Manifest & Metadata (must be before Module analysis)
+			for entry in range(0, cpd_num, 2) :
+				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
+				cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
+				cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
+				cpd_mod_comp = int(cpd_off_attr[7], 2) # $CPD Entry Offset Attribute Compressed (0 No, 1 Yes)
+				cpd_mod_res = int(cpd_off_attr[:6], 2) # $CPD Entry Offset Attribute Reserved (0)
+				cpd_entry_offset = cpd_offset + cpd_mod_off
+				cpd_entry_name = cpd_entry_hdr.Name
 				
-				# Calculate total Manifest & Metadata size via the $CPD entries
-				for entry in range(0, cpd_num, 2) : # Check only .man & .met
-					cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
-					cpd_entry_offset = cpd_offset + int.from_bytes(cpd_entry_hdr.Offset_CPD, byteorder='little', signed=False)
-					cpd_entry_size = cpd_entry_hdr.Size
-					cpd_entry_name = cpd_entry_hdr.Name
+				if b'.man' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at FTPR.man
+				elif b'.met' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset # Metadata is always Uncompressed
+				else : break # Sanity check, no Modules allowed here
+				
+				# Analyze all FTPR Manifest & Metadata Extensions
+				ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Extension Tag
+				
+				while ext_tag in ext_tag_all :
 						
-					if cpd_entry_name == b'FTPR.man' : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at FTPR.man
-					elif b'.met' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset
-					else : break # Sanity check, "for" loop
-						
-					# Analyze all Extensions found inside $CPD Entry
-					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Extension Tag
-					while ext_tag in ext_tag_all :
-						
-						if [ext_tag,variant] == [3,'ME'] :
-							ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_03)
-							vcn = ext_hdr.VCN
-						elif [ext_tag,variant] == [15,'TXE'] :
-							ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
-							vcn = ext_hdr.VCN
-						elif ext_tag == 12 :
-							ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0C)
-							fw_sku_attr = format(ext_hdr.FWSKUAttrib, '032b') # 32 bits (LE)
-							fw_0C_cse = int(fw_sku_attr[28:32], 2) # CSE Size * 0.5MB (0)
-							fw_0C_sku1 = int(fw_sku_attr[25:28], 2) # SKU Type (0 COR, 1 CON, 2 SLM)
-							fw_0C_lbg = int(fw_sku_attr[24], 2) # Lewisburg support (0 11.x, 1 11.20)
-							fw_0C_m3 = int(fw_sku_attr[23], 2) # M3 support (0 CON & SLM, 1 COR)
-							fw_0C_m0 = int(fw_sku_attr[22], 2) # M0 support (1 CON & SLM & COR)
-							fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 <= 11.0.0.1202 H/LP, 0 >= 11.0.0.1205 H, 1 >= 11.0.0.1205 LP)
-							fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
-							fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
+					if ext_tag == 3 : # Unique, FTPR.man (ME)
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_03)
+						vcn = ext_hdr.VCN
+					elif ext_tag == 10 : # Unique, .met
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0A)
+						mod_comp_type = ext_hdr.Compression # # Metadata's Module Compression Type (0-2)
+						mod_encr_type = ext_hdr.Encryption # # Metadata's Module Encryption Type (0-1)
+						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size])
+					elif ext_tag == 15 : # Unique, FTPR.man (TXE)
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
+						vcn = ext_hdr.VCN
+					elif ext_tag == 12 : # Unique, FTPR.man
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0C)
+						fw_sku_attr = format(ext_hdr.FWSKUAttrib, '032b') # 32 bits (LE)
+						fw_0C_cse = int(fw_sku_attr[28:32], 2) # CSE Size * 0.5MB (0)
+						fw_0C_sku1 = int(fw_sku_attr[25:28], 2) # SKU Type (0 COR, 1 CON, 2 SLM)
+						fw_0C_lbg = int(fw_sku_attr[24], 2) # Lewisburg support (0 11.x, 1 11.20)
+						fw_0C_m3 = int(fw_sku_attr[23], 2) # M3 support (0 CON & SLM, 1 COR)
+						fw_0C_m0 = int(fw_sku_attr[22], 2) # M0 support (1 CON & SLM & COR)
+						fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 for H/LP <= 11.0.0.1202, 0 for H >= 11.0.0.1205, 1 for LP >= 11.0.0.1205)
+						fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
+						fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
 							
-						cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
-						if cpd_ext_offset > cpd_entry_offset + cpd_entry_size : break # Stop Extension scanning at the end of $CPD Entry
-						ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
-	
-	return vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2
+					cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+					if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_hdr.Size : break # Stop Extension scanning at the end of .man/.met
+					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
+			
+			# Analyze FTPR Modules (must be after Metadata analysis)
+			for entry in range(1, cpd_num, 2) :
+				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
+				cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
+				cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
+				cpd_entry_offset = cpd_offset + cpd_mod_off
+				
+				# Set Module's starting offset at Module Attributes list
+				for mod in range(len(cpd_mod_attr)) :
+					if (cpd_entry_hdr.Name).decode('utf-8') == cpd_mod_attr[mod][0] :
+						cpd_mod_attr[mod][3] = cpd_entry_offset
+						break
+			
+	return cpd_offset, cpd_mod_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2
 
-def ker_anl(fw_type, start_man_match) :
-	cpd_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading[start_man_match - 0x500:start_man_match]) # "$CPD [0x8] FTPR" detection
-	
-	ker_start = 0x0
-	ker_end = 0x0
+def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
+	ker_start = -1
+	ker_end = -1
+	mod_start = -1
+	mod_end = -1
 	rel_db = "NaN"
-	ker_name = "NaN"
+	comp = ['No','Huffman','LZMA']
+	encr = ['No','Yes']
+	mod_names = []
+	mod_details = []
 	
-	if cpd_match is not None :
-		(start_cpd_match, end_cpd_match) = cpd_match.span()
-		start_cpd_match += start_man_match - 0x500
-		end_cpd_match += start_man_match - 0x500
-		ker_start = int.from_bytes(reading[end_cpd_match + 0x54:end_cpd_match + 0x57], 'little') + start_cpd_match # 5 = Kernel, B = BUP etc
-		ker_end = int.from_bytes(reading[end_cpd_match + 0x84:end_cpd_match + 0x87], 'little') + start_cpd_match # 8 = Kernel, E = BUP etc
+	# FTPR $CPD validity verified
+	if cpd_offset > -1 :
+		
+		for mod in cpd_mod_attr :
+			mod_names.append(mod[0]) # Store Module names
+			mod_details.append(('%12s \t%8s\t%4s\t    0x%X\t 0x%X' % (mod[0],comp[mod[1]],encr[mod[2]],mod[3],mod[4]))) # Store Module details
+			
+			# Store Kernel Start & End for SKU analysis
+			if mod[0] == 'kernel' :
+				ker_start = mod[3]
+				ker_end = ker_start + mod[4]
+		
 		if release == "Production" : rel_db = "PRD"
 		elif release == "Pre-Production" : rel_db = "PRE"
 		elif release == "ROM-Bypass" : rel_db = "BYP"
-		
-		ker_name = "%s.%s.%s.%s_%s_%s.bin" % (major, minor, hotfix, build, sku_db, rel_db)
 	
-	if fw_type == "extr" :
-		ker_data = reading[ker_start:ker_end]
-		try :
-			with open(mea_dir + os_dir + 'ker_temp.bin', 'w+b') as ker_temp : ker_temp.write(ker_data)
-			if os.path.isfile(mea_dir + os_dir + ker_name) : os.remove(mea_dir + os_dir + ker_name)
-			new_ker_name = mea_dir + os_dir + ker_name
-			os.rename(mea_dir + os_dir + 'ker_temp.bin', new_ker_name)
-			print(col_y + "Stored Huffman compressed module from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
+		if action == "extr" :
+			print('Detected %s FTPR Modules:\n\n      Module\tCompression   Encryption    Offset\t Size\n' % len(cpd_mod_attr))
+			for detail in mod_details : print(detail)
 			
-			with open(new_ker_name, 'r+b') as ker_file :
-				counter = 0
-				hdr_size = 0
-				extr_off = []
+			mod_name = input('\nEnter Module: ')
+			if mod_name in mod_names :
 				
-				ker_read = ker_file.read()
-				while ker_read[hdr_size + 0x3] in [0,64,128,192] : hdr_size += 4
-				hdr_data = ker_read[:hdr_size]
-				for step in range(0x0,hdr_size,0x4) :
-					extr_off.append(struct.unpack("<I", hdr_data[step:step + 0x3] + b'\x00')[0] + hdr_size)
+				for mod in cpd_mod_attr :
+					if mod[0] == mod_name :
+						mod_comp = mod[1] # Compression Type
+						mod_start = mod[3] # Starting offset
+						mod_end = mod_start + mod[4] # Ending offset
+						break
 				
-				extr_len = len(extr_off)
-				for offset in extr_off :
-					counter += 1
-					if counter >= extr_len : next_offset = ker_file.seek(0,2) # Some EOF padding may also be kept
-					else : next_offset = extr_off[counter]
-		
-					part = ker_read[offset:next_offset]
-					ker_dir = mea_dir + os_dir + ker_name + '_Sections'
+				try :
+					file_name = "%s__%s.%s.%s.%s_%s_%s.bin" % (mod_name, major, minor, hotfix, build, sku_db, rel_db)
+					mod_data = reading[mod_start:mod_end]
 					
-					if not os.path.isdir(ker_dir) : os.mkdir(ker_dir)
+					# Remove extra zeroes of LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
+					if mod_comp == 2 and mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
+						mod_data = mod_data[:0xE] + mod_data[0x11:]
 					
-					if counter == 1 : # Store Huffman compressed module header at file once
-						with open(ker_dir + os_dir + '0_Header.bin', "w+b") as out_file : out_file.write(hdr_data)
+					with open(mea_dir + os_dir + 'mod_temp.bin', 'w+b') as mod_temp : mod_temp.write(mod_data)
+					if os.path.isfile(mea_dir + os_dir + file_name) : os.remove(mea_dir + os_dir + file_name)
+					new_mod_name = mea_dir + os_dir + file_name
+					os.rename(mea_dir + os_dir + 'mod_temp.bin', new_mod_name)
+					print(col_y + '\nStored module "%s" from %s to %s' % (mod_name, hex(mod_start), hex(mod_end - 0x1)) + col_e)
 					
-					with open(ker_dir + os_dir + '%s.bin' % counter, "w+b") as out_file : out_file.write(part)
+					# Separate Huffman Modules into sub-sections
+					if mod_comp == 1 :
+						with open(new_mod_name, 'r+b') as mod_file :
+							counter = 0
+							hdr_size = 0
+							extr_off = []
 					
-				print(col_y + "\nSeparated Huffman compressed module into %s sections" % counter + col_e)
-		except :
-			print(col_r + "Error: could not store Huffman compressed module from %s to %s" % (hex(ker_start), hex(ker_end - 0x1)) + col_e)
-			if os.path.isfile(mea_dir + os_dir + 'ker_temp.bin') : os.remove(mea_dir + os_dir + 'ker_temp.bin')
-		
-		print(col_y + '\n\nAdjust "ker_start" and "ker_end" offsets at "ker_anl" function manually!' + col_e)
-		
-		return 'continue'
+							mod_read = mod_file.read()
+							while mod_read[hdr_size + 0x3] in [0,64,128,192] : hdr_size += 4
+							hdr_data = mod_read[:hdr_size]
+							for step in range(0x0,hdr_size,0x4) :
+								extr_off.append(struct.unpack("<I", hdr_data[step:step + 0x3] + b'\x00')[0] + hdr_size)
+					
+							extr_len = len(extr_off)
+							for offset in extr_off :
+								counter += 1
+								if counter >= extr_len : next_offset = mod_file.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
+								else : next_offset = extr_off[counter]
+			
+								part = mod_read[offset:next_offset]
+								mod_dir = mea_dir + os_dir + file_name + '_Sections'
+						
+								if not os.path.isdir(mod_dir) : os.mkdir(mod_dir)
+						
+								if counter == 1 : # Store Module Header at first file
+									with open(mod_dir + os_dir + '0_Header.bin', "w+b") as out_file : out_file.write(hdr_data)
+						
+								with open(mod_dir + os_dir + '%s.bin' % counter, "w+b") as out_file : out_file.write(part)
+						
+							print(col_y + '\nSeparated module "%s" into %s sections' % (mod_name, counter) + col_e)
+				except :
+					print(col_r + '\nError: Could not store module "%s" from %s to %s' % (mod_name, hex(mod_start), hex(mod_end - 0x1)) + col_e)
+					if os.path.isfile(mea_dir + os_dir + 'mod_temp.bin') : os.remove(mea_dir + os_dir + 'mod_temp.bin')
+			
+			else :
+				print(col_r + '\nError: Could not find module "%s"' % mod_name + col_e)
+			
+			return 'continue'
 		
 	return ker_start, ker_end, rel_db
 		
@@ -1133,7 +1184,7 @@ def msg_rep() :
 	
 	if param.hid_find : # Parameter -hid always prints a message whether the error/warning/note arrays are empty or not
 		if me_rec_ffs : print(col_y + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver(major,minor,hotfix,build)) + col_e)
-		else : print(col_y + "MEA: Found Intel %s Firmware %s in file!" % (variant, name_db) + col_e)
+		else : print(col_y + "MEA: Found Intel %s firmware %s in file!" % (variant, name_db) + col_e)
 		
 		if err_stor or warn_stor or note_stor : print("") # Separates -hid from -msg output (only when messages exist, Rule 1 compliant)
 		
@@ -1182,7 +1233,7 @@ if not param.skip_intro :
 	db_rev = mea_hdr_init()
 	mea_hdr(db_rev)
 
-	print("\nWelcome to Intel Engine Firmware Analysis Tool\n")
+	print("\nWelcome to Intel Engine firmware Analysis Tool\n")
 	
 	if arg_num == 2 :
 		print("Press Enter to skip or input -? to list options\n")
@@ -1428,22 +1479,22 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			# ME Region is Fujitsu UMEM compressed
 			if fuj_version != "NaN" :
-				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
-				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
+				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
+				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
 			# ME Region is Foxconn X58 Test?
 			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
-				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
+				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
+				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
 			
 			# ME Region is Unknown
 			else :
-				no_man_text = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware"
-				text_ubu_pre = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine Firmware"
+				no_man_text = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine firmware"
+				text_ubu_pre = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
 		
@@ -1458,26 +1509,26 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if param.extr_mea :
 					no_man_text = "NaN NaN_NaN_REC NaN NaN NaN" # For UEFI Strip (-extr)
 				elif param.print_msg :
-					no_man_text = col_m + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_e + \
-					col_y + "\n\nNote: further analysis not possible without manifest header." + col_e
+					no_man_text = col_m + "\n\nWarning: This is not a valid Intel Engine firmware image!" + col_e + \
+					col_y + "\n\nNote: Further analysis not possible without manifest header." + col_e
 				elif param.ubu_mea_pre :
 					no_man_text = "File does not contain Intel Engine firmware"
 				else :
 					no_man_text = "Release:  MERecovery Module\nGUID:     821D110C-D0A3-4CF7-AEF3-E28088491704" + \
-					col_m + "\n\nWarning: this is NOT a flashable Intel Engine Firmware image!" + col_e + \
-					col_y + "\n\nNote: further analysis not possible without manifest header." + col_e
+					col_m + "\n\nWarning: This is not a valid Intel Engine firmware image!" + col_e + \
+					col_y + "\n\nNote: Further analysis not possible without manifest header." + col_e
 			
 			# Image is ME Fujitsu UMEM compressed
 			elif fuj_version != "NaN" :
-				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
-				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine Firmware v%s" % fuj_version)
+				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
+				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
 			# Image is Foxconn X58 Test?
 			elif reading[0:8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
-				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine Firmware"
+				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
+				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
 			
@@ -1667,9 +1718,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x4F\x50\x52\x00', re.DOTALL)).search(reading) # .$MN2 + [0x274] + OPR.
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x49\x47\x52\x54', re.DOTALL)).search(reading) # .$MN2 + [0x264] + IGRT
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x264] + FTPR
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x4F\x50.{2}',     re.DOTALL)).search(reading) # .$MN2 + [0x264] + OPxx
+					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x4F\x50.{2}', re.DOTALL)).search(reading) # .$MN2 + [0x264] + OPxx
 					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{652}\x42\x52\x49\x4E', re.DOTALL)).search(reading) # .$MAN + [0x28C] + BRIN
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73',     re.DOTALL)).search(reading) # .$MAN + [0x2DC] + Epsx
+					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73', re.DOTALL)).search(reading) # .$MAN + [0x2DC] + Epsx
 					
 					# Found proper Manifest Header from Recovery section
 					if pr_man is not None :
@@ -1891,7 +1942,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
 						cpd_num = cpd_hdr.NumModules
 						
-						# Calculate partition size by the $MN2 Extension 03 (CPD_Ext_03)
+						# Calculate partition size by the $CPD Extension 03 (CPD_Ext_03)
 						# PartitionSize of CPD_Ext_03 is always 0x0A at TXE3+ so check $CPD entries instead
 						mn2_start = p_end_last + 0x10 + cpd_num * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
 						mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
@@ -1900,7 +1951,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							cpd_ext_03 = get_struct(reading, mn2_start + man_len, CPD_Ext_03)
 							
 							# ISHC size at $FPT can be larger than CPD_Ext_03.PartitionSize because
-							# it's the last charted region and thus 1K pre-alligned by Intel at the $FPT header
+							# it is the last charted region and thus 1K pre-alligned by Intel at the $FPT header
 							if cpd_ext_03.PartitionName == cpd_hdr.PartitionName : # Sanity check
 								p_end_last_cont = cpd_ext_03.PartitionSize
 							else :
@@ -1911,10 +1962,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						# Calculate partition size by the $CPD entries (TXE3+, 2nd check for ME11+)
 						for entry in range(1, cpd_num, 2) : # Skip 1st .man module, check only .met
 							cpd_entry_hdr = get_struct(reading, p_end_last + 0x10 + entry * 0x18, CPD_Entry)
+							cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
+							cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
 							cpd_entry_name = cpd_entry_hdr.Name
 								
 							if b'.met' not in cpd_entry_name and b'.man' not in cpd_entry_name : # Sanity check
-								cpd_entry_offset = int.from_bytes(cpd_entry_hdr.Offset_CPD, byteorder='little', signed=False)
+								cpd_entry_offset = cpd_mod_off
 								cpd_entry_size = cpd_entry_hdr.Size
 								
 								# Store last entry (max CPD offset)
@@ -1938,8 +1991,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if variant == 'SPS' : sps4_bis_match = (re.compile(br'\x24\x42\x49\x53\x00')).search(reading)
 				else : sps4_bis_match = None
 				
-				# SPI image with FD
-				if fd_rgn_exist :
+				# SPI image with FD (MERecovery excluded)
+				if fd_rgn_exist and not me_rec_ffs :
 					# noinspection PyTypeChecker
 					padd_size_fd = me_fd_size - eng_fw_end
 					
@@ -2581,7 +2634,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
-				vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl(start_man_match, variant) # Detect VCN & SKU Attributes
+				cpd_offset,cpd_mod_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl(start_man_match, variant) # Detect x86 Attributes
 				
 				# Set SKU Type via Extension 0C Attributes
 				if fw_0C_sku1 == 0 :
@@ -2605,7 +2658,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				elif fw_0C_lbg == 1 : lbg_support = 'Yes'
 				else : lbg_support = 'Unknown'
 				
-				ker_start,ker_end,rel_db = ker_anl('anl', start_man_match) # Kernel Analysis for all 11.x
+				ker_start,ker_end,rel_db = mod_anl('anl', release, cpd_offset, cpd_mod_attr) # Module Analysis for all 11.x
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
@@ -2813,9 +2866,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					me11_ker_msg = True
 					for i in range(len(err_stor_ker)) : err_stor.append(err_stor_ker[i]) # For -msg
 				
-				# Kernel Extraction for all 11.x
-				if param.me11_ker_extr :
-					ker_anl('extr', start_man_match)
+				# Module Extraction for all 11.x
+				if param.me11_mod_extr :
+					mod_anl('extr', release, cpd_offset, cpd_mod_attr)
 					continue # Next input file
 				
 				# UEFIStrip Fix for all 11.x
@@ -2961,7 +3014,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				platform = "BSW/CHT"
 				
 			elif major == 3 :
-				vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl(start_man_match, variant) # Detect VCN & SKU Attributes
+				cpd_offset,cpd_mod_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl(start_man_match, variant) # Detect x86 Attributes
 				
 				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
@@ -3102,7 +3155,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		# Search Engine database for firmware
 		fw_db = db_open()
-		if not wcod_found and variant != 'SPS' : # Must not be Partial Update, SPS not supported
+		if not wcod_found and not me_rec_ffs and variant != 'SPS' : # Must not be Partial Update or MERecovery, SPS not supported
 			if sku_db != "NaN" and rel_db != "NaN" and type_db != "NaN" : # Search database only if SKU, Release & Type are known
 				for line in fw_db :
 					if len(line) < 2 or line[:3] == "***" :
@@ -3263,9 +3316,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if fuj_rgn_exist : gen_msg(warn_stor, col_m + "Warning: Fujitsu Intel Engine firmware detected!" + col_e, '')
 		
-		if [fwupd_ishc_bug,release,major,minor] == [True,'Production',11,0] : gen_msg(warn_stor, col_m + "Warning: This firmware requires FWUpdate >= 11.6.10.1196" + col_e, '')
+		#if [fwupd_ishc_bug,release,major,minor] == [True,'Production',11,0] : gen_msg(warn_stor, col_m + "Warning: This firmware requires FWUpdate >= 11.6.10.1196" + col_e, '')
 		
-		if me_rec_ffs : gen_msg(warn_stor, col_m + "Warning: this is NOT a flashable Intel Engine Firmware image!" + col_e, 'del')
+		if me_rec_ffs : gen_msg(warn_stor, col_m + "Warning: This is not a valid Intel Engine firmware image!" + col_e, 'del')
 				
 		if multi_rgn : gen_msg(note_stor, col_y + "Note: Multiple (%d) Intel Engine firmware detected in file!" % fpt_count + col_e, '')
 		
