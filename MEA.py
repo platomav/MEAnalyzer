@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.14.0'
+title = 'ME Analyzer v1.14.1_x'
 
 import os
 import re
@@ -492,7 +492,7 @@ class CPD_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
 		("Compression",		uint8_t),		# 0x08 (0 Uncompressed, 1 Huffman, 2 LZMA)
-		("Encryption",		uint8_t),		# 0x09 (0 No, 1 Yes)
+		("Encryption",		uint8_t),		# 0x09 (0 No, 1 Yes, unknown if LE MSB or entire Byte)
 		("Reserved0",		uint8_t),		# 0x0A
 		("Reserved1",		uint8_t),		# 0x0B
 		("SizeUncomp",		uint32_t),		# 0x0C
@@ -951,7 +951,8 @@ def ext_anl(start_man_match, variant) :
 						mod_comp_type = ext_hdr.Compression # # Metadata's Module Compression Type (0-2)
 						mod_encr_type = ext_hdr.Encryption # # Metadata's Module Encryption Type (0-1)
 						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
-						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size])
+						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size])
 					elif ext_tag == 15 : # Unique, FTPR.man (TXE)
 						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
 						vcn = ext_hdr.VCN
@@ -976,7 +977,10 @@ def ext_anl(start_man_match, variant) :
 				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 				cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
 				cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
+				cpd_entry_name = cpd_entry_hdr.Name
 				cpd_entry_offset = cpd_offset + cpd_mod_off
+				
+				if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name : break # Sanity check, no Manifest/Metadata allowed here
 				
 				# Set Module's starting offset at Module Attributes list
 				for mod in range(len(cpd_mod_attr)) :
@@ -1002,7 +1006,7 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 		
 		for mod in cpd_mod_attr :
 			mod_names.append(mod[0]) # Store Module names
-			mod_details.append(('%12s \t%8s\t%4s\t    0x%X\t 0x%X' % (mod[0],comp[mod[1]],encr[mod[2]],mod[3],mod[4]))) # Store Module details
+			mod_details.append(('%12s \t%8s\t%4s\t    0x%.5X\t 0x%.5X      0x%.5X' % (mod[0],comp[mod[1]],encr[mod[2]],mod[3],mod[4],mod[5]))) # Store Module details
 			
 			# Store Kernel Start & End for SKU analysis
 			if mod[0] == 'kernel' :
@@ -1014,21 +1018,24 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 		elif release == "ROM-Bypass" : rel_db = "BYP"
 	
 		if action == "extr" :
-			print('Detected %s FTPR Modules:\n\n      Module\tCompression   Encryption    Offset\t Size\n' % len(cpd_mod_attr))
+			print('Detected %s FTPR Modules:\n\n      Module\tCompression   Encryption    Offset\t SizeComp     SizeUncomp\n' % len(cpd_mod_attr))
 			for detail in mod_details : print(detail)
 			
 			mod_name = input('\nEnter Module: ')
+			#mod_name = 'kernel' # mass kernel extraction test
 			if mod_name in mod_names :
 				
 				for mod in cpd_mod_attr :
 					if mod[0] == mod_name :
 						mod_comp = mod[1] # Compression Type
-						mod_start = mod[3] # Starting offset
-						mod_end = mod_start + mod[4] # Ending offset
+						mod_start = mod[3] # Starting Offset
+						mod_size_comp = mod[4] # Compressed Size
+						mod_size_uncomp = mod[5] # Uncompressed Size
+						mod_end = mod_start + mod_size_comp # Ending Offset
 						break
 				
 				try :
-					file_name = "%s__%s.%s.%s.%s_%s_%s.bin" % (mod_name, major, minor, hotfix, build, sku_db, rel_db)
+					file_name = "%s__%X__%s.%s.%s.%s_%s_%s.bin" % (mod_name, mod_size_uncomp, major, minor, hotfix, build, sku_db, rel_db)
 					mod_data = reading[mod_start:mod_end]
 					
 					# Remove extra zeroes of LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
@@ -1043,6 +1050,7 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 					
 					# Separate Huffman Modules into sub-sections
 					if mod_comp == 1 :
+					#if mod_comp == 99 : # mass kernel extraction test
 						with open(new_mod_name, 'r+b') as mod_file :
 							counter = 0
 							hdr_size = 0
@@ -3042,6 +3050,11 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				# Single/No SKU for TXE3, Rev only
 				if sku_stp == "NaN" : sku_db = "XX"
 				else : sku_db = sku_stp
+				
+				# Module Extraction for all 3.x
+				if param.me11_mod_extr :
+					mod_anl('extr', release, cpd_offset, cpd_mod_attr)
+					continue # Next input file
 				
 				platform = "Apollo Lake"
 			
