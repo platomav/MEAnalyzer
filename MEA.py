@@ -928,9 +928,9 @@ def ext_anl(start_man_match, variant) :
 			for entry in range(0, cpd_num, 2) :
 				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 				cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
-				cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
-				cpd_mod_comp = int(cpd_off_attr[7], 2) # $CPD Entry Offset Attribute Compressed (0 No, 1 Yes)
-				cpd_mod_res = int(cpd_off_attr[:6], 2) # $CPD Entry Offset Attribute Reserved (0)
+				cpd_mod_off = int(cpd_off_attr[7:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 25 bits)
+				cpd_mod_comp = int(cpd_off_attr[6], 2) # $CPD Entry Offset Attribute Compressed (0 No, 1 Yes)
+				cpd_mod_res = int(cpd_off_attr[:6], 2) # $CPD Entry Offset Attribute Reserved (0, 6 bits)
 				cpd_entry_offset = cpd_offset + cpd_mod_off
 				cpd_entry_name = cpd_entry_hdr.Name
 				
@@ -948,11 +948,11 @@ def ext_anl(start_man_match, variant) :
 						vcn = ext_hdr.VCN
 					elif ext_tag == 10 : # Unique, .met
 						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0A)
-						mod_comp_type = ext_hdr.Compression # # Metadata's Module Compression Type (0-2)
-						mod_encr_type = ext_hdr.Encryption # # Metadata's Module Encryption Type (0-1)
+						mod_comp_type = ext_hdr.Compression # Metadata's Module Compression Type (0-2)
+						mod_encr_type = ext_hdr.Encryption # Metadata's Module Encryption Type (0-1)
 						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
 						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
-						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size])
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0])
 					elif ext_tag == 15 : # Unique, FTPR.man (TXE)
 						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
 						vcn = ext_hdr.VCN
@@ -967,7 +967,7 @@ def ext_anl(start_man_match, variant) :
 						fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 for H/LP <= 11.0.0.1202, 0 for H >= 11.0.0.1205, 1 for LP >= 11.0.0.1205)
 						fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
 						fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
-							
+					
 					cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
 					if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_hdr.Size : break # Stop Extension scanning at the end of .man/.met
 					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
@@ -976,7 +976,7 @@ def ext_anl(start_man_match, variant) :
 			for entry in range(1, cpd_num, 2) :
 				cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 				cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
-				cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
+				cpd_mod_off = int(cpd_off_attr[7:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 25 bits)
 				cpd_entry_name = cpd_entry_hdr.Name
 				cpd_entry_offset = cpd_offset + cpd_mod_off
 				
@@ -985,19 +985,26 @@ def ext_anl(start_man_match, variant) :
 				# Set Module's starting offset at Module Attributes list
 				for mod in range(len(cpd_mod_attr)) :
 					if (cpd_entry_hdr.Name).decode('utf-8') == cpd_mod_attr[mod][0] :
-						cpd_mod_attr[mod][3] = cpd_entry_offset
+						mod_comp_size = cpd_mod_attr[mod][4] # Store Module Compressed Size for Empty check
+						
+						cpd_mod_attr[mod][3] = cpd_entry_offset # Fill Module Starting Offset from $CPD Entry
+						mod_data = reading[cpd_entry_offset:cpd_entry_offset + mod_comp_size] # Store Module data for Empty check
+						if mod_data == b'\xFF' * mod_comp_size : cpd_mod_attr[mod][6] = 1 # Determine if Module is Empty (me_cleaner)
+						
 						break
 			
 	return cpd_offset, cpd_mod_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2
 
+# Analyze & Store Engine x86 FTPR Modules
 def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 	ker_start = -1
 	ker_end = -1
 	mod_start = -1
 	mod_end = -1
-	rel_db = "NaN"
+	rel_db = 'NaN'
 	comp = ['No','Huffman','LZMA']
-	encr = ['No','Yes']
+	fext = ['mod','huff','lzma']
+	encr_empty = ['No','Yes']
 	mod_names = []
 	mod_details = []
 	
@@ -1006,87 +1013,101 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 		
 		for mod in cpd_mod_attr :
 			mod_names.append(mod[0]) # Store Module names
-			mod_details.append(('%12s \t%8s\t%4s\t    0x%.5X\t 0x%.5X      0x%.5X' % (mod[0],comp[mod[1]],encr[mod[2]],mod[3],mod[4],mod[5]))) # Store Module details
+			mod_details.append(('%12s \t%8s\t%4s\t    0x%.5X\t 0x%.5X      0x%.5X\t  %4s' % \
+						(mod[0],comp[mod[1]],encr_empty[mod[2]],mod[3],mod[4],mod[5],encr_empty[mod[6]]))) # Store Module details
 			
 			# Store Kernel Start & End for SKU analysis
 			if mod[0] == 'kernel' :
 				ker_start = mod[3]
 				ker_end = ker_start + mod[4]
 		
-		if release == "Production" : rel_db = "PRD"
-		elif release == "Pre-Production" : rel_db = "PRE"
-		elif release == "ROM-Bypass" : rel_db = "BYP"
+		if release == 'Production' : rel_db = 'PRD'
+		elif release == 'Pre-Production' : rel_db = 'PRE'
+		elif release == 'ROM-Bypass' : rel_db = 'BYP'
 	
-		if action == "extr" :
-			print('Detected %s FTPR Modules:\n\n      Module\tCompression   Encryption    Offset\t SizeComp     SizeUncomp\n' % len(cpd_mod_attr))
+		if action == 'extr' :
+			print('Detected %s FTPR Modules:\n\n      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % len(cpd_mod_attr))
 			for detail in mod_details : print(detail)
 			
-			mod_name = input('\nEnter Module: ')
-			#mod_name = 'kernel' # mass kernel extraction test
-			if mod_name in mod_names :
+			in_mod_name = input('\nEnter module name or * for all: ')
+			
+			if in_mod_name not in mod_names and in_mod_name != '*' :
+				print(col_r + '\nError: Could not find module "%s"' % in_mod_name + col_e)
 				
-				for mod in cpd_mod_attr :
-					if mod[0] == mod_name :
-						mod_comp = mod[1] # Compression Type
-						mod_start = mod[3] # Starting Offset
-						mod_size_comp = mod[4] # Compressed Size
-						mod_size_uncomp = mod[5] # Uncompressed Size
-						mod_end = mod_start + mod_size_comp # Ending Offset
-						break
+				return ker_start, ker_end, rel_db # Invalid input, return function-essential Kernel info
+			
+			folder_name = "%s.%s.%s.%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db)
+			if os.path.isdir(mea_dir + os_dir + folder_name) : shutil.rmtree(mea_dir + os_dir + folder_name)
+			os.mkdir(folder_name)
+			
+			# Parse all FTPR Modules based on their Metadata
+			for mod in cpd_mod_attr :
+				mod_name = mod[0] # Name
+				mod_comp = mod[1] # Compression Type
+				mod_start = mod[3] # Starting Offset
+				mod_size_comp = mod[4] # Compressed Size
+				mod_size_uncomp = mod[5] # Uncompressed Size
+				mod_end = mod_start + mod_size_comp # Ending Offset
+				
+				if in_mod_name != '*' and in_mod_name != mod_name : continue # Wait for requested FTPR Module only
 				
 				try :
-					file_name = "%s__%X__%s.%s.%s.%s_%s_%s.bin" % (mod_name, mod_size_uncomp, major, minor, hotfix, build, sku_db, rel_db)
+					file_name = '%s__%X__%s.%s.%s.%s_%s_%s.%s' % (mod_name, mod_size_uncomp, major, minor, hotfix, build, sku_db, rel_db, fext[mod_comp])
+					
 					mod_data = reading[mod_start:mod_end]
 					
-					# Remove extra zeroes of LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
+					# Remove extra zeroes from LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
 					if mod_comp == 2 and mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
-						mod_data = mod_data[:0xE] + mod_data[0x11:]
+						mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for stored module
 					
 					with open(mea_dir + os_dir + 'mod_temp.bin', 'w+b') as mod_temp : mod_temp.write(mod_data)
-					if os.path.isfile(mea_dir + os_dir + file_name) : os.remove(mea_dir + os_dir + file_name)
-					new_mod_name = mea_dir + os_dir + file_name
+					if os.path.isfile(mea_dir + os_dir + folder_name + os_dir + file_name) : os.remove(mea_dir + os_dir + folder_name + os_dir + file_name)
+					new_mod_name = mea_dir + os_dir + folder_name + os_dir + file_name
 					os.rename(mea_dir + os_dir + 'mod_temp.bin', new_mod_name)
-					print(col_y + '\nStored module "%s" from %s to %s' % (mod_name, hex(mod_start), hex(mod_end - 0x1)) + col_e)
+					print(col_y + '\n--> Stored %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
 					
-					# Separate Huffman Modules into sub-sections
+					# Separate Huffman Modules into compressed Chunks
 					if mod_comp == 1 :
-					#if mod_comp == 99 : # mass kernel extraction test
+						
 						with open(new_mod_name, 'r+b') as mod_file :
 							counter = 0
-							hdr_size = 0
-							extr_off = []
+							extr_offsets = []
 					
 							mod_read = mod_file.read()
-							while mod_read[hdr_size + 0x3] in [0,64,128,192] : hdr_size += 4
+							hdr_size = int((mod_size_uncomp / 0x1000) * 4) # Inspired from IllegalArgument's HuffmanDecompress
 							hdr_data = mod_read[:hdr_size]
+							
+							# Analyze Huffman Module Header
 							for step in range(0x0,hdr_size,0x4) :
-								extr_off.append(struct.unpack("<I", hdr_data[step:step + 0x3] + b'\x00')[0] + hdr_size)
-					
-							extr_len = len(extr_off)
-							for offset in extr_off :
+								chunk_dword = struct.unpack("<I", hdr_data[step:step + 0x4])[0]
+								chunk_bits = format(chunk_dword, '032b') # 32 bits (LE)
+								chunk_flags = int(chunk_bits[:6], 2) # Chunk Dictionary Type (0x20 or 0x60, 7 bits)
+								chunk_offset = int(chunk_bits[7:], 2) # Relative Chunk Offset (from Header's end, 25 bits)
+								extr_offsets.append(chunk_offset + hdr_size) # Store Actual Chunk Offset (from Module's start)
+							
+							# Store all Huffman Module Chunks
+							for offset in extr_offsets :
 								counter += 1
-								if counter >= extr_len : next_offset = mod_file.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
-								else : next_offset = extr_off[counter]
+								if counter >= len(extr_offsets) : next_offset = mod_file.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
+								else : next_offset = extr_offsets[counter]
 			
 								part = mod_read[offset:next_offset]
-								mod_dir = mea_dir + os_dir + file_name + '_Sections'
+								mod_dir = mea_dir + os_dir + folder_name + os_dir + file_name + '_Chunks'
 						
 								if not os.path.isdir(mod_dir) : os.mkdir(mod_dir)
 						
 								if counter == 1 : # Store Module Header at first file
-									with open(mod_dir + os_dir + '0_Header.bin', "w+b") as out_file : out_file.write(hdr_data)
+									with open(mod_dir + os_dir + '0_Header.bin', 'w+b') as out_file : out_file.write(hdr_data)
 						
-								with open(mod_dir + os_dir + '%s.bin' % counter, "w+b") as out_file : out_file.write(part)
+								with open(mod_dir + os_dir + '%s.bin' % counter, 'w+b') as out_file : out_file.write(part)
 						
-							print(col_y + '\nSeparated module "%s" into %s sections' % (mod_name, counter) + col_e)
+							print(col_y + '\n    Separated %s module "%s" into %d chunks' % (comp[mod_comp], mod_name, counter) + col_e)
 				except :
-					print(col_r + '\nError: Could not store module "%s" from %s to %s' % (mod_name, hex(mod_start), hex(mod_end - 0x1)) + col_e)
+					print(col_r + '\nError: Could not store %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
 					if os.path.isfile(mea_dir + os_dir + 'mod_temp.bin') : os.remove(mea_dir + os_dir + 'mod_temp.bin')
-			
-			else :
-				print(col_r + '\nError: Could not find module "%s"' % mod_name + col_e)
-			
-			return 'continue'
+					
+				if in_mod_name == mod_name : break # Store only requested FTPR Module
+				elif in_mod_name == '*' : pass # Store all FTPR Modules
 		
 	return ker_start, ker_end, rel_db
 		
@@ -1971,7 +1992,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						for entry in range(1, cpd_num, 2) : # Skip 1st .man module, check only .met
 							cpd_entry_hdr = get_struct(reading, p_end_last + 0x10 + entry * 0x18, CPD_Entry)
 							cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
-							cpd_mod_off = int(cpd_off_attr[8:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 17 bits)
+							cpd_mod_off = int(cpd_off_attr[7:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 25 bits)
 							cpd_entry_name = cpd_entry_hdr.Name
 								
 							if b'.met' not in cpd_entry_name and b'.man' not in cpd_entry_name : # Sanity check
