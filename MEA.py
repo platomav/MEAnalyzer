@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.14.1_x'
+title = 'ME Analyzer v1.15.0'
 
 import os
 import re
@@ -984,7 +984,7 @@ def ext_anl(start_man_match, variant) :
 				
 				# Set Module's starting offset at Module Attributes list
 				for mod in range(len(cpd_mod_attr)) :
-					if (cpd_entry_hdr.Name).decode('utf-8') == cpd_mod_attr[mod][0] :
+					if cpd_entry_hdr.Name.decode('utf-8') == cpd_mod_attr[mod][0] :
 						mod_comp_size = cpd_mod_attr[mod][4] # Store Module Compressed Size for Empty check
 						
 						cpd_mod_attr[mod][3] = cpd_entry_offset # Fill Module Starting Offset from $CPD Entry
@@ -999,8 +999,6 @@ def ext_anl(start_man_match, variant) :
 def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 	ker_start = -1
 	ker_end = -1
-	mod_start = -1
-	mod_end = -1
 	rel_db = 'NaN'
 	comp = ['No','Huffman','LZMA']
 	fext = ['mod','huff','lzma']
@@ -1013,8 +1011,8 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 		
 		for mod in cpd_mod_attr :
 			mod_names.append(mod[0]) # Store Module names
-			mod_details.append(('%12s \t%8s\t%4s\t    0x%.5X\t 0x%.5X      0x%.5X\t  %4s' % \
-						(mod[0],comp[mod[1]],encr_empty[mod[2]],mod[3],mod[4],mod[5],encr_empty[mod[6]]))) # Store Module details
+			mod_details.append(('%12s \t%8s\t%4s\t    0x%.5X\t 0x%.5X      0x%.5X\t  %4s' %
+								(mod[0],comp[mod[1]],encr_empty[mod[2]],mod[3],mod[4],mod[5],encr_empty[mod[6]]))) # Store Module details
 			
 			# Store Kernel Start & End for SKU analysis
 			if mod[0] == 'kernel' :
@@ -1081,6 +1079,7 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 							for step in range(0x0,hdr_size,0x4) :
 								chunk_dword = struct.unpack("<I", hdr_data[step:step + 0x4])[0]
 								chunk_bits = format(chunk_dword, '032b') # 32 bits (LE)
+								# noinspection PyUnusedLocal
 								chunk_flags = int(chunk_bits[:6], 2) # Chunk Dictionary Type (0x20 or 0x60, 7 bits)
 								chunk_offset = int(chunk_bits[7:], 2) # Relative Chunk Offset (from Header's end, 25 bits)
 								extr_offsets.append(chunk_offset + hdr_size) # Store Actual Chunk Offset (from Module's start)
@@ -2819,6 +2818,11 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					else : sku_db = "CON_LP" + "_" + sku_stp
 					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_CONLP' % minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+				elif sku == "Slim H" :
+					if sku_stp == "NaN" : sku_db = "SLM_H_XX"
+					else : sku_db = "SLM_H" + "_" + sku_stp
+					db_maj,db_min,db_hot,db_bld = check_upd(('Latest_ME_11%s_SLMH' % minor))
+					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 				elif sku == "Slim LP" :
 					if sku_stp == "NaN" : sku_db = "SLM_LP_XX"
 					else : sku_db = "SLM_LP" + "_" + sku_stp
@@ -2878,6 +2882,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				else :
 					if 'YPDM' in sku_pdm : pdm_status = 'Yes'
 					elif 'NPDM' in sku_pdm : pdm_status = 'No'
+					elif 'UPDM1' in sku_pdm : pdm_status = 'Unknown 1'
+					elif 'UPDM2' in sku_pdm : pdm_status = 'Unknown 2'
 					else : pdm_status = 'Unknown'
 						
 					sku_db += '_%s' % sku_pdm
@@ -2901,7 +2907,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					continue # Next input file
 				
 				# UEFIStrip Fix for all 11.x
-				if param.extr_mea and sku != 'Consumer H' and sku != 'Consumer LP' and sku != 'Corporate H' and sku != 'Corporate LP' and sku != 'Slim LP' :
+				if param.extr_mea and sku not in ['Consumer H','Consumer LP','Corporate H','Corporate LP','Slim H','Slim LP'] :
 					if sku_init == "Consumer" : sku_db = "CON_X"
 					elif sku_init == "Corporate" : sku_db = "COR_X"
 					elif sku_init == "Slim" : sku_db = "SLM_X"
@@ -3283,6 +3289,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				# noinspection PyUnboundLocalVariable
 				if [variant,major,wcod_found] == ['ME',11,False] :
 					if pdm_status != 'NaN' : print("PDM:      %s" % pdm_status)
+					# noinspection PyUnboundLocalVariable
 					print("LBG:      %s" % lbg_support)
 				
 				if pvpc != "NaN" and wcod_found is False : print("PV:       %s" % pvpc)
