@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.15.0'
+title = 'ME Analyzer v1.15.1_x'
 
 import os
 import re
@@ -35,10 +35,12 @@ mea_os = sys.platform
 if mea_os == 'win32' :
 	cl_wipe = 'cls'
 	uf_exec = 'UEFIFind.exe'
+	hd_exec = 'HuffmanDecompress.jar'
 	os_dir = '\\'
 elif mea_os.startswith('linux') or mea_os == 'darwin' :
 	cl_wipe = 'clear'
 	uf_exec = 'UEFIFind'
+	hd_exec = 'HuffmanDecompress'
 	os_dir = '//'
 else :
 	print(col_r + '\nError: ' + col_e + 'Unsupported platform: %s\n' % mea_os)
@@ -87,7 +89,7 @@ class MEA_Param :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
 			if i == '-multi' : self.multi = True # Checks multiple files, copies those with messages to new folder.
-			if i == '-emod' : self.me11_mod_extr = True # Storing & Separation of ME x86 modules.
+			if i == '-emod' : self.me11_mod_extr = True # Extraction (Decompress/Separate) of ME x86 modules.
 			if i == '-dsku' : self.me11_sku_disp = True # Forces MEA to print ME x86 Debug SKU detection.
 			if i == '-pdb' : self.db_print_new = True # Writes input firmware's DB entries to file.
 			if i == '-enuf' : self.enable_uf = True # Enables UEFIFind Engine GUID Detection.
@@ -702,7 +704,7 @@ def mea_help() :
 	text += "-dbname : Renames input file based on DB name\n"
 	text += "-dfpt   : Shows info about the $FPT header (Research)\n"
 	text += "-dsku   : Shows verbose info for ME 11+ SKU (Research)\n"
-	text += "-emod   : Stores and Separates ME 11+ modules (Research)"
+	text += "-emod   : Decompresses and Stores ME x86 modules (Research)"
 	
 	if mea_os == 'win32' :
 		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
@@ -1028,6 +1030,7 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 			for detail in mod_details : print(detail)
 			
 			in_mod_name = input('\nEnter module name or * for all: ')
+			#in_mod_name = 'bup'
 			
 			if in_mod_name not in mod_names and in_mod_name != '*' :
 				print(col_r + '\nError: Could not find module "%s"' % in_mod_name + col_e)
@@ -1049,28 +1052,42 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 				
 				if in_mod_name != '*' and in_mod_name != mod_name : continue # Wait for requested FTPR Module only
 				
-				try :
-					file_name = '%s__%X__%s.%s.%s.%s_%s_%s.%s' % (mod_name, mod_size_uncomp, major, minor, hotfix, build, sku_db, rel_db, fext[mod_comp])
+				file_name = '%s__%s.%s.%s.%s_%s_%s.%s' % (mod_name, major, minor, hotfix, build, sku_db, rel_db, fext[mod_comp])
 					
-					mod_data = reading[mod_start:mod_end]
+				mod_data = reading[mod_start:mod_end]
 					
-					# Remove extra zeroes from LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
-					if mod_comp == 2 and mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
-						mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for stored module
+				# Remove extra zeroes from LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
+				if mod_comp == 2 and mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
+					mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for stored module
+
+				# TODO: ADD LZMA DECOMPRESSION AS WELL (.lzma --> .mod)
+				
+				with open(mea_dir + os_dir + 'mod_temp.bin', 'w+b') as mod_temp : mod_temp.write(mod_data)
+				if os.path.isfile(mea_dir + os_dir + folder_name + os_dir + file_name) : os.remove(mea_dir + os_dir + folder_name + os_dir + file_name)
+				mod_fname = mea_dir + os_dir + folder_name + os_dir + file_name
+				os.rename(mea_dir + os_dir + 'mod_temp.bin', mod_fname)
+				print(col_y + '\n--> Stored %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
 					
-					with open(mea_dir + os_dir + 'mod_temp.bin', 'w+b') as mod_temp : mod_temp.write(mod_data)
-					if os.path.isfile(mea_dir + os_dir + folder_name + os_dir + file_name) : os.remove(mea_dir + os_dir + folder_name + os_dir + file_name)
-					new_mod_name = mea_dir + os_dir + folder_name + os_dir + file_name
-					os.rename(mea_dir + os_dir + 'mod_temp.bin', new_mod_name)
-					print(col_y + '\n--> Stored %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
-					
-					# Separate Huffman Modules into compressed Chunks
-					if mod_comp == 1 :
+				# Decompress or Separate Huffman Modules
+				if mod_comp == 1 :
 						
-						with open(new_mod_name, 'r+b') as mod_file :
+					with open(mod_fname, 'r+b') as mod_file :
+						
+						# Decompress Huffman Module via HuffmanDecompress (Scala + JRE, HuffmanDecompress.jar)
+						try :
+							if depend_hd :
+								mod_dname = mod_fname[:-5] + '.mod'
+								mod_xsize = '0x%X' % mod_size_uncomp # HuffmanDecompress requires hex size input
+								subprocess.run(['scala', hd_path, mod_fname, mod_dname, mod_xsize], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
+								if not os.path.isfile(mod_dname) : raise Exception('Scala or JRE not found')
+								else : print(col_y + '\n    Decompressed %s module "%s" via HuffmanDecompress' % (comp[mod_comp], mod_name) + col_e)
+							else : raise Exception('HuffmanDecompress not found')
+						except :
+							print(col_m + '\n    Failed to decompress %s module "%s" via HuffmanDecompress' % (comp[mod_comp], mod_name) + col_e)
+							
+							# Decompress failed, Separation init
 							counter = 0
 							extr_offsets = []
-					
 							mod_read = mod_file.read()
 							hdr_size = int((mod_size_uncomp / 0x1000) * 4) # Inspired from IllegalArgument's HuffmanDecompress
 							hdr_data = mod_read[:hdr_size]
@@ -1084,7 +1101,7 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 								chunk_offset = int(chunk_bits[7:], 2) # Relative Chunk Offset (from Header's end, 25 bits)
 								extr_offsets.append(chunk_offset + hdr_size) # Store Actual Chunk Offset (from Module's start)
 							
-							# Store all Huffman Module Chunks
+							# Store Huffman Module Compressed Chunks
 							for offset in extr_offsets :
 								counter += 1
 								if counter >= len(extr_offsets) : next_offset = mod_file.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
@@ -1100,10 +1117,9 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 						
 								with open(mod_dir + os_dir + '%s.bin' % counter, 'w+b') as out_file : out_file.write(part)
 						
-							print(col_y + '\n    Separated %s module "%s" into %d chunks' % (comp[mod_comp], mod_name, counter) + col_e)
-				except :
-					print(col_r + '\nError: Could not store %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
-					if os.path.isfile(mea_dir + os_dir + 'mod_temp.bin') : os.remove(mea_dir + os_dir + 'mod_temp.bin')
+							print(col_y + '\n    Separated %s module "%s" into %d compressed chunks' % (comp[mod_comp], mod_name, counter) + col_e)
+
+				if os.path.isfile(mea_dir + os_dir + 'mod_temp.bin') : os.remove(mea_dir + os_dir + 'mod_temp.bin')
 					
 				if in_mod_name == mod_name : break # Store only requested FTPR Module
 				elif in_mod_name == '*' : pass # Store all FTPR Modules
@@ -1254,8 +1270,10 @@ db_path = mea_dir + os_dir + 'MEA.dat'
 if param.alt_dir :
 	top_dir = os.path.dirname(mea_dir) # Get parent dir of mea_dir -> UBU folder or UEFI_Strip folder
 	uf_path = top_dir + os_dir + uf_exec
+	hd_path = top_dir + os_dir + hd_exec
 else :
 	uf_path = mea_dir + os_dir + uf_exec
+	hd_path = mea_dir + os_dir + hd_exec
 
 if not param.skip_intro :
 	db_rev = mea_hdr_init()
@@ -1314,6 +1332,7 @@ else :
 # Check if dependencies exist
 depend_db = os.path.isfile(db_path)
 depend_uf = os.path.isfile(uf_path)
+depend_hd = os.path.isfile(hd_path)
 
 # Connect to DB, if it exists
 if depend_db :
