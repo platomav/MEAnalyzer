@@ -6,11 +6,12 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.15.1_x'
+title = 'ME Analyzer v1.16.0_x'
 
 import os
 import re
 import sys
+import lzma
 import struct
 import ctypes
 import shutil
@@ -25,6 +26,7 @@ import subprocess
 # Initialize and setup Colorama
 colorama.init()
 col_r = colorama.Fore.RED + colorama.Style.BRIGHT
+col_c = colorama.Fore.CYAN + colorama.Style.BRIGHT
 col_g = colorama.Fore.GREEN + colorama.Style.BRIGHT
 col_y = colorama.Fore.YELLOW + colorama.Style.BRIGHT
 col_m = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
@@ -499,9 +501,9 @@ class CPD_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes
 		("Reserved1",		uint8_t),		# 0x0B
 		("SizeUncomp",		uint32_t),		# 0x0C
 		("SizeComp",		uint32_t),		# 0x10 (LZMA & Huffman w/o EOM alignment)
-		("DEV_ID",			uint16_t),		# 0x10
-		("VEN_ID",			uint16_t),		# 0x10 (0x8086)
-		("Hash",			uint32_t*8),	# 0x14
+		("DEV_ID",			uint16_t),		# 0x14
+		("VEN_ID",			uint16_t),		# 0x16 (0x8086)
+		("Hash",			uint32_t*8),	# 0x18 (Compressed for LZMA, Uncompressed for Huffman)
 		# 0x38
 	]
 	
@@ -743,9 +745,13 @@ def mea_exit(code=0) :
 	input("\nPress enter to exit")
 	sys.exit(code)
 
-# Calculate SHA-1 hash of text
+# Calculate SHA1 hash of text
 def sha1_text(text) :
 	return hashlib.sha1(text).hexdigest()
+	
+# Calculate SHA256 hash of data
+def sha_256(data) :
+	return hashlib.sha256(data).hexdigest()
 
 # Must be called at the end of analysis to gather all available messages, if any
 def multi_drop() :
@@ -954,7 +960,8 @@ def ext_anl(start_man_match, variant) :
 						mod_encr_type = ext_hdr.Encryption # Metadata's Module Encryption Type (0-1)
 						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
 						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
-						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0])
+						mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Metadata's Module Hash
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash])
 					elif ext_tag == 15 : # Unique, FTPR.man (TXE)
 						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
 						vcn = ext_hdr.VCN
@@ -1029,8 +1036,8 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 			print('Detected %s FTPR Modules:\n\n      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % len(cpd_mod_attr))
 			for detail in mod_details : print(detail)
 			
-			in_mod_name = input('\nEnter module name or * for all: ')
-			#in_mod_name = 'bup'
+			#in_mod_name = input('\nEnter module name or * for all: ')
+			in_mod_name = '*'
 			
 			if in_mod_name not in mod_names and in_mod_name != '*' :
 				print(col_r + '\nError: Could not find module "%s"' % in_mod_name + col_e)
@@ -1048,30 +1055,48 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 				mod_start = mod[3] # Starting Offset
 				mod_size_comp = mod[4] # Compressed Size
 				mod_size_uncomp = mod[5] # Uncompressed Size
+				mod_hash = mod[7] # Hash (LZMA --> Compressed + zeroes, Huffman --> Uncompressed)
 				mod_end = mod_start + mod_size_comp # Ending Offset
 				
 				if in_mod_name != '*' and in_mod_name != mod_name : continue # Wait for requested FTPR Module only
 				
-				file_name = '%s__%s.%s.%s.%s_%s_%s.%s' % (mod_name, major, minor, hotfix, build, sku_db, rel_db, fext[mod_comp])
+				mod_fname = mea_dir + os_dir + folder_name + os_dir + '%s_%s.%s.%s.%s_%s_%s.%s' % (mod_name, major, minor, hotfix, build, sku_db, rel_db, fext[mod_comp])
 					
 				mod_data = reading[mod_start:mod_end]
-					
-				# Remove extra zeroes from LZMA Modules to allow manual decompression (inspired from Igor Skochinsky's me_unpack)
-				if mod_comp == 2 and mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
-					mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for stored module
 
-				# TODO: ADD LZMA DECOMPRESSION AS WELL (.lzma --> .mod)
-				
-				with open(mea_dir + os_dir + 'mod_temp.bin', 'w+b') as mod_temp : mod_temp.write(mod_data)
-				if os.path.isfile(mea_dir + os_dir + folder_name + os_dir + file_name) : os.remove(mea_dir + os_dir + folder_name + os_dir + file_name)
-				mod_fname = mea_dir + os_dir + folder_name + os_dir + file_name
-				os.rename(mea_dir + os_dir + 'mod_temp.bin', mod_fname)
-				print(col_y + '\n--> Stored %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
+				# Initialization for Module Storing
+				if mod_comp == 2 :
+					# Calculate LZMA Module SHA256 hash
+					mea_hash = sha_256(mod_data).upper() # Compressed, Header zeroes included (>= 11.0.0.1120)
 					
+					# Remove zeroes from LZMA header for decompression (inspired from Igor Skochinsky's me_unpack)
+					if mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
+						mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for compressed module
+				
+				# Store Compressed Module for Decompression
+				with open(mod_fname, 'w+b') as mod_file : mod_file.write(mod_data)
+				print(col_y + '\n--> Stored %s module "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_name, mod_start, mod_end - 0x1) + col_e)
+				
+				# Decompress LZMA Modules
+				if mod_comp == 2 :
+					mod_data = lzma.LZMADecompressor().decompress(mod_data) # Decompress LZMA Module via Python
+					mod_fname = mod_fname[:-5] + '.mod'
+					with open(mod_fname, 'w+b') as mod_file : mod_file.write(mod_data)
+					print(col_c + '\n    Decompressed %s module "%s" via Python' % (comp[mod_comp], mod_name) + col_e)
+					
+					# Firmware < 11.0.0.1120 check the Uncompressed LZMA module Hash (11.0.0.1115 "ptt" has wrong Hash)
+					if minor == 0 and hotfix == 0 and build < 1120 : mea_hash = sha_256(mod_data).upper() # Uncompressed (< 11.0.0.1120)
+					
+					print('\n    MOD: %s' % mod_hash)
+					print('    MEA: %s' % mea_hash)
+					
+					if mod_hash == mea_hash : print(col_g + '\n    Hash of %s module "%s" is VALID' % (comp[mod_comp], mod_name) + col_e)
+					else : print(col_r + '\n    Hash of %s module "%s" is INVALID' % (comp[mod_comp], mod_name) + col_e)
+				
 				# Decompress or Separate Huffman Modules
 				if mod_comp == 1 :
 						
-					with open(mod_fname, 'r+b') as mod_file :
+					with open(mod_fname, 'r+b') as mod_cfile :
 						
 						# Decompress Huffman Module via HuffmanDecompress (Scala + JRE, HuffmanDecompress.jar)
 						try :
@@ -1080,15 +1105,27 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 								mod_xsize = '0x%X' % mod_size_uncomp # HuffmanDecompress requires hex size input
 								subprocess.run(['scala', hd_path, mod_fname, mod_dname, mod_xsize], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
 								if not os.path.isfile(mod_dname) : raise Exception('Scala or JRE not found')
-								else : print(col_y + '\n    Decompressed %s module "%s" via HuffmanDecompress' % (comp[mod_comp], mod_name) + col_e)
-							else : raise Exception('HuffmanDecompress not found')
+								else :
+									print(col_c + '\n    Decompressed %s module "%s" via HuffmanDecompress' % (comp[mod_comp], mod_name) + col_e)
+									
+									# Open decompressed Huffman module for hash validation
+									with open(mod_dname, 'r+b') as mod_dfile :
+										mea_hash = sha_256(mod_dfile.read()).upper()
+										
+										print('\n    MOD: %s' % mod_hash)
+										print('    MEA: %s' % mea_hash)
+										
+										if mod_hash == mea_hash : print(col_g + '\n    Hash of %s module "%s" is VALID' % (comp[mod_comp], mod_name) + col_e)
+										else : print(col_r + '\n    Hash of %s module "%s" is INVALID' % (comp[mod_comp], mod_name) + col_e)	
+							else :
+								raise Exception('HuffmanDecompress not found')
 						except :
-							print(col_m + '\n    Failed to decompress %s module "%s" via HuffmanDecompress' % (comp[mod_comp], mod_name) + col_e)
+							print(col_r + '\n    Failed to decompress %s module "%s" via HuffmanDecompress' % (comp[mod_comp], mod_name) + col_e)
 							
 							# Decompress failed, Separation init
 							counter = 0
 							extr_offsets = []
-							mod_read = mod_file.read()
+							mod_read = mod_cfile.read()
 							hdr_size = int((mod_size_uncomp / 0x1000) * 4) # Inspired from IllegalArgument's HuffmanDecompress
 							hdr_data = mod_read[:hdr_size]
 							
@@ -1104,11 +1141,11 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 							# Store Huffman Module Compressed Chunks
 							for offset in extr_offsets :
 								counter += 1
-								if counter >= len(extr_offsets) : next_offset = mod_file.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
+								if counter >= len(extr_offsets) : next_offset = mod_cfile.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
 								else : next_offset = extr_offsets[counter]
 			
 								part = mod_read[offset:next_offset]
-								mod_dir = mea_dir + os_dir + folder_name + os_dir + file_name + '_Chunks'
+								mod_dir = mod_fname + '_Chunks'
 						
 								if not os.path.isdir(mod_dir) : os.mkdir(mod_dir)
 						
@@ -1117,9 +1154,7 @@ def mod_anl(action, release, cpd_offset, cpd_mod_attr) :
 						
 								with open(mod_dir + os_dir + '%s.bin' % counter, 'w+b') as out_file : out_file.write(part)
 						
-							print(col_y + '\n    Separated %s module "%s" into %d compressed chunks' % (comp[mod_comp], mod_name, counter) + col_e)
-
-				if os.path.isfile(mea_dir + os_dir + 'mod_temp.bin') : os.remove(mea_dir + os_dir + 'mod_temp.bin')
+							print(col_c + '\n    Separated %s module "%s" into %d compressed chunks' % (comp[mod_comp], mod_name, counter) + col_e)
 					
 				if in_mod_name == mod_name : break # Store only requested FTPR Module
 				elif in_mod_name == '*' : pass # Store all FTPR Modules
