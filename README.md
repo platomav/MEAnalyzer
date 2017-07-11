@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/2EwzUjf.png)
+![](https://i.imgur.com/VMFKT8Y.png)
 
 ## **A. About ME Analyzer**
 
@@ -66,7 +66,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -dbname : Renames input file based on DB name
 * -dfpt   : Shows info about the $FPT header (Research)
 * -dsku   : Shows verbose info about ME 11+ SKU (Research)
-* -emod   : Stores and Separates ME 11+ modules (Research)
+* -unp86  : Unpacks fully all Engine x86 firmware (Research)
 
 The following are Windows specific:
 
