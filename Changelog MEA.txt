@@ -1,3 +1,9 @@
+v1.16.1
+
+Brought back SPS firmware detection, no support
+Improved unpacked firmware folder names (-unp86)
+Updated Engine Firmware Repository Database to r94
+
 v1.16.0
 
 MEA can now fully unpack all Engine x86 firmware (-unp86)

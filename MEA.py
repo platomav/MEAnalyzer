@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.16.0'
+title = 'ME Analyzer v1.16.1'
 
 import os
 import re
@@ -857,7 +857,8 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 		
 def fw_ver(major,minor,hotfix,build) :
 	if variant == "SPS" :
-		version = "%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build)) # xx.xx.xx.xxx
+		if sub_sku != "NaN" : version = "%s.%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku) # xx.xx.xx.xxx.y
+		else : version = "%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build)) # xx.xx.xx.xxx
 	else :
 		version = "%s.%s.%s.%s" % (major, minor, hotfix, build)
 	
@@ -909,6 +910,22 @@ def fovd_clean (fovdtype) :
 		else : return False
 	else : return True
 
+# Create Firmware Type Database Entry
+def fw_types(fw_type) :
+	type_db = 'NaN'
+	
+	if variant == "SPS" and (fw_type == "Region" or fw_type == "Region, Stock" or fw_type == "Region, Extracted") : # SPS --> Region (EXTR at DB)
+		fw_type = "Region"
+		type_db = "EXTR"
+	elif fw_type == "Region, Extracted" : type_db = "EXTR"
+	elif fw_type == "Region, Stock" or fw_type == "Region" : type_db = "RGN"
+	elif fw_type == "Update" : type_db = "UPD"
+	elif fw_type == "Operational" : type_db = "OPR"
+	elif fw_type == "Recovery" : type_db = "REC"
+	elif fw_type == "Unknown" : type_db = "UNK"
+	
+	return fw_type, type_db
+	
 # Validate Manifest RSA Signature
 def rsa_sig_val(man_hdr_struct, check_start) :
 	man_hdr = man_hdr_struct.HeaderLength * 4
@@ -933,12 +950,16 @@ def rsa_sig_val(man_hdr_struct, check_start) :
 	return [dec_hash == rsa_hash, dec_hash, rsa_hash]
 	
 # Unpack Engine x86 firmware
-def x86_unpack(fpt_part_all) :
+def x86_unpack(fpt_part_all, fw_type) :
 	part_details = []
 	cpd_match_ranges = []
 	
+	# Get Firmware Type DB
+	fw_type, type_db = fw_types(fw_type)
+	
 	# Create firmware extraction folder
-	fw_name = "%s.%s.%s.%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db)
+	if variant == 'SPS' : fw_name = "%s.%s.%s.%s_%s_%s" % (major, minor, hotfix, build, rel_db, type_db) # No SKU SPS4
+	else : fw_name = "%s.%s.%s.%s_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db)
 	if os.path.isdir(mea_dir + os_dir + fw_name) : shutil.rmtree(mea_dir + os_dir + fw_name)
 	os.mkdir(fw_name)
 	
@@ -1137,7 +1158,9 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 			cpd_pname = cpd_all_attr[0][8] # $CPD PartitionName
 			ext_inid = cpd_all_attr[0][9] # Partition Instance ID
 			mn2_valid = cpd_all_attr[0][10][0] # Partition Signature Validation
+			# noinspection PyUnusedLocal
 			mn2_sig_dec = cpd_all_attr[0][10][1] # Partition Signature Decrypted
+			# noinspection PyUnusedLocal
 			mn2_sig_sha = cpd_all_attr[0][10][2] # Partition Signature Data Hash
 			
 			if cpd_pname in ['LOCL','WCOD'] :
@@ -1199,11 +1222,13 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				if mod_encr == 1 :
 					print(col_y + '\n\t--> Stored Encrypted %s "%s" [0x%.5X - 0x%.5X]' % (mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
 					
-					print('\n\t    MOD: %s' % mod_hash)
+					#print('\n\t    MOD: %s' % mod_hash) # Debug
 					
 					print(col_m + '\n\t    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					
 					os.rename(mod_fname, mod_fname[:-5] + '.encr') # Change file extension from .lzma to .encr
+					
+					#if mod_name != 'pavp' : input() # Debug
 					
 					continue # Module Encryption on top of Compression, skip decompression
 				else :
@@ -1213,20 +1238,24 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				if mod_comp == 0 :
 					# Manifest & Metadata
 					if '.man' in mod_name or '.met' in mod_name :
-						print('\n\t    MN2: %s' % mn2_sig_dec)
-						print('\t    MEA: %s' % mn2_sig_sha)
+						#print('\n\t    MN2: %s' % mn2_sig_dec) # Debug
+						#print('\t    MEA: %s' % mn2_sig_sha) # Debug
 					
 						if mn2_valid : print(col_g + '\n\t    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
-						else : print(col_r + '\n\t    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
+						else :
+							print(col_r + '\n\t    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
+							#input() # Debug
 					# Modules
 					else :
 						mea_hash = sha_256(mod_data).upper()
 					
-						print('\n\t    MOD: %s' % mod_hash)
-						print('\t    MEA: %s' % mea_hash)
+						#print('\n\t    MOD: %s' % mod_hash) # Debug
+						#print('\t    MEA: %s' % mea_hash) # Debug
 					
 						if mod_hash == mea_hash : print(col_g + '\n\t    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						else : print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						else :
+							print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							#input() # Debug
 					
 				# Extract & Decompress LZMA Modules
 				if mod_comp == 2 :
@@ -1246,21 +1275,33 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 						mea_hash_u = sha_256(mod_data).upper() # Uncompressed (few LZMA Modules)
 					except :
 						print(col_r + '\n\t    Failed to decompress %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						#input() # Debug
 					
-					print('\n\t    MOD  : %s' % mod_hash)
-					print('\t    MEA C: %s' % mea_hash_c)
-					print('\t    MEA U: %s' % mea_hash_u)
+					#print('\n\t    MOD  : %s' % mod_hash) # Debug
+					#print('\t    MEA C: %s' % mea_hash_c) # Debug
+					#print('\t    MEA U: %s' % mea_hash_u) # Debug
 					
 					if mod_hash == mea_hash_c or mod_hash == mea_hash_u : print(col_g + '\n\t    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-					else : print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					else :
+						print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						#input() # Debug
 				
 				# Extract & Decompress or Separate Huffman Modules
 				if mod_comp == 1 :
-						
+					
+					# noinspection PyUnusedLocal
 					with open(mod_fname, 'r+b') as mod_cfile :
 						
 						# Decompress Huffman Module via Huffman11Decompress by IllegalArgument (https://github.com/IllegalArgument/Huffman11)
-						# Huffman11Decompress.jar required (JRE jar only by Scala sbt, not Scala + JRE jar)
+						"""
+						01. Install Scala
+						02. Install Scala sbt
+						03. Install Java Runtime Environment
+						04. Project's folder must have subfolder "project\file assembly.sbt" with data: addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
+						05. Project's folder must have subfolder "src\main\scala\HuffmanDecompress\" with both "HuffmanDecompress.scala" and "HuffmanDictionaries.scala"
+						06. Open cmd at Project's folder and run command "sbt assembly"
+						07. Rename output .jar to Huffman11Decompress.jar and place at MEA dir
+						"""
 						try :
 							if depend_hd :
 								mod_dname = mod_fname[:-5] + '.mod'
@@ -1268,25 +1309,26 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 								subprocess.run(['java', '-jar', hd_path, mod_fname, mod_dname, mod_xsize], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
 								if not os.path.isfile(mod_dname) : raise Exception('JRE not found!')
 								else :
-									print(col_c + '\n\t    Decompressed %s %s "%s" via Huffman11Decompress' % (comp[mod_comp], mod_type, mod_name) + col_e)
+									print(col_c + '\n\t    Decompressed %s %s "%s" via Huffman11Decompress by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
 									
 									# Open decompressed Huffman module for hash validation
 									with open(mod_dname, 'r+b') as mod_dfile :
 										mea_hash = sha_256(mod_dfile.read()).upper()
 										
-										print('\n\t    MOD: %s' % mod_hash)
-										print('\t    MEA: %s' % mea_hash)
+										#print('\n\t    MOD: %s' % mod_hash) # Debug
+										#print('\t    MEA: %s' % mea_hash) # Debug
 										
 										if mod_hash == mea_hash : print(col_g + '\n\t    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-										else : print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)	
+										else :
+											print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+											#input() # Debug
 							else :
 								raise Exception('Huffman11Decompress not found!')
 						except :
-							print(col_r + '\n\t    Failed to decompress %s %s "%s" via Huffman11Decompress' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							
-							# Decompress failed, Separation instead
-							# Will be removed after Python version of Huffman11Decompress
-							
+							print(col_r + '\n\t    Failed to decompress %s %s "%s" via Huffman11Decompress by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							#input() # Debug
+						
+							"""
 							# Separation Initialization
 							counter = 0
 							extr_offsets = []
@@ -1320,6 +1362,7 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 								with open(mod_dir + os_dir + '%s.bin' % counter, 'w+b') as out_file : out_file.write(part)
 						
 							print(col_c + '\n\t    Separated %s %s "%s" into %d compressed chunks' % (comp[mod_comp], mod_type, mod_name, counter) + col_e)
+							"""
 					
 				if in_mod_name == mod_name : break # Store only requested Module
 				elif in_mod_name == '*' : pass # Store all Modules
@@ -1554,6 +1597,7 @@ for file_in in source :
 	upd_rslt = ''
 	fpt_in_id = ''
 	found_guid = ''
+	err_sps_sku = ''
 	me2_type_fix = ''
 	me2_type_exp = ''
 	name_db_hash = ''
@@ -1562,11 +1606,14 @@ for file_in in source :
 	pvpc = 'NaN'
 	sku_db = 'NaN'
 	rel_db = 'NaN'
+	sub_sku = 'NaN'
 	type_db = 'NaN'
 	sku_stp = 'NaN'
 	txe_sub = 'NaN'
+	sps_serv = 'NaN'
 	platform = 'NaN'
 	sku_init = 'NaN'
+	opr_mode = 'NaN'
 	txe_sub_db = 'NaN'
 	fuj_version = 'NaN'
 	no_man_text = 'NaN'
@@ -1589,6 +1636,7 @@ for file_in in source :
 	me_rec_ffs = False
 	sku_missing = False
 	rec_missing = False
+	fw_type_fix = False
 	fd_rgn_exist = False
 	me11_sku_anl = False
 	me11_ker_msg = False
@@ -2261,7 +2309,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if mod_align > 0 : eng_fw_end = p_end_last + 0x1000 - mod_align
 					else : eng_fw_end = p_end_last
 				
-				# Detect SPS 4 extra data after Engine payload size ($BIS)
+				# Detect SPS 4 (usually) Uncharted empty Partition ($BIS)
 				if variant == 'SPS' : sps4_bis_match = (re.compile(br'\x24\x42\x49\x53\x00')).search(reading)
 				else : sps4_bis_match = None
 				
@@ -2293,7 +2341,43 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							# Extra padding has data
 							if sps4_bis_match is not None : eng_size_text = ''
 							else : eng_size_text = 'Warning: File size exceeds firmware, data in padding!'
+			
+			# Firmware Type detection (Stock, Extracted, Update)
+			if rgn_exist : # SPS 1-3 have their own Firmware Types
+				if variant == "SPS" and major < 4 : fw_type = "Region" # SPS is built manually so EXTR
+				elif variant == "ME" and (1 < major < 8) :
+					# Check 1, FOVD section
+					if (major > 2 and not fovd_clean("new")) or (major == 2 and not fovd_clean("old")) : fw_type = "Region, Extracted"
+					else :
+						# Check 2, EFFS/NVKR strings
+						fitc_match = re.compile(br'\x4B\x52\x4E\x44\x00').search(reading) # KRND. detection = FITC, 0x00 adds old ME RGN support
+						if fitc_match is not None :
+							if major == 4 : fw_type_fix = True # ME4-Only Fix 3
+							else : fw_type = "Region, Extracted"
+						elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
+						else : fw_type = "Region, Stock"
+				elif (variant == "ME" and major >=8) or (variant == "TXE" and major < 3) or (variant == "SPS" and major > 3) :
+					# Check 1, FITC Version
+					# noinspection PyUnboundLocalVariable
+					fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
 				
+					if fpt_hdr.FitBuild == 0 or fpt_hdr.FitBuild == 65535 : # 0000/FFFF --> clean ME/TXE
+						fw_type = "Region, Stock"
+						# Check 2, FOVD section
+						if not fovd_clean("new") : fw_type = "Region, Extracted"
+					else :
+						# Get FIT/FITC version used to build the image
+						fitc_ver_found = True
+						fw_type = "Region, Extracted"
+						fitc_major = fpt_hdr.FitMajor
+						fitc_minor = fpt_hdr.FitMinor
+						fitc_hotfix = fpt_hdr.FitHotfix
+						fitc_build = fpt_hdr.FitBuild
+				elif variant == 'TXE' and major > 2 :
+					# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
+					if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
+					reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' : fw_type = "Region, Extracted"
+					else : fw_type = "Region, Stock"
 			else :
 				fw_type = "Update" # No Region detected, Update
 			
@@ -2404,43 +2488,47 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					err_stor.append(sku)
 				
 				# ME2-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME2
-				if sku == "QST" or (sku == "AMT" and minor >= 5) :
-					nvkr_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44')).search(reading) # NVKRKRID detection
-					if nvkr_match is not None :
-						(start_nvkr_match, end_nvkr_match) = nvkr_match.span()
-						nvkr_start = int.from_bytes(reading[end_nvkr_match:end_nvkr_match + 0x4], 'little')
-						nvkr_size = int.from_bytes(reading[end_nvkr_match + 0x4:end_nvkr_match + 0x8], 'little')
-						nvkr_data = reading[fpt_start + nvkr_start:fpt_start + nvkr_start + nvkr_size]
-						# NVKR sections : Name[0xC] + Size[0x3] + Data[Size]
-						prat_match = (re.compile(br'\x50\x72\x61\x20\x54\x61\x62\x6C\x65\xFF\xFF\xFF')).search(nvkr_data) # "Pra Table" detection (2.5/2.6)
-						maxk_match = (re.compile(br'\x4D\x61\x78\x55\x73\x65\x64\x4B\x65\x72\x4D\x65\x6D\xFF\xFF\xFF')).search(nvkr_data) # "MaxUsedKerMem" detection
-						if prat_match is not None :
-							(start_prat_match, end_prat_match) = prat_match.span()
-							prat_start = fpt_start + nvkr_start + end_prat_match + 0x3
-							prat_end = fpt_start + nvkr_start + end_prat_match + 0x13
-							me2_type_fix = (binascii.b2a_hex(reading[prat_start:prat_end])).decode('utf-8').upper()
-							me2_type_exp = "7F45DBA3E65424458CB09A6E608812B1"
-						elif maxk_match is not None :
-							(start_maxk_match, end_maxk_match) = maxk_match.span()
-							qstpat_start = fpt_start + nvkr_start + end_maxk_match + 0x68
-							qstpat_end = fpt_start + nvkr_start + end_maxk_match + 0x78
-							me2_type_fix = (binascii.b2a_hex(reading[qstpat_start:qstpat_end])).decode('utf-8').upper()
-							me2_type_exp = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
-				elif sku == "AMT" and minor < 5 :
-					nvsh_match = (re.compile(br'\x4E\x56\x53\x48\x4F\x53\x49\x44')).search(reading) # NVSHOSID detection
-					if nvsh_match is not None :
-						(start_nvsh_match, end_nvsh_match) = nvsh_match.span()
-						nvsh_start = int.from_bytes(reading[end_nvsh_match:end_nvsh_match + 0x4], 'little')
-						nvsh_size = int.from_bytes(reading[end_nvsh_match + 0x4:end_nvsh_match + 0x8], 'little')
-						nvsh_data = reading[fpt_start + nvsh_start:fpt_start + nvsh_start + nvsh_size]
-						netip_match = (re.compile(br'\x6E\x65\x74\x2E\x69\x70\xFF\xFF\xFF')).search(reading) # "net.ip" detection (2.0-2.2)
-						if netip_match is not None :
-							(start_netip_match, end_netip_match) = netip_match.span()
-							netip_size = int.from_bytes(reading[end_netip_match + 0x0:end_netip_match + 0x3], 'little')
-							netip_start = fpt_start + end_netip_match + 0x4 # 0x4 always 03 so after that byte for 00 search
-							netip_end = fpt_start + end_netip_match + netip_size + 0x3 # (+ 0x4 - 0x1)
-							me2_type_fix = (binascii.b2a_hex(reading[netip_start:netip_end])).decode('utf-8').upper()
-							me2_type_exp = (binascii.b2a_hex(b'\x00' * (netip_size - 0x1))).decode('utf-8').upper()
+				if fw_type_fix :
+					if sku == "QST" or (sku == "AMT" and minor >= 5) :
+						nvkr_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44')).search(reading) # NVKRKRID detection
+						if nvkr_match is not None :
+							(start_nvkr_match, end_nvkr_match) = nvkr_match.span()
+							nvkr_start = int.from_bytes(reading[end_nvkr_match:end_nvkr_match + 0x4], 'little')
+							nvkr_size = int.from_bytes(reading[end_nvkr_match + 0x4:end_nvkr_match + 0x8], 'little')
+							nvkr_data = reading[fpt_start + nvkr_start:fpt_start + nvkr_start + nvkr_size]
+							# NVKR sections : Name[0xC] + Size[0x3] + Data[Size]
+							prat_match = (re.compile(br'\x50\x72\x61\x20\x54\x61\x62\x6C\x65\xFF\xFF\xFF')).search(nvkr_data) # "Pra Table" detection (2.5/2.6)
+							maxk_match = (re.compile(br'\x4D\x61\x78\x55\x73\x65\x64\x4B\x65\x72\x4D\x65\x6D\xFF\xFF\xFF')).search(nvkr_data) # "MaxUsedKerMem" detection
+							if prat_match is not None :
+								(start_prat_match, end_prat_match) = prat_match.span()
+								prat_start = fpt_start + nvkr_start + end_prat_match + 0x3
+								prat_end = fpt_start + nvkr_start + end_prat_match + 0x13
+								me2_type_fix = (binascii.b2a_hex(reading[prat_start:prat_end])).decode('utf-8').upper()
+								me2_type_exp = "7F45DBA3E65424458CB09A6E608812B1"
+							elif maxk_match is not None :
+								(start_maxk_match, end_maxk_match) = maxk_match.span()
+								qstpat_start = fpt_start + nvkr_start + end_maxk_match + 0x68
+								qstpat_end = fpt_start + nvkr_start + end_maxk_match + 0x78
+								me2_type_fix = (binascii.b2a_hex(reading[qstpat_start:qstpat_end])).decode('utf-8').upper()
+								me2_type_exp = "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+					elif sku == "AMT" and minor < 5 :
+						nvsh_match = (re.compile(br'\x4E\x56\x53\x48\x4F\x53\x49\x44')).search(reading) # NVSHOSID detection
+						if nvsh_match is not None :
+							(start_nvsh_match, end_nvsh_match) = nvsh_match.span()
+							nvsh_start = int.from_bytes(reading[end_nvsh_match:end_nvsh_match + 0x4], 'little')
+							nvsh_size = int.from_bytes(reading[end_nvsh_match + 0x4:end_nvsh_match + 0x8], 'little')
+							nvsh_data = reading[fpt_start + nvsh_start:fpt_start + nvsh_start + nvsh_size]
+							netip_match = (re.compile(br'\x6E\x65\x74\x2E\x69\x70\xFF\xFF\xFF')).search(reading) # "net.ip" detection (2.0-2.2)
+							if netip_match is not None :
+								(start_netip_match, end_netip_match) = netip_match.span()
+								netip_size = int.from_bytes(reading[end_netip_match + 0x0:end_netip_match + 0x3], 'little')
+								netip_start = fpt_start + end_netip_match + 0x4 # 0x4 always 03 so after that byte for 00 search
+								netip_end = fpt_start + end_netip_match + netip_size + 0x3 # (+ 0x4 - 0x1)
+								me2_type_fix = (binascii.b2a_hex(reading[netip_start:netip_end])).decode('utf-8').upper()
+								me2_type_exp = (binascii.b2a_hex(b'\x00' * (netip_size - 0x1))).decode('utf-8').upper()
+								
+					if me2_type_fix != me2_type_exp : fw_type = "Region, Extracted"
+					else : fw_type = "Region, Stock"
 				
 				# ME2-Only Fix 2 : Identify ICH Revision B0 firmware SKUs
 				me2_sku_fix = ['1C3FA8F0B5B9738E717F74F1F01D023D58085298','AB5B010215DFBEA511C12F350522E672AD8C3345','92983C962AC0FD2636B5B958A28CFA42FB430529']
@@ -2448,7 +2536,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku = "AMT B0"
 					sku_db = "AMT_B0"
 				
-				# ME2-Only Fix 3: Detect ROMB RGN/EXTR image correctly (at $FPT v1 ROMB was before $FPT)
+				# ME2-Only Fix 3 : Detect ROMB RGN/EXTR image correctly (at $FPT v1 ROMB was before $FPT)
 				if rgn_exist and release == "Pre-Production" :
 					byp_pat = re.compile(br'\x24\x56\x45\x52\x02\x00\x00\x00', re.DOTALL) # $VER2... detection (ROM-Bypass)
 					byp_match = byp_pat.search(reading)
@@ -2486,26 +2574,30 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					err_stor.append(sku)
 
 				# ME3-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME3
-				me3_type_fix1 = []
-				me3_type_fix2a = 0x10 * 'FF'
-				me3_type_fix2b = 0x10 * 'FF'
-				me3_type_fix3 = 0x10 * 'FF'
-				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
-				if effs_match is not None :
-					(start_effs_match, end_effs_match) = effs_match.span()
-					effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
-					effs_size = int.from_bytes(reading[end_effs_match + 0x4:end_effs_match + 0x8], 'little')
-					effs_data = reading[fpt_start + effs_start:fpt_start + effs_start + effs_size]
-					
-					me3_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46\x04\x4E\x56\x4B\x52')).findall(effs_data) # ME_CFG_DEF.NVKR detection (RGN have <= 2)
-					me3_type_fix2 = (re.compile(br'\x4D\x61\x78\x55\x73\x65\x64\x4B\x65\x72\x4D\x65\x6D\x04\x4E\x56\x4B\x52\x7F\x78\x01')).search(effs_data) # MaxUsedKerMem.NVKR.x. detection
-					me3_type_fix3 = (binascii.b2a_hex(reading[fpt_start + effs_start + effs_size - 0x20:fpt_start + effs_start + effs_size - 0x10])).decode('utf-8').upper()
-					
-					if me3_type_fix2 is not None :
-						(start_me3f2_match, end_me3f2_match) = me3_type_fix2.span()
-						me3_type_fix2a = (binascii.b2a_hex(reading[fpt_start + effs_start + end_me3f2_match - 0x30:fpt_start + effs_start + end_me3f2_match - 0x20])).decode('utf-8').upper()
-						me3_type_fix2b = (binascii.b2a_hex(reading[fpt_start + effs_start + end_me3f2_match + 0x30:fpt_start + effs_start + end_me3f2_match + 0x40])).decode('utf-8').upper()
-					
+				if fw_type_fix :
+					me3_type_fix1 = []
+					me3_type_fix2a = 0x10 * 'FF'
+					me3_type_fix2b = 0x10 * 'FF'
+					me3_type_fix3 = 0x10 * 'FF'
+					effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
+					if effs_match is not None :
+						(start_effs_match, end_effs_match) = effs_match.span()
+						effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
+						effs_size = int.from_bytes(reading[end_effs_match + 0x4:end_effs_match + 0x8], 'little')
+						effs_data = reading[fpt_start + effs_start:fpt_start + effs_start + effs_size]
+						
+						me3_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46\x04\x4E\x56\x4B\x52')).findall(effs_data) # ME_CFG_DEF.NVKR detection (RGN have <= 2)
+						me3_type_fix2 = (re.compile(br'\x4D\x61\x78\x55\x73\x65\x64\x4B\x65\x72\x4D\x65\x6D\x04\x4E\x56\x4B\x52\x7F\x78\x01')).search(effs_data) # MaxUsedKerMem.NVKR.x. detection
+						me3_type_fix3 = (binascii.b2a_hex(reading[fpt_start + effs_start + effs_size - 0x20:fpt_start + effs_start + effs_size - 0x10])).decode('utf-8').upper()
+						
+						if me3_type_fix2 is not None :
+							(start_me3f2_match, end_me3f2_match) = me3_type_fix2.span()
+							me3_type_fix2a = (binascii.b2a_hex(reading[fpt_start + effs_start + end_me3f2_match - 0x30:fpt_start + effs_start + end_me3f2_match - 0x20])).decode('utf-8').upper()
+							me3_type_fix2b = (binascii.b2a_hex(reading[fpt_start + effs_start + end_me3f2_match + 0x30:fpt_start + effs_start + end_me3f2_match + 0x40])).decode('utf-8').upper()
+
+					if len(me3_type_fix1) > 2 or (0x10 * 'FF') not in me3_type_fix3 or (0x10 * 'FF') not in me3_type_fix2a or (0x10 * 'FF') not in me3_type_fix2b : fw_type = "Region, Extracted"
+					else : fw_type = "Region, Stock"
+				
 				# ME3-Only Fix 2 : Detect AMT ROMB UPD image correctly (very vague, may not always work)
 				if fw_type == "Update" and release == "Pre-Production" : # Debug Flag detected at $MAN but PRE vs BYP is needed for UPD (not RGN)
 					# It seems that ROMB UPD is smaller than equivalent PRE UPD
@@ -2525,7 +2617,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						release = "ROM-Bypass"
 						rel_db = "BYP"
 				
-				# ME3-Only Fix 3: Detect Pre-Alpha ($FPT v1) ROMB RGN/EXTR image correctly
+				# ME3-Only Fix 3 : Detect Pre-Alpha ($FPT v1) ROMB RGN/EXTR image correctly
 				if rgn_exist and fpt_version == 16 and release == "Pre-Production" :
 					byp_pat = byp_pat = re.compile(br'\x24\x56\x45\x52\x03\x00\x00\x00', re.DOTALL) # $VER3... detection (ROM-Bypass)
 					byp_match = byp_pat.search(reading)
@@ -2582,17 +2674,22 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						sku = "AMT" # CA_ICH9_REL_IAMT_
 						sku_db = "AMT"
 				
-				# ME4-Only Fix 3 : The usual method to detect EXTR vs RGN does not work for ME4
-				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
-				if effs_match is not None :
-					(start_effs_match, end_effs_match) = effs_match.span()
-					effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
-					effs_size = int.from_bytes(reading[end_effs_match + 0x4:end_effs_match + 0x8], 'little')
-					effs_data = reading[fpt_start + effs_start:fpt_start + effs_start + effs_size]
+				# ME4-Only Fix 3 : The usual method to detect EXTR vs RGN does not work for ME4, KRND. not enough
+				if fw_type_fix :
+					effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
+					if effs_match is not None :
+						(start_effs_match, end_effs_match) = effs_match.span()
+						effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
+						effs_size = int.from_bytes(reading[end_effs_match + 0x4:end_effs_match + 0x8], 'little')
+						effs_data = reading[fpt_start + effs_start:fpt_start + effs_start + effs_size]
 					
-					me4_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46')).findall(effs_data) # ME_CFG_DEF detection (RGN have 2-4)
-					me4_type_fix2 = (re.compile(br'\x47\x50\x49\x4F\x31\x30\x4F\x77\x6E\x65\x72')).search(effs_data) # GPIO10Owner detection
-					me4_type_fix3 = (re.compile(br'\x41\x70\x70\x52\x75\x6C\x65\x2E\x30\x33\x2E\x30\x30\x30\x30\x30\x30')).search(effs_data) # AppRule.03.000000 detection
+						me4_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46')).findall(effs_data) # ME_CFG_DEF detection (RGN have 2-4)
+						me4_type_fix2 = (re.compile(br'\x47\x50\x49\x4F\x31\x30\x4F\x77\x6E\x65\x72')).search(effs_data) # GPIO10Owner detection
+						me4_type_fix3 = (re.compile(br'\x41\x70\x70\x52\x75\x6C\x65\x2E\x30\x33\x2E\x30\x30\x30\x30\x30\x30')).search(effs_data) # AppRule.03.000000 detection
+					
+					# noinspection PyUnboundLocalVariable
+					if len(me4_type_fix1) > 5 or me4_type_fix2 is not None or me4_type_fix3 is not None : fw_type = "Region, Extracted"
+					else : fw_type = "Region, Stock"
 				
 				# Placed here in order to comply with Fix 2 above in case it is triggered
 				if sku_db == "ALL" :
@@ -2628,7 +2725,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					err_rep += 1
 					err_stor.append(sku)
 					
-				# ME5-Only Fix: Detect ROMB UPD image correctly
+				# ME5-Only Fix : Detect ROMB UPD image correctly
 				if fw_type == "Update" :
 					byp_pat = re.compile(br'\x52\x4F\x4D\x42') # ROMB detection (ROM-Bypass)
 					byp_match = byp_pat.search(reading)
@@ -2674,7 +2771,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					err_rep += 1
 					err_stor.append(sku)
 				
-				# ME6-Only Fix: Ignore errors at ROMB (Region present, FTPR tag & size missing)
+				# ME6-Only Fix 1 : ME6 Ignition does not work with KRND
+				if sku == 'Ignition' and rgn_exist :
+					ign_pat = (re.compile(br'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
+					if len(ign_pat) < 2 : fw_type = "Region, Extracted" # 2 before NFTP & IGRT
+					else : fw_type = "Region, Stock"
+				
+				# ME6-Only Fix 2 : Ignore errors at ROMB (Region present, FTPR tag & size missing)
 				if release == "ROM-Bypass" :
 					err_rep -= 1
 					rec_missing = False
@@ -3160,7 +3263,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# Module Extraction for all x86
 				if param.me11_mod_extr :
-					x86_unpack(fpt_part_all)
+					x86_unpack(fpt_part_all, fw_type)
 					
 					continue # Next input file
 				
@@ -3311,7 +3414,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 				
-				if fw_type == 'Update' : fw_type = "Region, Extracted" # TXE3 PRD & PRE in IFWI/BIOS, BYP in TXE Region
+				# TXE3 PRD & PRE in IFWI/BIOS, BYP in TXE Region
+				if fw_type == 'Update' : fw_type = "Region, Extracted"
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
@@ -3338,7 +3442,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				# Module Extraction for all x86
 				if param.me11_mod_extr :
-					x86_unpack(fpt_part_all)
+					x86_unpack(fpt_part_all, fw_type)
 					
 					continue # Next input file
 				
@@ -3350,70 +3454,57 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				err_rep += 1
 				err_stor.append(sku)
 				
-		elif variant == 'SPS' and major >= 4 :
+		elif variant == 'SPS' :
 			
-			# Module Extraction for all x86
-			if param.me11_mod_extr :
-				x86_unpack(fpt_part_all)
-					
-				continue # Next input file
-		
-		# Region Type detection (Stock or Extracted)
-		if rgn_exist :
-			if variant == "ME" and (1 < major < 8) :
-				# Check 1, FOVD section
-				if (major > 2 and not fovd_clean("new")) or (major == 2 and not fovd_clean("old")) :
-					fw_type = "Region, Extracted"
+			if sku_match is not None :
+				sku_sps = reading[start_sku_match + 8:start_sku_match + 0xC]
+				sku_sps = binascii.b2a_hex(sku_sps).decode('utf-8').upper() # Hex value with Little Endianess
+			
+			opr2_pat = re.compile(br'\x4F\x50\x52\x32\xFF\xFF\xFF\xFF') # OPR2 detection for SPS2,3,4 (the 4xFF force FPT area only)
+			opr2_match = opr2_pat.search(reading)
+			
+			cod2_pat = re.compile(br'\x43\x4F\x44\x32\xFF\xFF\xFF\xFF') # COD2 detection for SPS1 (the 4xFF force FPT area only)
+			cod2_match = cod2_pat.search(reading)
+			
+			if not rgn_exist :
+				# REC detection always first, FTPR Manifest
+				if major == 1 :
+					sps1_rec_pat = re.compile(br'\x45\x70\x73\x52\x65\x63\x6F\x76\x65\x72\x79') # EpsRecovery detection
+					sps1_rec_match = sps1_rec_pat.search(reading)
+					if sps1_rec_match is not None : fw_type = "Recovery"
+					else : fw_type = "Operational"
+				elif major < 4 :
+					mme_pat = re.compile(br'\x24\x4D\x4D\x45') # $MME detection
+					mme_match = mme_pat.findall(reading)
+					if len(mme_match) == 1 : fw_type = "Recovery" # SPSRecovery , FTPR for SPS2,3 (only $MMEBUP section)
+					elif len(mme_match) > 1 : fw_type = "Operational" # SPSOperational , OPR1/OPR2 for SPS2,3 or COD1/COD2 for SPS1 regions
 				else :
-					# Check 2, EFFS/NVKR strings
-					fitc_pat = re.compile(br'\x4B\x52\x4E\x44\x00') # KRND. detection = FITC image, 0x00 adds old ME RGN support
-					fitc_match = fitc_pat.search(reading)
-					if fitc_match is not None :
-						if major == 4 : # ME4-Only Fix 3, KRND. not enough
-							# noinspection PyUnboundLocalVariable
-							if len(me4_type_fix1) > 5 or me4_type_fix2 is not None or me4_type_fix3 is not None : fw_type = "Region, Extracted"
-							else : fw_type = "Region, Stock"
-						else :
-							fw_type = "Region, Extracted"
+					norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading) # SPSRecovery, $CPD + [0x8] + FTPR
+					if norgn_sps_match is not None : fw_type = "Recovery"
 					else :
-						if major == 2 : # ME2-Only Fix 1
-							if me2_type_fix != me2_type_exp : fw_type = "Region, Extracted"
-							else : fw_type = "Region, Stock"
-						elif major == 3 : # ME3-Only Fix 1
-							# noinspection PyUnboundLocalVariable
-							if len(me3_type_fix1) > 2 or (0x10 * 'FF') not in me3_type_fix3 or (0x10 * 'FF') not in me3_type_fix2a\
-							or (0x10 * 'FF') not in me3_type_fix2b : fw_type = "Region, Extracted"
-							else : fw_type = "Region, Stock"
-						elif major == 6 and sku == "Ignition" : # ME6 Ignition does not work with KRND
-							ign_pat = (re.compile(br'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
-							if len(ign_pat) < 2 : fw_type = "Region, Extracted" # 2 before NFTP & IGRT
-							else : fw_type = "Region, Stock"
-						else :
-							fw_type = "Region, Stock"
-			elif (variant == "ME" and major >=8) or (variant == "TXE" and major < 3) or (variant == "SPS" and major > 3) :
-				# Check 1, FITC Version
-				# noinspection PyUnboundLocalVariable
-				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
+						norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x4F\x50\x52\x00', re.DOTALL)).search(reading) # SPSOperational, $CPD + [0x8] + OPR.
+						if norgn_sps_match is not None : fw_type = "Operational"
+			else :
+				if opr2_match is not None or cod2_match is not None :
+					sub_sku = "1" # xx.xx.xxx.1
+					opr_mode = "Dual OPR"
+				else :
+					sub_sku = "0" # xx.xx.xxx.0
+					opr_mode = "Single OPR"
+			
+			if major == 3 and rgn_exist :
+				nm_sien_match = (re.compile(br'\x4F\x75\x74\x6C\x65\x74\x20\x54\x65\x6D\x70')).search(reading) # "Outlet Temp" detection (NM only)
+				if nm_sien_match is not None : sps_serv = "Node Manager" # NM
+				else : sps_serv = "Silicon Enabling" # SiEn
 				
-				if fpt_hdr.FitBuild == 0 or fpt_hdr.FitBuild == 65535 : # 0000/FFFF --> clean ME/TXE
-					fw_type = "Region, Stock"
-					# Check 2, FOVD section
-					if not fovd_clean("new") : fw_type = "Region, Extracted"
-				else :
-					# Get FIT/FITC version used to build the image
-					fitc_ver_found = True
-					fw_type = "Region, Extracted"
-					fitc_major = fpt_hdr.FitMajor
-					fitc_minor = fpt_hdr.FitMinor
-					fitc_hotfix = fpt_hdr.FitHotfix
-					fitc_build = fpt_hdr.FitBuild
-			elif variant == 'TXE' and major > 2 :
-				# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
-				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
-				reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' :
-					fw_type = "Region, Extracted"
-				else :
-					fw_type = "Region, Stock"
+			elif major == 4 :
+				cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext_anl('$MN2', start_man_match) # Detect x86 Attributes
+			
+				if param.me11_mod_extr :
+					# Module Extraction for all x86
+					x86_unpack(fpt_part_all, fw_type)
+					
+					continue # Next input file
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
 		locl_start = (re.compile(br'\x24\x43\x50\x44........\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
@@ -3435,31 +3526,40 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		# ME Firmware non Partial Update without $SKU
 		if sku_match is None and fw_type != "Partial Update" and not me_rec_ffs :
-			if (variant == "ME" and 1 < major < 11) or (variant == "TXE" and major < 3) :
+			if (variant == "ME" and 1 < major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4) :
 				sku_missing = True
 				err_rep += 1
 		
-		# Check database for unknown firmware, all firmware filenames have this stucture: Major.Minor.Hotfix.Build_SKU_Release_Type.bin
-		if fw_type == "Region, Extracted" : type_db = "EXTR"
-		elif fw_type == "Region, Stock" or fw_type == "Region" : type_db = "RGN"
-		elif fw_type == "Update" : type_db = "UPD"
-		elif fw_type == "Unknown" : type_db = "UNK"
+		# Create Firmware Type DB entry
+		fw_type, type_db = fw_types(fw_type)
 		
 		# Create firmware DB names
 		if variant == "ME" or variant == "TXE" :
 			name_db = "%s.%s.%s.%s_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db) # The re-created filename without extension
 			name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_hash) # The equivalent "clean" RGN filename
 			name_db_extr = "%s.%s.%s.%s_%s_%s_EXTR_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_hash) # The equivalent "dirty" EXTR filename
-			name_db_hash = name_db + '_' + rsa_hash
+		elif variant == "SPS" :
+			if sub_sku == "NaN" :
+				name_db = "%s.%s.%s.%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, type_db)
+				name_db_rgn = "%s.%s.%s.%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent RGN filename
+				name_db_extr = "%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR filename
+				name_db_0_extr = "%s.%s.%s.%s.0_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR 0 filename
+				name_db_1_extr = "%s.%s.%s.%s.1_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR 1 filename
+			else :
+				name_db = "%s.%s.%s.%s.%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, type_db)
+				name_db_rgn = "%s.%s.%s.%s.%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, rsa_hash) # The equivalent RGN filename
+				name_db_extr = "%s.%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku, rel_db, rsa_hash) # The equivalent EXTR filename
+		
+		name_db_hash = name_db + '_' + rsa_hash
 		
 		if param.db_print_new :
 			with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
 			continue # Next input file
 		
-		# Search Engine database for firmware
+		# Search firmware database, all firmware filenames have this stucture: Major.Minor.Hotfix.Build_SKU_Release_Type
 		fw_db = db_open()
-		if not wcod_found and not me_rec_ffs and variant != 'SPS' : # Must not be Partial Update or MERecovery, SPS not supported
-			if sku_db != "NaN" and rel_db != "NaN" and type_db != "NaN" : # Search database only if SKU, Release & Type are known
+		if not wcod_found and not me_rec_ffs : # Must not be Partial Update or MERecovery
+			if (((variant == "ME" or variant == "TXE") and sku_db != "NaN") or err_sps_sku == "") and rel_db != "NaN" and type_db != "NaN" : # Search database only if SKU, Release & Type are known
 				for line in fw_db :
 					if len(line) < 2 or line[:3] == "***" :
 						continue # Skip empty lines or comments
@@ -3472,6 +3572,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							(major == 6 and sku == "Ignition"))) or variant == "TXE") : # Only for ME8 and up or ME7 non-PRD or ME6.0 IGN
 							# noinspection PyUnboundLocalVariable
 							if (name_db_rgn in line) or (name_db_extr in line) : rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
+						# noinspection PyUnboundLocalVariable
+						if (type_db == "OPR" or type_db == "REC") and ((name_db_0_extr in line) or (name_db_1_extr in line)) : rgn_over_extr_found = True # Same EXTR found at DB, OPR/REC disregarded
 				fw_db.close()
 			# If SKU and/or Release and/or Type are NaN (unknown), the database will not be searched but rare firmware will be reported (Partial Update excluded)
 		else :
@@ -3480,12 +3582,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		# Check if firmware is updated, Production only
 		if release == "Production" and err_rep == 0 and not wcod_found : # Does not display if there is any error or firmware is Partial Update
 			if variant == "TXE" and major == 0 : pass # Exclude TXE v0.x
-			else :
+			elif variant in ['ME','TXE'] : # SPS excluded
 				if upd_found : upd_rslt = "Latest:   " + col_r + "No" + col_e
 				elif not upd_found : upd_rslt = "Latest:   " + col_g + "Yes" + col_e
 		
 		# Rename input file based on the DB structured name
-		if param.give_db_name and variant in ['ME','TXE'] :
+		if param.give_db_name :
 			file_name = file_in
 			new_dir_name = os.path.join(os.path.dirname(file_in), name_db + '.bin')
 			f.close()
@@ -3506,8 +3608,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			if fw_in_db_found == "No" and not rgn_over_extr_found and not wcod_found : 
 				# noinspection PyUnboundLocalVariable
 				if variant == 'ME' and major == 11 and (sku_db == 'CON_X' or sku_db == 'COR_X') and sku_stp == 'NaN' and sku_pdm == 'NaN' : sku_db += "_XX_UPDM"
-				if variant != 'SPS' : name_db = "%s_%s_%s_%s_%s" % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, rsa_hash) # Not supported
-				else : name_db = "%s_%s" % (fw_ver(major,minor,hotfix,build), rel_db)
+				if variant != 'SPS' : name_db = "%s_%s_%s_%s_%s" % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, rsa_hash)
+				else : name_db = "%s_%s_%s_%s" % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_hash) # No SKU for SPS
 				
 			if fuj_rgn_exist : name_db = "%s_UMEM" % name_db
 			
@@ -3519,12 +3621,19 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		# Print MEA Messages
 		elif variant == "SPS" and not param.print_msg :
 			print("Family:   %s" % variant)
-			print("Version:  %s" % fw_ver(major,minor,hotfix,build))
-			if release != 'Production' : print("Release:  %s" % release)
+			if sub_sku != "NaN" : print("Version:  %s.%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sub_sku)) # xx.xx.xx.xxx.y
+			else : print("Version:  %s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build))) # xx.xx.xx.xxx
+			print("Release:  %s" % release)
+			if sps_serv != "NaN" : print("Service:  %s" % sps_serv)
+			print("Type:     %s" % fw_type)
+			if opr_mode != "NaN" : print("Mode:     %s" % opr_mode)
+			if major == 4 : # Only for x86
+				print("SVN:      %s" % svn)
+				print("VCN:      %s" % vcn)
 			print("Date:     %s" % date)
 			if fitc_ver_found : print("FIT Ver:  %s" % fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build))
 			if rgn_exist : print('Size:     0x%X' % eng_fw_end)
-			print("\nIntel SPS firmware is not supported")
+			print("\nIntel SPS firmware is not officially supported")
 		elif not param.print_msg :
 			print("Family:   %s" % variant)
 			print("Version:  %s.%s.%s.%s" % (major, minor, hotfix, build))

@@ -30,6 +30,7 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 - Detection of unique mobile Apple Macintosh Engine firmware SKUs
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to analyze multiple files by drag & drop or by input path
+- Ability to unpack all Engine x86 firmware (ME >= 11, TXE >= 3, SPS >= 4)
 - Ability to detect & categorize firmware which require attention
 - Ability to validate Engine region's $FPT checksums & entries counter
 - Ability to detect various important firmware problems and corruptions
