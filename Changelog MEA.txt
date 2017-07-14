@@ -1,3 +1,9 @@
+v1.16.2
+
+Engine x86 Huffman now decompress via Huffman11 python (-unp86)
+Greatly improved unpacking of TXE 3.x firmware (-unp86)
+Improved $CPD detection, robust pattern
+
 v1.16.1
 
 Brought back SPS firmware detection, no support

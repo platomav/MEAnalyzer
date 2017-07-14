@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.16.1'
+title = 'ME Analyzer v1.16.2'
 
 import os
 import re
@@ -22,6 +22,7 @@ import tempfile
 import colorama
 import traceback
 import subprocess
+import contextlib
 
 # Initialize and setup Colorama
 colorama.init()
@@ -38,12 +39,10 @@ mea_os = sys.platform
 if mea_os == 'win32' :
 	cl_wipe = 'cls'
 	uf_exec = 'UEFIFind.exe'
-	hd_exec = 'Huffman11Decompress.jar'
 	os_dir = '\\'
 elif mea_os.startswith('linux') or mea_os == 'darwin' :
 	cl_wipe = 'clear'
 	uf_exec = 'UEFIFind'
-	hd_exec = 'Huffman11Decompress'
 	os_dir = '//'
 else :
 	print(col_r + '\nError: ' + col_e + 'Unsupported platform: %s\n' % mea_os)
@@ -987,7 +986,7 @@ def x86_unpack(fpt_part_all, fw_type) :
 			with open(file_name, 'w+b') as part_file : part_file.write(part_data)
 	
 	# Code Partition Directory detection
-	cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00', re.DOTALL)
+	cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10', re.DOTALL) # $CPD detection
 	cpd_match_store = list(cpd_pat.finditer(reading))
 	
 	# Store all Code Partition Directory ranges
@@ -1005,7 +1004,6 @@ def x86_unpack(fpt_part_all, fw_type) :
 # Analyze Engine x86 $CPD Offset & Extensions
 # noinspection PyUnusedLocal
 def ext_anl(input_type, input_offset) :
-	global start_man_match
 	vcn = -1
 	in_id = -1
 	cpd_num = -1
@@ -1014,10 +1012,14 @@ def ext_anl(input_type, input_offset) :
 	fw_0C_sku1 = -1
 	fw_0C_sku2 = -1
 	cpd_offset = -1
-	mn2_sigs = []
+	start_man_match = -1
+	cpd_ext_offset = 0
+	mod_empty = 0
 	cpd_mod_attr = []
 	cpd_ext_attr = []
-	ext_tag_all = list(range(16)) # $CPD Extensions 00-0F
+	cpd_ext_names = []
+	mn2_sigs = [False, -1, -1]
+	ext_tag_all = list(range(22)) # $CPD Extensions 0x00-0x15
 	
 	if input_type == '$MN2' :
 		start_man_match = input_offset
@@ -1032,12 +1034,15 @@ def ext_anl(input_type, input_offset) :
 		
 		# Scan forward for $MN2 (should be <= 0x500B)
 		mn2_pat = re.compile(br'\x00\x24\x4D\x4E\x32').search(reading[cpd_offset:cpd_offset + 0x1000]) # .$MN2 detection, 0x00 adds old ME RGN support
-		(start_man_match, end_man_match) = mn2_pat.span()
-		start_man_match += cpd_offset
-		end_man_match += cpd_offset
-		
-	mn2_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
-	if param.me11_mod_extr : mn2_sigs = rsa_sig_val(mn2_hdr, start_man_match - 0x1B) # For each Partition
+		if mn2_pat is not None :
+			(start_man_match, end_man_match) = mn2_pat.span()
+			start_man_match += cpd_offset
+			end_man_match += cpd_offset
+	
+	# $MN2 existence not mandatory
+	if start_man_match != -1 :
+		mn2_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
+		if param.me11_mod_extr : mn2_sigs = rsa_sig_val(mn2_hdr, start_man_match - 0x1B) # For each Partition
 	
 	# $CPD detected
 	if cpd_offset > -1 :
@@ -1046,83 +1051,113 @@ def ext_anl(input_type, input_offset) :
 		cpd_name = cpd_hdr.PartitionName.decode('utf-8')
 			
 		# Analyze Manifest & Metadata (must be before Module analysis)
-		for entry in range(0, cpd_num, 2) :
+		for entry in range(0, cpd_num) :
 			cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 			cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
 			cpd_mod_off = int(cpd_off_attr[7:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 25 bits)
 			cpd_mod_comp = int(cpd_off_attr[6], 2) # $CPD Entry Offset Attribute Compressed (0 No, 1 Yes)
 			cpd_mod_res = int(cpd_off_attr[:6], 2) # $CPD Entry Offset Attribute Reserved (0, 6 bits)
 			cpd_entry_offset = cpd_offset + cpd_mod_off
-			cpd_entry_size = cpd_entry_hdr.Size # Can be used for Metadata only
+			cpd_entry_size = cpd_entry_hdr.Size # Uncompressed only
 			cpd_entry_name = cpd_entry_hdr.Name
-				
-			if b'.man' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at .man
-			elif b'.met' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset # Metadata is always Uncompressed
-			else : break # Sanity check, no Modules allowed here
-				
-			# Analyze all Manifest & Metadata Extensions
-			ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Extension Tag
-				
-			while ext_tag in ext_tag_all :
-						
-				if ext_tag == 3 : # Unique, .man (ME)
-					ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_03)
-					vcn = ext_hdr.VCN
-					in_id = ext_hdr.InstanceID # LOCL/WCOD identifier
-				elif ext_tag == 10 : # Unique, .met
-					ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0A)
-					mod_comp_type = ext_hdr.Compression # Metadata's Module Compression Type (0-2)
-					mod_encr_type = ext_hdr.Encryption # Metadata's Module Encryption Type (0-1)
-					mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
-					mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
-					mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Metadata's Module Hash
-					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs])
-				elif ext_tag == 15 : # Unique, .man (TXE)
-					ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
-					vcn = ext_hdr.VCN
-				elif ext_tag == 12 : # Unique, .man
-					ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0C)
-					fw_sku_attr = format(ext_hdr.FWSKUAttrib, '032b') # 32 bits (LE)
-					fw_0C_cse = int(fw_sku_attr[28:32], 2) # CSE Size * 0.5MB (0)
-					fw_0C_sku1 = int(fw_sku_attr[25:28], 2) # SKU Type (0 COR, 1 CON, 2 SLM)
-					fw_0C_lbg = int(fw_sku_attr[24], 2) # Lewisburg support (0 11.x, 1 11.20)
-					fw_0C_m3 = int(fw_sku_attr[23], 2) # M3 support (0 CON & SLM, 1 COR)
-					fw_0C_m0 = int(fw_sku_attr[22], 2) # M0 support (1 CON & SLM & COR)
-					fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 for H/LP <= 11.0.0.1202, 0 for H >= 11.0.0.1205, 1 for LP >= 11.0.0.1205)
-					fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
-					fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
-				
-				cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
-				if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_hdr.Size : # End of Extension reached
-					ext_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
-					if ext_data == b'\xFF' * cpd_entry_size : ext_empty = 1 # Determine if Extension is Empty (me_cleaner)
-					cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), cpd_mod_comp, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs])
-						
-					break # Stop Extension scanning at the end of .man/.met
-				ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
 			
-		# Analyze Modules (must be after Metadata analysis)
-		for entry in range(1, cpd_num, 2) :
+			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name :
+				
+				# Set initial $CPD Extension Offset
+				if b'.man' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at .man
+				elif b'.met' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset # Metadata is always Uncompressed
+				
+				# Analyze all Manifest & Metadata Extensions
+				ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Extension Tag
+				
+				while ext_tag in ext_tag_all :
+							
+					if ext_tag == 3 : # Unique, .man (ME)
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_03)
+						vcn = ext_hdr.VCN
+						in_id = ext_hdr.InstanceID # LOCL/WCOD identifier
+					elif ext_tag == 10 : # Unique, .met
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0A)
+						mod_comp_type = ext_hdr.Compression # Metadata's Module Compression Type (0-2)
+						mod_encr_type = ext_hdr.Encryption # Metadata's Module Encryption Type (0-1)
+						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
+						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
+						mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Metadata's Module Hash
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs])
+					elif ext_tag == 15 : # Unique, .man (TXE)
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
+						vcn = ext_hdr.VCN
+					elif ext_tag == 12 : # Unique, .man
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0C)
+						fw_sku_attr = format(ext_hdr.FWSKUAttrib, '032b') # 32 bits (LE)
+						fw_0C_cse = int(fw_sku_attr[28:32], 2) # CSE Size * 0.5MB (0)
+						fw_0C_sku1 = int(fw_sku_attr[25:28], 2) # SKU Type (0 COR, 1 CON, 2 SLM)
+						fw_0C_lbg = int(fw_sku_attr[24], 2) # Lewisburg support (0 11.x, 1 11.20)
+						fw_0C_m3 = int(fw_sku_attr[23], 2) # M3 support (0 CON & SLM, 1 COR)
+						fw_0C_m0 = int(fw_sku_attr[22], 2) # M0 support (1 CON & SLM & COR)
+						fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 for H/LP <= 11.0.0.1202, 0 for H >= 11.0.0.1205, 1 for LP >= 11.0.0.1205)
+						fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
+						fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
+					
+					cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+					if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_hdr.Size : # End of Extension reached
+						
+						ext_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
+						if ext_data == b'\xFF' * cpd_entry_size : ext_empty = 1 # Determine if Extension is Empty/Missing
+						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), cpd_mod_comp, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs])
+						cpd_ext_names.append(cpd_entry_name.decode('utf-8')[:-4]) # Store Module names which have Metadata
+							
+						break # Stop Extension scanning at the end of .man/.met
+					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
+		
+		# Analyze Modules, Keys & Data (must be after Manifest & Metadata Extension analysis)
+		for entry in range(0, cpd_num) :
 			cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 			cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
 			cpd_mod_off = int(cpd_off_attr[7:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 25 bits)
 			cpd_entry_name = cpd_entry_hdr.Name
+			cpd_entry_size = cpd_entry_hdr.Size # Uncompressed only
 			cpd_entry_offset = cpd_offset + cpd_mod_off
-				
-			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name : break # Sanity check, no Manifest/Metadata allowed here
-				
-			# Set Module's starting offset at Module Attributes list
-			for mod in range(len(cpd_mod_attr)) :
-				if cpd_entry_hdr.Name.decode('utf-8') == cpd_mod_attr[mod][0] :
-					cpd_mod_attr[mod][3] = cpd_entry_offset # Fill Module Starting Offset from $CPD Entry
-					cpd_mod_attr[mod][9] = in_id # Fill Module Instance ID from CPD_Ext_03
-						
-					mod_comp_size = cpd_mod_attr[mod][4] # Store Module Compressed Size for Empty check
-					mod_data = reading[cpd_entry_offset:cpd_entry_offset + mod_comp_size] # Store Module data for Empty check
-					if mod_data == b'\xFF' * mod_comp_size : cpd_mod_attr[mod][6] = 1 # Determine if Module is Empty (me_cleaner)
-						
-					break
 			
+			# Manifest & Metadata Skip
+			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name : continue
+			
+			# Modules with Metadata
+			elif cpd_entry_name.decode('utf-8') in cpd_ext_names :
+			
+				# Set Module's starting offset at Module Attributes list
+				for mod in range(len(cpd_mod_attr)) :
+					if cpd_mod_attr[mod][0] == cpd_entry_name.decode('utf-8') :
+						
+						cpd_mod_attr[mod][3] = cpd_entry_offset # Fill Module Starting Offset from $CPD Entry
+						cpd_mod_attr[mod][9] = in_id # Fill Module Instance ID from CPD_Ext_03
+						
+						mod_comp_size = cpd_mod_attr[mod][4] # Store Module Compressed Size for Empty check
+						mod_data = reading[cpd_entry_offset:cpd_entry_offset + mod_comp_size] # Store Module data for Empty check
+						if mod_data == b'\xFF' * mod_comp_size : cpd_mod_attr[mod][6] = 1 # Determine if Module is Empty/Missing
+						
+						break
+			
+			# Keys
+			elif '.key' in cpd_entry_name.decode('utf-8') :
+				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
+				if mod_data == b'\xFF' * cpd_entry_size : mod_empty = 1 # Determine if Key is Empty/Missing
+				
+				# Validate Key's RSA Signature
+				mn2_key_hdr = get_struct(reading, cpd_entry_offset, MN2_Manifest)
+				mn2_key_sigs = rsa_sig_val(mn2_key_hdr, cpd_entry_offset)
+					
+				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_key_sigs])
+			
+			# Generic Data
+			else :
+				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
+				if mod_data == b'\xFF' * cpd_entry_size : mod_empty = 1 # Determine if Module is Empty/Missing
+				
+				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_sigs])
+
+	#for test in cpd_mod_attr : print(test)
+	
 	return cpd_offset, cpd_mod_attr, cpd_ext_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2
 
 # Analyze & Store Engine x86 Modules
@@ -1192,10 +1227,13 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				mod_start = mod[3] # Starting Offset
 				mod_size_comp = mod[4] # Compressed Size
 				mod_size_uncomp = mod[5] # Uncompressed Size
+				mod_empty = mod[6] # Empty/Missing
 				mod_hash = mod[7] # Hash (LZMA --> Compressed + zeroes, Huffman --> Uncompressed)
 				mod_end = mod_start + mod_size_comp # Ending Offset
 				
 				if in_mod_name != '*' and in_mod_name != mod_name : continue # Wait for requested Module only
+				
+				if mod_empty == 1 : continue # Skip Empty/Missing Modules
 				
 				if '.man' in mod_name or '.met' in mod_name :
 					mod_fname = folder_name + mod_name
@@ -1245,6 +1283,22 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 						else :
 							print(col_r + '\n\t    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
 							#input() # Debug
+					# Keys
+					elif '.key' in mod_name :
+						#print('\n\t    MN2: %s' % mn2_sig_dec) # Debug
+						#print('\t    MEA: %s' % mn2_sig_sha) # Debug
+					
+						if mn2_valid : print(col_g + '\n\t    RSA Signature of key "%s" is VALID' % mod_name + col_e)
+						else :
+							print(col_r + '\n\t    RSA Signature of key "%s" is INVALID' % mod_name + col_e)
+							#input() # Debug
+							
+						os.rename(mod_fname, mod_fname[:-4]) # Change file extension from .mod to .key
+					# Data
+					elif mod_hash == 0 :
+						print(col_m + '\n\t    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						
+						os.rename(mod_fname, mod_fname[:-4]) # Change file extension from .mod to default
 					# Modules
 					else :
 						mea_hash = sha_256(mod_data).upper()
@@ -1288,81 +1342,48 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				
 				# Extract & Decompress or Separate Huffman Modules
 				if mod_comp == 1 :
+					# Decompress Huffman Module via Huffman11 by IllegalArgument (https://github.com/IllegalArgument/Huffman11)
+					# Download Huffman11.py and place it at MEA dir
 					
-					# noinspection PyUnusedLocal
-					with open(mod_fname, 'r+b') as mod_cfile :
+					try :
+						sys.dont_write_bytecode = True
+						import Huffman11
+					
+						mod_dname = mod_fname[:-5] + '.mod'
+					
+						# noinspection PyUnusedLocal
+						with open(mod_fname, 'r+b') as mod_cfile :
+							#mod_ddata = Huffman11.huffman_decompress(mod_cfile.read(), mod_size_comp, mod_size_uncomp) # Debug
 						
-						# Decompress Huffman Module via Huffman11Decompress by IllegalArgument (https://github.com/IllegalArgument/Huffman11)
-						"""
-						01. Install Scala
-						02. Install Scala sbt
-						03. Install Java Runtime Environment
-						04. Project's folder must have subfolder "project\file assembly.sbt" with data: addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
-						05. Project's folder must have subfolder "src\main\scala\HuffmanDecompress\" with both "HuffmanDecompress.scala" and "HuffmanDictionaries.scala"
-						06. Open cmd at Project's folder and run command "sbt assembly"
-						07. Rename output .jar to Huffman11Decompress.jar and place at MEA dir
-						"""
-						try :
-							if depend_hd :
-								mod_dname = mod_fname[:-5] + '.mod'
-								mod_xsize = '0x%X' % mod_size_uncomp # Huffman11Decompress requires hex size input
-								subprocess.run(['java', '-jar', hd_path, mod_fname, mod_dname, mod_xsize], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=True)
-								if not os.path.isfile(mod_dname) : raise Exception('JRE not found!')
-								else :
-									print(col_c + '\n\t    Decompressed %s %s "%s" via Huffman11Decompress by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							with open(os.devnull, 'w') as devnull:
+								with contextlib.redirect_stdout(devnull): # Hide output
+									mod_ddata = Huffman11.huffman_decompress(mod_cfile.read(), mod_size_comp, mod_size_uncomp)
+						
+							with open(mod_dname, 'w+b') as mod_dfile : mod_dfile.write(mod_ddata)
+							
+						if os.path.isfile(mod_dname) :
+							print(col_c + '\n\t    Decompressed %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
 									
-									# Open decompressed Huffman module for hash validation
-									with open(mod_dname, 'r+b') as mod_dfile :
-										mea_hash = sha_256(mod_dfile.read()).upper()
+							# Open decompressed Huffman module for hash validation
+							with open(mod_dname, 'r+b') as mod_dfile :
+								mea_hash = sha_256(mod_dfile.read()).upper()
 										
-										#print('\n\t    MOD: %s' % mod_hash) # Debug
-										#print('\t    MEA: %s' % mea_hash) # Debug
+								#print('\n\t    MOD: %s' % mod_hash) # Debug
+								#print('\t    MEA: %s' % mea_hash) # Debug
 										
-										if mod_hash == mea_hash : print(col_g + '\n\t    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-										else :
-											print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-											#input() # Debug
-							else :
-								raise Exception('Huffman11Decompress not found!')
-						except :
-							print(col_r + '\n\t    Failed to decompress %s %s "%s" via Huffman11Decompress by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							#input() # Debug
-						
-							"""
-							# Separation Initialization
-							counter = 0
-							extr_offsets = []
-							mod_read = mod_cfile.read()
-							hdr_size = int((mod_size_uncomp / 0x1000) * 4) # Inspired from IllegalArgument's Huffman11Decompress
-							hdr_data = mod_read[:hdr_size]
-							
-							# Analyze Huffman Module Header
-							for step in range(0x0,hdr_size,0x4) :
-								chunk_dword = struct.unpack("<I", hdr_data[step:step + 0x4])[0]
-								chunk_bits = format(chunk_dword, '032b') # 32 bits (LE)
-								# noinspection PyUnusedLocal
-								chunk_flags = int(chunk_bits[:6], 2) # Chunk Dictionary Type (0x20 or 0x60, 7 bits)
-								chunk_offset = int(chunk_bits[7:], 2) # Relative Chunk Offset (from Header's end, 25 bits)
-								extr_offsets.append(chunk_offset + hdr_size) # Store Actual Chunk Offset (from Module's start)
-							
-							# Store Huffman Module Compressed Chunks
-							for offset in extr_offsets :
-								counter += 1
-								if counter >= len(extr_offsets) : next_offset = mod_cfile.seek(0,2) # No EOM padding due to CPD_Ext_0A.SizeComp
-								else : next_offset = extr_offsets[counter]
-			
-								part = mod_read[offset:next_offset]
-								mod_dir = mod_fname + '_Chunks'
-						
-								if not os.path.isdir(mod_dir) : os.mkdir(mod_dir)
-						
-								if counter == 1 : # Store Module Header at first file
-									with open(mod_dir + os_dir + '0_Header.bin', 'w+b') as out_file : out_file.write(hdr_data)
-						
-								with open(mod_dir + os_dir + '%s.bin' % counter, 'w+b') as out_file : out_file.write(part)
-						
-							print(col_c + '\n\t    Separated %s %s "%s" into %d compressed chunks' % (comp[mod_comp], mod_type, mod_name, counter) + col_e)
-							"""
+								if mod_hash == mea_hash : print(col_g + '\n\t    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+								else :
+									print(col_r + '\n\t    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+									#input() # Debug
+						else :
+							raise Exception('Decompressed file not found!')
+					except ModuleNotFoundError :
+						print(col_r + '\n\t    Huffman11 by IllegalArgument not found! Place Huffman11.py at MEA folder' + col_e)
+						print(col_r + '\n\t    Failed to decompress %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						#input() # Debug
+					except :
+						print(col_r + '\n\t    Failed to decompress %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						#input() # Debug
 					
 				if in_mod_name == mod_name : break # Store only requested Module
 				elif in_mod_name == '*' : pass # Store all Modules
@@ -1513,10 +1534,8 @@ db_path = mea_dir + os_dir + 'MEA.dat'
 if param.alt_dir :
 	top_dir = os.path.dirname(mea_dir) # Get parent dir of mea_dir -> UBU folder or UEFI_Strip folder
 	uf_path = top_dir + os_dir + uf_exec
-	hd_path = top_dir + os_dir + hd_exec
 else :
 	uf_path = mea_dir + os_dir + uf_exec
-	hd_path = mea_dir + os_dir + hd_exec
 
 if not param.skip_intro :
 	db_rev = mea_hdr_init()
@@ -1575,7 +1594,6 @@ else :
 # Check if dependencies exist
 depend_db = os.path.isfile(db_path)
 depend_uf = os.path.isfile(uf_path)
-depend_hd = os.path.isfile(hd_path)
 
 # Connect to DB, if it exists
 if depend_db :
@@ -2081,7 +2099,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				txe1_match = reading[end_man_match + 0x270 + 0x80:end_man_match + 0x270 + 0x84].decode('utf-8', 'ignore') # Go to 2nd $MME module
 				if txe3_match is not None or txe1_match == '$MME' : variant = "TXE"
 				else :
-					sps_match = (re.compile(br'\x24\x43\x50\x44........\x4F\x50\x52\x00', re.DOTALL)).search(reading) # $CPD + [0x8] + OPR. detection for SPS 4 OPR
+					sps_match = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x4F\x50\x52\x00', re.DOTALL)).search(reading) # $CPD + [0x8] + OPR. detection for SPS 4 OPR
 					if sps_match is None : sps_match = (re.compile(br'\x62\x75\x70\x5F\x72\x63\x76\x2E\x6D\x65\x74')).search(reading) # bup_rcv.met detection for SPS 4 REC
 					if sps_match is None : sps_match = (re.compile(br'\x24\x53\x4B\x55\x03\x00\x00\x00\x2F\xE4\x01\x00')).search(reading) # $SKU of SPS 2 & 3
 					if sps_match is None : sps_match = (re.compile(br'\x24\x53\x4B\x55\x03\x00\x00\x00\x08\x00\x00\x00')).search(reading) # $SKU of SPS 1
@@ -3479,10 +3497,10 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if len(mme_match) == 1 : fw_type = "Recovery" # SPSRecovery , FTPR for SPS2,3 (only $MMEBUP section)
 					elif len(mme_match) > 1 : fw_type = "Operational" # SPSOperational , OPR1/OPR2 for SPS2,3 or COD1/COD2 for SPS1 regions
 				else :
-					norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x46\x54\x50\x52', re.DOTALL)).search(reading) # SPSRecovery, $CPD + [0x8] + FTPR
+					norgn_sps_match = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x46\x54\x50\x52', re.DOTALL)).search(reading) # SPSRecovery, $CPD + [0x8] + FTPR
 					if norgn_sps_match is not None : fw_type = "Recovery"
 					else :
-						norgn_sps_match = (re.compile(br'\x24\x43\x50\x44........\x4F\x50\x52\x00', re.DOTALL)).search(reading) # SPSOperational, $CPD + [0x8] + OPR.
+						norgn_sps_match = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x4F\x50\x52\x00', re.DOTALL)).search(reading) # SPSOperational, $CPD + [0x8] + OPR.
 						if norgn_sps_match is not None : fw_type = "Operational"
 			else :
 				if opr2_match is not None or cod2_match is not None :
@@ -3507,7 +3525,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					continue # Next input file
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
-		locl_start = (re.compile(br'\x24\x43\x50\x44........\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
+		locl_start = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
 		if (variant == "ME") and (major == 11) and (locl_start is not None) :
 			if locl_start.start() == 0 : # Partial Update has "$CPD + [0x8] + LOCL" at first 0x10
 				wcod_found = True
