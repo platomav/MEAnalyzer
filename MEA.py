@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.16.2'
+title = 'ME Analyzer v1.16.3'
 
 import os
 import re
@@ -608,9 +608,27 @@ class CPD_Ext_0F_Mod(ctypes.LittleEndianStructure) :
 		("MetadataHash",	uint32_t*8),	# 0x14
 		# 0x34
 	]
+
+# noinspection PyTypeChecker
+class CPD_Ext_10(ctypes.LittleEndianStructure) : # IUNP (APL)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("ModuleCount",		uint32_t),		# 0x08
+		("Reserved",		uint32_t*4),	# 0x0C
+		("SizeComp",		uint32_t),		# 0x1C
+		("SizeUncomp",		uint32_t),		# 0x20
+		("Day",				uint8_t),		# 0x24
+		("Month",			uint8_t),		# 0x25
+		("Year",			uint16_t),		# 0x26
+		("Hash",			uint32_t*8),	# 0x28 (Big Endian)
+		("Reserved",		uint32_t*6),	# 0x48
+		# 0x60
+	]
 	
 # noinspection PyTypeChecker
-class CPD_Ext_12(ctypes.LittleEndianStructure) : # ??? (TXE)
+class CPD_Ext_12(ctypes.LittleEndianStructure) : # FTPR (TXE)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -637,9 +655,29 @@ class CPD_Ext_12_Mod(ctypes.LittleEndianStructure) :
 		("Unknown30_38",	uint32_t*2),	# 0x30 (FFFFFFFFFFFFFFFF)
 		# 0x38
 	]
+
+# noinspection PyTypeChecker
+class CPD_Ext_13(ctypes.LittleEndianStructure) : # IBBP (APL)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				uint32_t),		# 0x00
+		("Size",			uint32_t),		# 0x04
+		("Unknown08_0C",	uint32_t),		# 0x08
+		# 0xC
+	]
 	
 # noinspection PyTypeChecker
-class CPD_Ext_15(ctypes.LittleEndianStructure) : # Secure Token (TXE, no sample)
+class CPD_Ext_13_Mod(ctypes.LittleEndianStructure) :
+	_pack_ = 1
+	_fields_ = [
+		("ModuleCount",		uint32_t),		# 0x00
+		("SizeHash",		uint32_t),		# 0x04 (0x20 for SHA-256)
+		("Hash",			uint32_t*8),	# 0x08 (Big Endian)
+		# 0x28
+	]
+	
+# noinspection PyTypeChecker
+class CPD_Ext_15(ctypes.LittleEndianStructure) : # Secure Token (STKN/UTOK, empty)
 	_pack_ = 1
 	_fields_ = [
 		("Unknown00_04",	uint32_t),		# 0x00
@@ -755,6 +793,16 @@ def sha_1(data) :
 def sha_256(data) :
 	return hashlib.sha256(data).hexdigest()
 
+# Validate UCODE checksum
+def mc_chk32(data) :
+	chk32 = 0
+	
+	for idx in range(0, len(data), 4) : # Move 4 bytes at a time
+		chkbt = int.from_bytes(data[idx:idx + 4], 'little') # Convert to int, MSB at the end (LE)
+		chk32 = chk32 + chkbt
+	
+	return -chk32 & 0xFFFFFFFF # Return 0
+	
 # Must be called at the end of analysis to gather all available messages, if any
 def multi_drop() :
 	if err_stor or warn_stor or note_stor : # Any note, warning or error copies the file
@@ -924,6 +972,15 @@ def fw_types(fw_type) :
 	elif fw_type == "Unknown" : type_db = "UNK"
 	
 	return fw_type, type_db
+
+# Validate $CPD Checksum
+def cpd_chk(cpd_data) :
+	cpd_chk_byte = cpd_data[0xB]
+	cpd_sum = sum(cpd_data) - cpd_chk_byte
+	cpd_chk_calc = (0x100 - cpd_sum & 0xFF) & 0xFF
+	
+	if cpd_chk_byte == cpd_chk_calc : return True
+	else : return False
 	
 # Validate Manifest RSA Signature
 def rsa_sig_val(man_hdr_struct, check_start) :
@@ -933,20 +990,23 @@ def rsa_sig_val(man_hdr_struct, check_start) :
 	man_pkey = int((''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(man_hdr_struct.RsaPubKey))), 16)
 	man_sign = int((''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(man_hdr_struct.RsaSig))), 16)
 	
-	dec_sign = '%X' % pow(man_sign, man_pexp, man_pkey) # Decrypted Signature
+	try :
+		dec_sign = '%X' % pow(man_sign, man_pexp, man_pkey) # Decrypted Signature
 	
-	if (variant == 'ME' and major < 6) or (variant == 'SPS' and major < 2) : # SHA-1
-		rsa_hash = hashlib.sha1()
-		dec_hash = dec_sign[-40:] # 160-bit
-	else : # SHA-256
-		rsa_hash = hashlib.sha256()
-		dec_hash = dec_sign[-64:] # 256-bit
+		if (variant == 'ME' and major < 6) or (variant == 'SPS' and major < 2) : # SHA-1
+			rsa_hash = hashlib.sha1()
+			dec_hash = dec_sign[-40:] # 160-bit
+		else : # SHA-256
+			rsa_hash = hashlib.sha256()
+			dec_hash = dec_sign[-64:] # 256-bit
 	
-	rsa_hash.update(reading[check_start:check_start + 0x80]) # First 0x80 before RSA area
-	rsa_hash.update(reading[check_start + man_hdr:check_start + man_size]) # Manifest protected data
-	rsa_hash = rsa_hash.hexdigest().upper() # Data SHA-1 or SHA-256 Hash
-	
-	return [dec_hash == rsa_hash, dec_hash, rsa_hash]
+		rsa_hash.update(reading[check_start:check_start + 0x80]) # First 0x80 before RSA area
+		rsa_hash.update(reading[check_start + man_hdr:check_start + man_size]) # Manifest protected data
+		rsa_hash = rsa_hash.hexdigest().upper() # Data SHA-1 or SHA-256 Hash
+		
+		return [dec_hash == rsa_hash, dec_hash, rsa_hash, False]
+	except :
+		return [False, 0, 0, True]
 	
 # Unpack Engine x86 firmware
 def x86_unpack(fpt_part_all, fw_type) :
@@ -960,7 +1020,7 @@ def x86_unpack(fpt_part_all, fw_type) :
 	if variant == 'SPS' : fw_name = "%s.%s.%s.%s_%s_%s" % (major, minor, hotfix, build, rel_db, type_db) # No SKU SPS4
 	else : fw_name = "%s.%s.%s.%s_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db)
 	if os.path.isdir(mea_dir + os_dir + fw_name) : shutil.rmtree(mea_dir + os_dir + fw_name)
-	os.mkdir(fw_name)
+	os.mkdir(mea_dir + os_dir + fw_name)
 	
 	# Parse all Flash Partition Table entries
 	if len(fpt_part_all) :
@@ -978,12 +1038,12 @@ def x86_unpack(fpt_part_all, fw_type) :
 			part_end = part[2]
 			part_inid = part[3]
 			
-			if part_inid != '----' : part_name += '_%s' % part_inid
+			if part_inid != '----' : part_name += ' %s' % part_inid
 			
-			file_name = fw_name + os_dir + part_name + '.bin'
+			file_name = fw_name + os_dir + part_name + ' [%0.6X].bin' % part_start # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
 			
 			part_data = reading[part_start:part_end]
-			with open(file_name, 'w+b') as part_file : part_file.write(part_data)
+			with open(mea_dir + os_dir + file_name, 'w+b') as part_file : part_file.write(part_data)
 	
 	# Code Partition Directory detection
 	cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10', re.DOTALL) # $CPD detection
@@ -1018,7 +1078,7 @@ def ext_anl(input_type, input_offset) :
 	cpd_mod_attr = []
 	cpd_ext_attr = []
 	cpd_ext_names = []
-	mn2_sigs = [False, -1, -1]
+	mn2_sigs = [False, -1, -1, True]
 	ext_tag_all = list(range(22)) # $CPD Extensions 0x00-0x15
 	
 	if input_type == '$MN2' :
@@ -1029,6 +1089,7 @@ def ext_anl(input_type, input_offset) :
 			if b'$CPD' in reading[offset - 1:offset - 1 + 4] :
 				cpd_offset = offset - 1 # Catch UPD $CPD at offset 0 (offset - 1 = 1 - 1 = 0)
 				break # Stop at first detected $CPD
+	
 	elif input_type == '$CPD' :
 		cpd_offset = input_offset
 		
@@ -1049,6 +1110,8 @@ def ext_anl(input_type, input_offset) :
 		cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
 		cpd_num = cpd_hdr.NumModules
 		cpd_name = cpd_hdr.PartitionName.decode('utf-8')
+		
+		cpd_valid = cpd_chk(reading[cpd_offset:cpd_offset + 0x10 + cpd_num * 0x18]) # Validate $CPD Checksum
 			
 		# Analyze Manifest & Metadata (must be before Module analysis)
 		for entry in range(0, cpd_num) :
@@ -1064,14 +1127,14 @@ def ext_anl(input_type, input_offset) :
 			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name :
 				
 				# Set initial $CPD Extension Offset
-				if b'.man' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at .man
+				if b'.man' in cpd_entry_name and start_man_match != -1 : cpd_ext_offset = cpd_entry_offset + mn2_hdr.HeaderLength * 4 # Skip $MN2 at .man
 				elif b'.met' in cpd_entry_name : cpd_ext_offset = cpd_entry_offset # Metadata is always Uncompressed
 				
 				# Analyze all Manifest & Metadata Extensions
 				ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Extension Tag
 				
 				while ext_tag in ext_tag_all :
-							
+					
 					if ext_tag == 3 : # Unique, .man (ME)
 						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_03)
 						vcn = ext_hdr.VCN
@@ -1083,10 +1146,7 @@ def ext_anl(input_type, input_offset) :
 						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
 						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
 						mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Metadata's Module Hash
-						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs])
-					elif ext_tag == 15 : # Unique, .man (TXE)
-						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
-						vcn = ext_hdr.VCN
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 					elif ext_tag == 12 : # Unique, .man
 						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0C)
 						fw_sku_attr = format(ext_hdr.FWSKUAttrib, '032b') # 32 bits (LE)
@@ -1098,19 +1158,35 @@ def ext_anl(input_type, input_offset) :
 						fw_0C_sku2 = int(fw_sku_attr[20:22], 2) # Unknown/SKU Platform (0 for H/LP <= 11.0.0.1202, 0 for H >= 11.0.0.1205, 1 for LP >= 11.0.0.1205)
 						fw_0C_sicl = int(fw_sku_attr[16:20], 2) # Si Class H M L (2 CON & SLM, 4 COR)
 						fw_0C_res2 = int(fw_sku_attr[:16], 2) # Reserved (0)
+					elif ext_tag == 15 : # Unique, .man (TXE)
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_0F)
+						vcn = ext_hdr.VCN
+					elif ext_tag == 16 : # Unique, IUNP (APL)
+						ext_hdr = get_struct(reading, cpd_ext_offset, CPD_Ext_10)
+						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
+						mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.Hash) # Metadata's Module Hash (BE)
+						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, mod_uncomp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
+					elif ext_tag == 19 : # Unique, IBBP (APL)
+						cpd_ext_mod_count = reading[cpd_ext_offset + 0xC]
+						cpd_ext_mod_offset = cpd_ext_offset + 0xC
+						for _ in range(cpd_ext_mod_count) :
+							ext_hdr = get_struct(reading, cpd_ext_mod_offset, CPD_Ext_13_Mod)
+							mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.Hash) # Module Hash (BE)
+							cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, 0, 0, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
+							cpd_ext_mod_offset += 0x28 # Next CPD_Ext_13_Mod
 					
 					cpd_ext_offset += int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
 					if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_hdr.Size : # End of Extension reached
 						
 						ext_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
 						if ext_data == b'\xFF' * cpd_entry_size : ext_empty = 1 # Determine if Extension is Empty/Missing
-						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), cpd_mod_comp, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs])
+						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), cpd_mod_comp, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs, cpd_offset, cpd_valid])
 						cpd_ext_names.append(cpd_entry_name.decode('utf-8')[:-4]) # Store Module names which have Metadata
 							
 						break # Stop Extension scanning at the end of .man/.met
 					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
 		
-		# Analyze Modules, Keys & Data (must be after Manifest & Metadata Extension analysis)
+		# Analyze Modules, Keys, Microcodes & Data (must be after Manifest & Metadata Extension analysis)
 		for entry in range(0, cpd_num) :
 			cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 			cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
@@ -1122,10 +1198,21 @@ def ext_anl(input_type, input_offset) :
 			# Manifest & Metadata Skip
 			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name : continue
 			
-			# Modules with Metadata
-			elif cpd_entry_name.decode('utf-8') in cpd_ext_names :
+			# Adjust Module with Metadata of different name
+			if b'IBBL' == cpd_entry_name or b'IBB' == cpd_entry_name :
+				for mod in range(len(cpd_mod_attr)) :
+					if cpd_mod_attr[mod][0] == 'BPM' :
+						
+						cpd_mod_attr[mod][0] = cpd_entry_name.decode('utf-8') # Fill Module Name from $CPD Entry
+						cpd_mod_attr[mod][4] = cpd_entry_size # Fill Module Uncompressed Size from $CPD Entry
+						cpd_mod_attr[mod][5] = cpd_entry_size # Fill Module Uncompressed Size from $CPD Entry
+						
+						cpd_ext_names.append(cpd_entry_name.decode('utf-8')) # To enter "Module with Metadata" section below
+						
+						break
 			
-				# Set Module's starting offset at Module Attributes list
+			# Module with Metadata
+			if cpd_entry_name.decode('utf-8') in cpd_ext_names :
 				for mod in range(len(cpd_mod_attr)) :
 					if cpd_mod_attr[mod][0] == cpd_entry_name.decode('utf-8') :
 						
@@ -1138,7 +1225,7 @@ def ext_anl(input_type, input_offset) :
 						
 						break
 			
-			# Keys
+			# Key
 			elif '.key' in cpd_entry_name.decode('utf-8') :
 				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
 				if mod_data == b'\xFF' * cpd_entry_size : mod_empty = 1 # Determine if Key is Empty/Missing
@@ -1147,16 +1234,25 @@ def ext_anl(input_type, input_offset) :
 				mn2_key_hdr = get_struct(reading, cpd_entry_offset, MN2_Manifest)
 				mn2_key_sigs = rsa_sig_val(mn2_key_hdr, cpd_entry_offset)
 					
-				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_key_sigs])
+				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_key_sigs, cpd_offset, cpd_valid])
 			
-			# Generic Data
+			# Microcode
+			elif 'upatch' in cpd_entry_name.decode('utf-8') :
+				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
+				if mod_data == b'\xFF' * cpd_entry_size : mod_empty = 1 # Determine if Microcode is Empty/Missing
+				
+				# Detect actual Microcode length
+				mc_len = int.from_bytes(mod_data[0x20:0x24], 'little')
+				mc_data = reading[cpd_entry_offset:cpd_entry_offset + mc_len]
+				
+				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, mc_chk32(mc_data), cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
+			
+			# Data
 			else :
 				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
 				if mod_data == b'\xFF' * cpd_entry_size : mod_empty = 1 # Determine if Module is Empty/Missing
 				
-				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_sigs])
-
-	#for test in cpd_mod_attr : print(test)
+				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 	
 	return cpd_offset, cpd_mod_attr, cpd_ext_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2
 
@@ -1188,24 +1284,37 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				ker_end = ker_start + mod[4]
 		
 		if action == 'extr' :
-			
 			# Parent Partition Attributes (same for all cpd_all_attr list instance entries)
-			cpd_pname = cpd_all_attr[0][8] # $CPD PartitionName
+			cpd_pname = cpd_all_attr[0][8] # $CPD Name
+			cpd_poffset = cpd_all_attr[0][11] # $CPD Offset, covers any cases with duplicate name entries (Joule_C0-X64-Release)
+			cpd_pvalid = cpd_all_attr[0][12] # CPD Checksum Valid
 			ext_inid = cpd_all_attr[0][9] # Partition Instance ID
 			mn2_valid = cpd_all_attr[0][10][0] # Partition Signature Validation
+			mn2_error = cpd_all_attr[0][10][3] # Partition Signature Error
 			# noinspection PyUnusedLocal
 			mn2_sig_dec = cpd_all_attr[0][10][1] # Partition Signature Decrypted
 			# noinspection PyUnusedLocal
 			mn2_sig_sha = cpd_all_attr[0][10][2] # Partition Signature Data Hash
 			
-			if cpd_pname in ['LOCL','WCOD'] :
-				print(col_y + '\n\tDetected %s Module(s) at %s %0.4X:\n\n\t      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
-						(len(cpd_all_attr), cpd_pname, ext_inid) + col_e)
+			if 'LOCL' in cpd_pname or 'WCOD' in cpd_pname :
+				print(col_y + '\n\tDetected %s Module(s) at %s %0.4X [%0.6X]:\n\n\t      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
+						(len(cpd_all_attr), cpd_pname, ext_inid, cpd_poffset) + col_e)
+				
+				folder_name = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [%0.6X]' % (cpd_pname, ext_inid, cpd_poffset) + os_dir
 			else :
-				print(col_y + '\n\tDetected %s Module(s) at %s:\n\n\t      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
-						(len(cpd_all_attr), cpd_pname) + col_e)
+				print(col_y + '\n\tDetected %s Module(s) at %s [%0.6X]:\n\n\t      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
+						(len(cpd_all_attr), cpd_pname, cpd_poffset) + col_e)
+						
+				folder_name = mea_dir + os_dir + fw_name + os_dir + cpd_pname + ' [%0.6X]' % cpd_poffset + os_dir
+				
+			os.mkdir(folder_name)
 			
 			for detail in mod_details : print(detail)
+			
+			if cpd_pvalid : print(col_g + '\n\t    $CPD Checksum of partition "%s" is VALID' % cpd_pname + col_e)
+			else :
+				print(col_r + '\n\t    $CPD Checksum of partition "%s" is INVALID' % cpd_pname + col_e)
+				#input() # Debug
 			
 			#in_mod_name = input('\nEnter module name or * for all: ') # Asks at all Partitions, better use * for all
 			in_mod_name = '*'
@@ -1214,10 +1323,6 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				print(col_r + '\n\tError: Could not find module "%s"' % in_mod_name + col_e)
 				
 				return ker_start, ker_end # Invalid input, return function-essential Kernel info
-			
-			if cpd_pname not in ['LOCL','WCOD'] : folder_name = mea_dir + os_dir + fw_name + os_dir + cpd_pname + os_dir
-			else : folder_name = mea_dir + os_dir + fw_name + os_dir + '%s_%0.4X' % (cpd_pname, ext_inid) + os_dir
-			os.mkdir(folder_name)
 			
 			# Parse all Modules based on their Metadata
 			for mod in cpd_all_attr :
@@ -1258,47 +1363,59 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name) :
 				
 				# Extract & Ignore Encrypted Modules
 				if mod_encr == 1 :
-					print(col_y + '\n\t--> Stored Encrypted %s "%s" [0x%.5X - 0x%.5X]' % (mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
+					print(col_y + '\n\t--> Stored Encrypted %s "%s" [0x%.6X - 0x%.6X]' % (mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
 					
 					#print('\n\t    MOD: %s' % mod_hash) # Debug
 					
 					print(col_m + '\n\t    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					
-					os.rename(mod_fname, mod_fname[:-5] + '.encr') # Change file extension from .lzma to .encr
-					
-					#if mod_name != 'pavp' : input() # Debug
+					os.rename(mod_fname, mod_fname[:-5] + '.encr') # Change Module extension from .lzma to .encr
 					
 					continue # Module Encryption on top of Compression, skip decompression
 				else :
-					print(col_y + '\n\t--> Stored %s %s "%s" [0x%.5X - 0x%.5X]' % (comp[mod_comp], mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
+					print(col_y + '\n\t--> Stored %s %s "%s" [0x%.6X - 0x%.6X]' % (comp[mod_comp], mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
 				
 				# Extract & Validate Uncompressed Data
 				if mod_comp == 0 :
+					
 					# Manifest & Metadata
 					if '.man' in mod_name or '.met' in mod_name :
 						#print('\n\t    MN2: %s' % mn2_sig_dec) # Debug
 						#print('\t    MEA: %s' % mn2_sig_sha) # Debug
-					
-						if mn2_valid : print(col_g + '\n\t    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
+						
+						if mn2_error : print(col_m + '\n\t    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
+						elif mn2_valid : print(col_g + '\n\t    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
 						else :
 							print(col_r + '\n\t    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
 							#input() # Debug
+					
 					# Keys
 					elif '.key' in mod_name :
 						#print('\n\t    MN2: %s' % mn2_sig_dec) # Debug
 						#print('\t    MEA: %s' % mn2_sig_sha) # Debug
-					
-						if mn2_valid : print(col_g + '\n\t    RSA Signature of key "%s" is VALID' % mod_name + col_e)
+						
+						if mn2_error : print(col_m + '\n\t    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
+						elif mn2_valid : print(col_g + '\n\t    RSA Signature of key "%s" is VALID' % mod_name + col_e)
 						else :
 							print(col_r + '\n\t    RSA Signature of key "%s" is INVALID' % mod_name + col_e)
 							#input() # Debug
 							
-						os.rename(mod_fname, mod_fname[:-4]) # Change file extension from .mod to .key
+						os.rename(mod_fname, mod_fname[:-4]) # Change Key extension from .mod to .key
+					
+					elif 'upatch' in mod_name :
+						if mod_hash == 0 : print(col_g + '\n\t    Checksum of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						else :
+							print(col_r + '\n\t    Checksum of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							#input() # Debug
+							
+						os.rename(mod_fname, mod_fname[:-4] + '.bin') # Change Microcode extension from .mod to .bin
+					
 					# Data
 					elif mod_hash == 0 :
 						print(col_m + '\n\t    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						
-						os.rename(mod_fname, mod_fname[:-4]) # Change file extension from .mod to default
+						os.rename(mod_fname, mod_fname[:-4]) # Change Data extension from .mod to default
+					
 					# Modules
 					else :
 						mea_hash = sha_256(mod_data).upper()

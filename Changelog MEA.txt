@@ -1,8 +1,14 @@
-v1.16.2
+v1.16.3
 
-Engine x86 Huffman now decompress via Huffman11 python (-unp86)
-Greatly improved unpacking of TXE 3.x firmware (-unp86)
-Improved $CPD detection, robust pattern
+Added Engine x86 $CPD Extensions 16 (0x10) & 19 (0x13)
+Added Engine x86 Huffman Python decompression via Huffman11 (-unp86)
+Added Engine x86 $CPD Checksum validation when unpacking (-unp86)
+Greatly improved unpacking of TXE 3 & APL SPI firmware (-unp86)
+Improved Engine x86 $CPD detection via more robust patterns
+Fixed Engine x86 unpacking crash at duplicate names (-unp86)
+Fixed Engine x86 unpacking crash at empty RSA block (-unp86)
+Fixed Engine x86 unpacking crash when using MEA.exe (-unp86)
+Updated Engine Firmware Repository Database to r95
 
 v1.16.1
 
