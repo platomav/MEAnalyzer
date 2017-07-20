@@ -1,8 +1,23 @@
+v1.16.4
+
+Added Engine x86 $CPD Extensions 14, 19, 20, 21 and 50
+Added Engine x86 Extension info printing while unpacking (-ext86)
+Added Engine x86 Extension info unpacking report storing (-unp86)
+Added Engine x86 Metadata Hash validation when unpacking (-unp86)
+Added Engine x86 $FPT checksum validation when unpacking (-unp86)
+Added Engine x86 unimplemented $CPD Extensions detection (-unp86)
+Added better Apollo Lake SPI firmware unpacking & checks (-unp86)
+Fixed Engine x86 Module/Metadata Empty/Missing detection (-unp86)
+Fixed Engine x86 Empty/Missing Partition/Module skipping (-unp86)
+Fixed Engine x86 Key RSA Signature check when unpacking (-unp86)
+Fixed mistakes at CPD_Ext_10 & CPD_Ext_0E_Mod structures
+MEA now uses & requires PTable 3rd-party dependency (pip)
+
 v1.16.3
 
 Added Engine x86 $CPD Extensions 16 (0x10) & 19 (0x13)
 Added Engine x86 Huffman Python decompression via Huffman11 (-unp86)
-Added Engine x86 $CPD Checksum validation when unpacking (-unp86)
+Added Engine x86 $CPD checksum validation when unpacking (-unp86)
 Greatly improved unpacking of TXE 3 & APL SPI firmware (-unp86)
 Improved Engine x86 $CPD detection via more robust patterns
 Fixed Engine x86 unpacking crash at duplicate names (-unp86)
