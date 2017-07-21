@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.16.4'
+title = 'ME Analyzer v1.16.5'
 
 import os
 import re
@@ -1980,7 +1980,7 @@ def ext_anl(input_type, input_offset, file_end) :
 			cpd_entry_name = cpd_entry_hdr.Name
 			cpd_entry_size = cpd_entry_hdr.Size # Uncompressed only
 			cpd_entry_offset = cpd_offset + cpd_mod_off
-			mod_empty = 1
+			mod_empty = 0
 			
 			# Manifest & Metadata Skip
 			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name : continue
@@ -2010,14 +2010,14 @@ def ext_anl(input_type, input_offset, file_end) :
 						
 						mod_comp_size = cpd_mod_attr[mod][4] # Store Module Compressed Size for Empty check
 						mod_data = reading[cpd_entry_offset:cpd_entry_offset + mod_comp_size] # Store Module data for Empty check
-						if mod_data != b'\xFF' * mod_comp_size and cpd_entry_offset < file_end : cpd_mod_attr[mod][6] = 0 # Determine if Module is Empty/Missing
+						if mod_data == b'\xFF' * mod_comp_size or cpd_entry_offset > file_end : cpd_mod_attr[mod][6] = 1 # Determine if Module is Empty/Missing
 						
 						break
 			
 			# Key
 			elif '.key' in cpd_entry_name.decode('utf-8') :
 				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
-				if mod_data != b'\xFF' * cpd_entry_size and cpd_entry_offset < file_end : mod_empty = 0 # Determine if Key is Empty/Missing
+				if mod_data == b'\xFF' * cpd_entry_size or cpd_entry_offset > file_end : mod_empty = 1 # Determine if Key is Empty/Missing
 				
 				# Validate Key's RSA Signature
 				mn2_key_hdr = get_struct(reading, cpd_entry_offset, MN2_Manifest)
@@ -2028,7 +2028,7 @@ def ext_anl(input_type, input_offset, file_end) :
 			# Microcode
 			elif 'upatch' in cpd_entry_name.decode('utf-8') :
 				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
-				if mod_data != b'\xFF' * cpd_entry_size and cpd_entry_offset < file_end : mod_empty = 0 # Determine if Microcode is Empty/Missing
+				if mod_data == b'\xFF' * cpd_entry_size or cpd_entry_offset > file_end : mod_empty = 1 # Determine if Microcode is Empty/Missing
 				
 				# Detect actual Microcode length
 				mc_len = int.from_bytes(mod_data[0x20:0x24], 'little')
@@ -2039,7 +2039,7 @@ def ext_anl(input_type, input_offset, file_end) :
 			# Data
 			else :
 				mod_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
-				if mod_data != b'\xFF' * cpd_entry_size and cpd_entry_offset < file_end : mod_empty = 0 # Determine if Module is Empty/Missing
+				if mod_data == b'\xFF' * cpd_entry_size or cpd_entry_offset > file_end : mod_empty = 1 # Determine if Module is Empty/Missing
 				
 				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 		
@@ -2314,18 +2314,18 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, 
 						print(col_c + '\n    Decompressed %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						
 						mea_hash_u = sha_256(mod_data).upper() # Uncompressed (few LZMA Modules)
+						
+						if param.me11_mod_bug :
+							print('\n    MOD  : %s' % mod_hash) # Debug
+							print('    MEA C: %s' % mea_hash_c) # Debug
+							print('    MEA U: %s' % mea_hash_u) # Debug
+							
+						if mod_hash in [mea_hash_c,mea_hash_u] : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						else :
+							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							if param.me11_mod_bug : input() # Debug
 					except :
 						print(col_r + '\n    Failed to decompress %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						if param.me11_mod_bug : input() # Debug
-					
-					if param.me11_mod_bug :
-						print('\n    MOD  : %s' % mod_hash) # Debug
-						print('    MEA C: %s' % mea_hash_c) # Debug
-						print('    MEA U: %s' % mea_hash_u) # Debug
-					
-					if mod_hash == mea_hash_c or mod_hash == mea_hash_u : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-					else :
-						print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						if param.me11_mod_bug : input() # Debug
 				
 				# Extract & Decompress or Separate Huffman Modules

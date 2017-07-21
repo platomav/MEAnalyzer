@@ -68,6 +68,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -dfpt   : Shows info about the $FPT header (Research)
 * -dsku   : Shows verbose info about ME 11+ SKU (Research)
 * -unp86  : Unpacks fully all Engine x86 firmware (Research)
+* -ext86  : Prints Extension info at Engine x86 unpacking (Research)
 
 The following are Windows specific:
 
@@ -95,27 +96,29 @@ ME Analyzer has been tested to be compatible with Windows Vista-10, Ubuntu 16.04
 
 #### **C2. Code Prerequisites**
 
-To run ME Analyzer's python script, you need to have the following 3rd party Python module installed:
+To run ME Analyzer's python script, you need to have the following 3rd party Python modules installed:
 
-* [Colorama](https://pypi.python.org/pypi/colorama)
+* [Colorama](https://pypi.python.org/pypi/colorama/)
+* [PTable](https://github.com/kxxoling/PTable/tree/master/)
 
 To build/freeze/compile ME Analyzer's python script, you can use whatever you like. The following are verified to work:
 
-* [Py2exe](https://pypi.python.org/pypi/py2exe) (Windows)
-* [Py2app](https://pypi.python.org/pypi/py2app) (macOS)
-* [PyInstaller](https://pypi.python.org/pypi/PyInstaller/) (Windows/Linux/macOS)
+* [Py2exe](https://pypi.python.org/pypi/py2exe/) (Windows)
+* [Py2app](https://pypi.python.org/pypi/py2app/) (macOS)
+* [PyInstaller](https://github.com/pyinstaller/pyinstaller/tree/develop/) (Windows/Linux/macOS)
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
 PyInstaller can build/freeze/compile ME Analyzer at all three supported platforms, it is simple to run and gets updated often.
 
 1. Make sure you have Python 3.6 installed
-2. Use pip to install colorama module
-3. Use pip to install pyinstaller module
-4. Open a command prompt and execute:
+2. Use pip to install colorama (PyPi)
+3. Use pip to install PTable (Github, master branch)
+4. Use pip to install PyInstaller (Github, develop branch)
+5. Open a command prompt and execute:
 
 > pyinstaller --noupx --onefile MEA.py
 
 At dist folder you should find the final MEA executable
 
-**Note:** You need to use the [develop PyInstaller branch](https://github.com/pyinstaller/pyinstaller/tree/develop) to build with Python 3.6 currently.
+**Note:** You need to use the [develop PyInstaller branch](https://github.com/pyinstaller/pyinstaller/tree/develop/) to build with Python 3.6 currently.

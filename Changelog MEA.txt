@@ -1,3 +1,8 @@
+v1.16.5
+
+Fixed Engine x86 bug at Empty $CPD Entry detection (-unp86)
+Fixed Engine x86 bug at failed LZMA decompressions (-unp86)
+
 v1.16.4
 
 Added Engine x86 $CPD Extensions 14, 19, 20, 21 and 50
