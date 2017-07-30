@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.16.5'
+title = 'ME Analyzer v1.16.6'
 
 import os
 import re
@@ -1732,7 +1732,8 @@ def ext_anl(input_type, input_offset, file_end) :
 	start_man_match = -1
 	ext_print = []
 	ibbp_all = []
-	ibbp_found = []
+	ibbp_del = []
+	ibbp_bpm = ['IBBL', 'IBB', 'OBB']
 	cpd_ext_hash = []
 	cpd_mod_attr = []
 	cpd_ext_attr = []
@@ -1987,16 +1988,14 @@ def ext_anl(input_type, input_offset, file_end) :
 			
 			# Fill Module Attributes by single unified Metadata
 			if cpd_name == 'IBBP' : # APL IBBP
-				ibbp_all = ['IBBL', 'IBB', 'OBB'] # Store all IBBP Module names to exclude those missing but with Hash at .met (GREAT WORK INTEL...)
+				ibbp_all.append(cpd_entry_name.decode('utf-8')) # Store all IBBP Module names to exclude those missing but with Hash at .met (GREAT WORK INTEL...)
 				
 				# BPM.met > IBBL, IBB, OBB
 				for mod in range(len(cpd_mod_attr)) :
 					if cpd_mod_attr[mod][0] == cpd_entry_name.decode('utf-8') :
 						cpd_mod_attr[mod][4] = cpd_entry_size # Fill Module Uncompressed Size from $CPD Entry
 						cpd_mod_attr[mod][5] = cpd_entry_size # Fill Module Uncompressed Size from $CPD Entry
-						
 						cpd_ext_names.append(cpd_entry_name.decode('utf-8')) # To enter "Module with Metadata" section below
-						ibbp_found.append(cpd_entry_name.decode('utf-8')) # Store found IBBP Module names for missing deletion
 						
 						break
 			
@@ -2044,11 +2043,13 @@ def ext_anl(input_type, input_offset, file_end) :
 				cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, mod_empty, 0, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 		
 		# Remove missing APL IBBP Module Attributes
-		for ibbp in ibbp_all :
-			if ibbp not in ibbp_found : # Module has hash at unified Metadata but is actually missing
-				for mod_index in range(len(cpd_mod_attr)) :
-					if cpd_mod_attr[mod_index][0] == ibbp :
-						del cpd_mod_attr[mod_index] # Delete missing Module's Attributes
+		if len(ibbp_all) :
+			for ibbp in ibbp_bpm :
+				if ibbp not in ibbp_all : # Module has hash at unified Metadata but is actually missing
+					for mod_index in range(len(cpd_mod_attr)) :
+						if cpd_mod_attr[mod_index][0] == ibbp : ibbp_del.append(mod_index) # Store missing Module's Attributes
+						
+			for mod_index in ibbp_del : del cpd_mod_attr[mod_index] # Delete missing Module's Attributes
 		
 	return cpd_offset, cpd_mod_attr, cpd_ext_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2, ext_print, ext_dict, ext_tag_all
 
@@ -3958,15 +3959,17 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					if sku_me == "E09911C113220000" :
 						sku = "1.5MB"
 						sku_db = "1.5MB"
+						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_90_15MB')
+						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					elif sku_me == "EFD9FFCD0A430000" :
 						sku = "5MB"
 						sku_db = "5MB"
+						db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_90_5MB')
+						if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					else :
 						sku = col_r + "Error" + col_e + ", unknown ME 9.0 SKU!" + col_r + " *" + col_e
 						err_rep += 1
 						err_stor.append(sku)
-					
-					upd_found = True # 9.1 upgradable
 					
 					platform = "LPT"
 					
@@ -4053,8 +4056,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext_dict,ext_tag_all = ext_anl('$MN2', start_man_match, file_end) # Detect x86 Attributes
 				
 				# Set SKU Type via Extension 0C Attributes
-				if fw_0C_sku1 == 0 :
-					sku_init = 'Corporate' # 0 Corporate/Intel (1272K MFS)
+				if fw_0C_sku1 == 0 : # 0 Corporate/Intel (1272K MFS)
+					sku_init = 'Corporate'
 					sku_init_db = 'COR'
 				elif fw_0C_sku1 == 1 : # 1 Consumer/Intel (400K MFS)
 					sku_init = 'Consumer'

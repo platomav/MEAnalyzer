@@ -1,9 +1,4 @@
-v1.16.5
-
-Fixed Engine x86 bug at Empty $CPD Entry detection (-unp86)
-Fixed Engine x86 bug at failed LZMA decompressions (-unp86)
-
-v1.16.4
+v1.16.6
 
 Added Engine x86 $CPD Extensions 14, 19, 20, 21 and 50
 Added Engine x86 Extension info printing while unpacking (-ext86)
@@ -15,8 +10,12 @@ Added better Apollo Lake SPI firmware unpacking & checks (-unp86)
 Fixed Engine x86 Module/Metadata Empty/Missing detection (-unp86)
 Fixed Engine x86 Empty/Missing Partition/Module skipping (-unp86)
 Fixed Engine x86 Key RSA Signature check when unpacking (-unp86)
+Fixed Engine x86 bug at Empty $CPD Entry detection (-unp86)
+Fixed Engine x86 bug at failed LZMA decompressions (-unp86)
+Fixed crash at APL IBBP $CPD Partition unpacking (-unp86)
 Fixed mistakes at CPD_Ext_10 & CPD_Ext_0E_Mod structures
 MEA now uses & requires PTable 3rd-party dependency (pip)
+Updated Engine Firmware Repository Database to r96
 
 v1.16.3
 
