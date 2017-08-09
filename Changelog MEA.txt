@@ -1,3 +1,11 @@
+v1.16.7
+
+Added detection of ME 11.x Power Down Mitigation (PDM)
+Added robust SKU detection via Kernel for older ME 11.0
+Fixed Engine x86 false positive ROM-Bypass Release detection
+MEA now requires Huffman11 3rd-party dependency (Github)
+Updated Engine Firmware Repository Database to r97
+
 v1.16.6
 
 Added Engine x86 $CPD Extensions 14, 19, 20, 21 and 50

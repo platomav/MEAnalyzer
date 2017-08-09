@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.16.6'
+title = 'ME Analyzer v1.16.7'
 
 import os
 import re
@@ -34,6 +34,16 @@ col_g = colorama.Fore.GREEN + colorama.Style.BRIGHT
 col_y = colorama.Fore.YELLOW + colorama.Style.BRIGHT
 col_m = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
 col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
+
+# Import Huffman11 by IllegalArgument
+try :
+	sys.dont_write_bytecode = True
+	import huffman11 # https://github.com/IllegalArgument/Huffman11
+except ModuleNotFoundError :
+	print(col_r + '\nError: Huffman11 dependency not found, place huffman11.py at MEA directory!\n' + col_e)
+	input('Press enter to exit')
+	colorama.deinit()
+	sys.exit(-1)
 
 # Detect OS Platform
 mea_os = sys.platform
@@ -275,7 +285,7 @@ class CPD_Entry(ctypes.LittleEndianStructure) :
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("OffsetAttrib",	uint32_t),		# 0x0C (LE --> 0:24 Offset from $CPD, 25 Compressed No/Yes, 26:31 Reserved)
+		("OffsetAttrib",	uint32_t),		# 0x0C (LE --> 0:24 Offset from $CPD, 25 Huffman No/Yes, 26:31 Reserved)
 		("Size",			uint32_t),		# 0x10 (Uncompressed for LZMA/Huffman, Compressed at CPD_Ext_0A instead)
 		("Reserved",		uint32_t),		# 0x14
 		# 0x18
@@ -1717,7 +1727,7 @@ def x86_unpack(fpt_part_all, fw_type, file_end) :
 						
 		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,un1,un2,un3,un4,ext_print,ext_dict,ext_tag_all = ext_anl('$CPD', start_cpd_emod, file_end)
 						
-		mod_anl('extr', cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_dict, ext_tag_all)
+		mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_dict, ext_tag_all)
 	
 # Analyze Engine x86 $CPD Offset & Extensions
 # noinspection PyUnusedLocal
@@ -1818,7 +1828,7 @@ def ext_anl(input_type, input_offset, file_end) :
 			cpd_entry_hdr = get_struct(reading, cpd_offset + 0x10 + entry * 0x18, CPD_Entry)
 			cpd_off_attr = format(cpd_entry_hdr.OffsetAttrib, '032b') # 32 bits (LE)
 			cpd_mod_off = int(cpd_off_attr[7:], 2) # $CPD Entry Offset Attribute Address (from $CPD, 25 bits)
-			cpd_mod_comp = int(cpd_off_attr[6], 2) # $CPD Entry Offset Attribute Compressed (0 No, 1 Yes)
+			cpd_mod_huff = int(cpd_off_attr[6], 2) # $CPD Entry Offset Attribute Huffman (0 No, 1 Yes)
 			cpd_mod_res = int(cpd_off_attr[:6], 2) # $CPD Entry Offset Attribute Reserved (0, 6 bits)
 			cpd_entry_offset = cpd_offset + cpd_mod_off
 			cpd_entry_size = cpd_entry_hdr.Size # Uncompressed only
@@ -1957,7 +1967,7 @@ def ext_anl(input_type, input_offset, file_end) :
 						ext_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
 						if ext_data == b'\xFF' * cpd_entry_size or cpd_entry_offset > file_end : ext_empty = 1 # Determine if Extension is Empty/Missing
 						
-						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), cpd_mod_comp, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs, cpd_offset, cpd_valid])
+						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs, cpd_offset, cpd_valid])
 						cpd_ext_names.append(cpd_entry_name.decode('utf-8')[:-4]) # Store Module names which have Metadata
 						
 						break # Stop Extension scanning at the end of .man/.met
@@ -2054,9 +2064,8 @@ def ext_anl(input_type, input_offset, file_end) :
 	return cpd_offset, cpd_mod_attr, cpd_ext_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2, ext_print, ext_dict, ext_tag_all
 
 # Analyze & Store Engine x86 Modules
-def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_dict, ext_tag_all) :
-	ker_start = -1
-	ker_end = -1
+def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_dict, ext_tag_all) :
+	# noinspection PyUnusedLocal
 	mea_hash_u = 0
 	mea_hash_c = 0
 	comp = ['Uncompressed','Huffman','LZMA']
@@ -2075,326 +2084,305 @@ def mod_anl(action, cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, 
 			mod_names.append(mod[0]) # Store Module names
 			mod_details.append(('%12s \t%8s\t%4s\t    0x%.6X\t 0x%.6X      0x%.6X\t  %4s' %
 								(mod[0],comp[mod[1]],encr_empty[mod[2]],mod[3],mod[4],mod[5],encr_empty[mod[6]]))) # Store Module details
-			
-			# Store Kernel Start & End for SKU analysis
-			if mod[0] == 'kernel' :
-				ker_start = mod[3]
-				ker_end = ker_start + mod[4]
 		
-		if action == 'extr' :
-			# Parent Partition Attributes (same for all cpd_all_attr list instance entries)
-			cpd_pname = cpd_all_attr[0][8] # $CPD Name
-			cpd_poffset = cpd_all_attr[0][11] # $CPD Offset, covers any cases with duplicate name entries (Joule_C0-X64-Release)
-			cpd_pvalid = cpd_all_attr[0][12] # CPD Checksum Valid
-			ext_inid = cpd_all_attr[0][9] # Partition Instance ID
+		# Parent Partition Attributes (same for all cpd_all_attr list instance entries)
+		cpd_pname = cpd_all_attr[0][8] # $CPD Name
+		cpd_poffset = cpd_all_attr[0][11] # $CPD Offset, covers any cases with duplicate name entries (Joule_C0-X64-Release)
+		cpd_pvalid = cpd_all_attr[0][12] # CPD Checksum Valid
+		ext_inid = cpd_all_attr[0][9] # Partition Instance ID
+		
+		if 'LOCL' in cpd_pname or 'WCOD' in cpd_pname :
+			print(col_y + '\nDetected %s Module(s) at %s %0.4X [%0.6X]:\n\n      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
+					(len(cpd_all_attr), cpd_pname, ext_inid, cpd_poffset) + col_e)
 			
-			if 'LOCL' in cpd_pname or 'WCOD' in cpd_pname :
-				print(col_y + '\nDetected %s Module(s) at %s %0.4X [%0.6X]:\n\n      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
-						(len(cpd_all_attr), cpd_pname, ext_inid, cpd_poffset) + col_e)
-				
-				folder_name = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [%0.6X]' % (cpd_pname, ext_inid, cpd_poffset) + os_dir
-			else :
-				print(col_y + '\nDetected %s Module(s) at %s [%0.6X]:\n\n      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
-						(len(cpd_all_attr), cpd_pname, cpd_poffset) + col_e)
-						
-				folder_name = mea_dir + os_dir + fw_name + os_dir + cpd_pname + ' [%0.6X]' % cpd_poffset + os_dir
-				
-			os.mkdir(folder_name)
-			
-			for detail in mod_details : print(detail)
-			
-			if cpd_pvalid : print(col_g + '\n    $CPD Checksum of partition "%s" is VALID' % cpd_pname + col_e)
-			else :
-				print(col_r + '\n    $CPD Checksum of partition "%s" is INVALID' % cpd_pname + col_e)
-				if param.me11_mod_bug : input() # Debug
-			
-			#in_mod_name = input('\nEnter module name or * for all: ') # Asks at all Partitions, better use * for all
-			in_mod_name = '*'
-			
-			if in_mod_name not in mod_names and in_mod_name != '*' :
-				print(col_r + '\nError: Could not find module "%s"' % in_mod_name + col_e)
-				
-				return ker_start, ker_end # Invalid input, return function-essential Kernel info
-			
-			# Parse all Modules based on their Metadata
-			for mod in cpd_all_attr :
-				mod_name = mod[0] # Name
-				mod_comp = mod[1] # Compression
-				mod_encr = mod[2] # Encryption
-				mod_start = mod[3] # Starting Offset
-				mod_size_comp = mod[4] # Compressed Size
-				mod_size_uncomp = mod[5] # Uncompressed Size
-				mod_empty = mod[6] # Empty/Missing
-				mod_hash = mod[7] # Hash (LZMA --> Compressed + zeroes, Huffman --> Uncompressed)
-				mod_end = mod_start + mod_size_comp # Ending Offset
-				mn2_valid = mod[10][0] # RSA Signature Validation
-				# noinspection PyUnusedLocal
-				mn2_sig_dec = mod[10][1] # RSA Signature Decrypted
-				# noinspection PyUnusedLocal
-				mn2_sig_sha = mod[10][2] # RSA Signature Data Hash
-				mn2_error = mod[10][3] # RSA Signature Validation Error
-				
-				if in_mod_name != '*' and in_mod_name != mod_name : continue # Wait for requested Module only
-				
-				if mod_empty == 1 : continue # Skip Empty/Missing Modules
-				
-				if '.man' in mod_name or '.met' in mod_name :
-					mod_fname = folder_name + mod_name
-					mod_type = 'metadata'
-				else :
-					mod_fname = folder_name + '%s.%s' % (mod_name, fext[mod_comp])
-					mod_type = 'module'
+			folder_name = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [%0.6X]' % (cpd_pname, ext_inid, cpd_poffset) + os_dir
+		else :
+			print(col_y + '\nDetected %s Module(s) at %s [%0.6X]:\n\n      Module\tCompression   Encryption    Offset\t SizeComp    SizeUncomp   Empty\n' % \
+					(len(cpd_all_attr), cpd_pname, cpd_poffset) + col_e)
 					
-				mod_data = reading[mod_start:mod_end]
+			folder_name = mea_dir + os_dir + fw_name + os_dir + cpd_pname + ' [%0.6X]' % cpd_poffset + os_dir
+			
+		os.mkdir(folder_name)
+		
+		for detail in mod_details : print(detail)
+		
+		if cpd_pvalid : print(col_g + '\n    $CPD Checksum of partition "%s" is VALID' % cpd_pname + col_e)
+		else :
+			print(col_r + '\n    $CPD Checksum of partition "%s" is INVALID' % cpd_pname + col_e)
+			if param.me11_mod_bug : input() # Debug
+		
+		#in_mod_name = input('\nEnter module name or * for all: ') # Asks at all Partitions, better use * for all
+		in_mod_name = '*'
+		
+		if in_mod_name not in mod_names and in_mod_name != '*' : print(col_r + '\nError: Could not find module "%s"' % in_mod_name + col_e)
+		
+		# Parse all Modules based on their Metadata
+		for mod in cpd_all_attr :
+			mod_name = mod[0] # Name
+			mod_comp = mod[1] # Compression
+			mod_encr = mod[2] # Encryption
+			mod_start = mod[3] # Starting Offset
+			mod_size_comp = mod[4] # Compressed Size
+			mod_size_uncomp = mod[5] # Uncompressed Size
+			mod_empty = mod[6] # Empty/Missing
+			mod_hash = mod[7] # Hash (LZMA --> Compressed + zeroes, Huffman --> Uncompressed)
+			mod_end = mod_start + mod_size_comp # Ending Offset
+			mn2_valid = mod[10][0] # RSA Signature Validation
+			# noinspection PyUnusedLocal
+			mn2_sig_dec = mod[10][1] # RSA Signature Decrypted
+			# noinspection PyUnusedLocal
+			mn2_sig_sha = mod[10][2] # RSA Signature Data Hash
+			mn2_error = mod[10][3] # RSA Signature Validation Error
+			
+			if in_mod_name != '*' and in_mod_name != mod_name : continue # Wait for requested Module only
+			
+			if mod_empty == 1 : continue # Skip Empty/Missing Modules
+			
+			if '.man' in mod_name or '.met' in mod_name :
+				mod_fname = folder_name + mod_name
+				mod_type = 'metadata'
+			else :
+				mod_fname = folder_name + '%s.%s' % (mod_name, fext[mod_comp])
+				mod_type = 'module'
+				
+			mod_data = reading[mod_start:mod_end]
 
-				# Initialization for Module Storing
-				if mod_comp == 2 :
-					# Calculate LZMA Module SHA256 hash
-					mea_hash_c = sha_256(mod_data).upper() # Compressed, Header zeroes included (most LZMA Modules)
-					
-					# Remove zeroes from LZMA header for decompression (inspired from Igor Skochinsky's me_unpack)
-					if mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
-						mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for compressed module
+			# Initialization for Module Storing
+			if mod_comp == 2 :
+				# Calculate LZMA Module SHA256 hash
+				mea_hash_c = sha_256(mod_data).upper() # Compressed, Header zeroes included (most LZMA Modules)
 				
-				# Store Metadata or Module for further actions
-				with open(mod_fname, 'w+b') as mod_file : mod_file.write(mod_data)
+				# Remove zeroes from LZMA header for decompression (inspired from Igor Skochinsky's me_unpack)
+				if mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
+					mod_data = mod_data[:0xE] + mod_data[0x11:] # Visually, mod_size_comp += -3 for compressed module
+			
+			# Store Metadata or Module for further actions
+			with open(mod_fname, 'w+b') as mod_file : mod_file.write(mod_data)
+			
+			# Extract & Ignore Encrypted Modules
+			if mod_encr == 1 :
+				print(col_y + '\n--> Stored Encrypted %s "%s" [0x%.6X - 0x%.6X]' % (mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
 				
-				# Extract & Ignore Encrypted Modules
-				if mod_encr == 1 :
-					print(col_y + '\n--> Stored Encrypted %s "%s" [0x%.6X - 0x%.6X]' % (mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
+				if param.me11_mod_bug : print('\n    MOD: %s' % mod_hash) # Debug
+				
+				print(col_m + '\n    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
+				
+				os.rename(mod_fname, mod_fname[:-5] + '.encr') # Change Module extension from .lzma to .encr
+				
+				continue # Module Encryption on top of Compression, skip decompression
+			else :
+				print(col_y + '\n--> Stored %s %s "%s" [0x%.6X - 0x%.6X]' % (comp[mod_comp], mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
+			
+			# Extract & Validate Uncompressed Data
+			if mod_comp == 0 :
+				
+				# Manifest
+				if '.man' in mod_name :
+					if param.me11_mod_bug :
+						print('\n    MN2: %s' % mn2_sig_dec) # Debug
+						print('    MEA: %s' % mn2_sig_sha) # Debug
 					
-					if param.me11_mod_bug : print('\n    MOD: %s' % mod_hash) # Debug
+					if mn2_error : print(col_m + '\n    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
+					elif mn2_valid : print(col_g + '\n    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
+					else :
+						print(col_r + '\n    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
+						if param.me11_mod_bug : input() # Debug
+				
+				# Metadata
+				elif '.met' in mod_name :
+					mea_hash = sha_256(mod_data).upper()
 					
+					if param.me11_mod_bug :
+						print('\n    MOD: %s' % mod_hash) # Debug
+						print('    MEA: %s' % mea_hash) # Debug
+				
+					if mod_hash == mea_hash : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					else :
+						print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						if param.me11_mod_bug : input() # Debug
+				
+				# Key
+				elif '.key' in mod_name :
+					if param.me11_mod_bug :
+						print('\n    MN2: %s' % mn2_sig_dec) # Debug
+						print('    MEA: %s' % mn2_sig_sha) # Debug
+					
+					if mn2_error : print(col_m + '\n    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
+					elif mn2_valid : print(col_g + '\n    RSA Signature of key "%s" is VALID' % mod_name + col_e)
+					else :
+						print(col_r + '\n    RSA Signature of key "%s" is INVALID' % mod_name + col_e)
+						if param.me11_mod_bug : input() # Debug
+
+					os.rename(mod_fname, mod_fname[:-4]) # Change Key extension from .mod to .key
+					
+					mod_fname = mod_fname[:-4] # To save Key Extension info file
+					
+					# Analyze all Key Extensions (Key Metadata stored within equivalent Module)
+					# Almost identical parent code at ext_anl > Manifest & Metadata Analysis > Extensions
+					with open(mod_fname, 'r+b') as key_file :
+						key_data = key_file.read()
+						cpd_ext_offset = int.from_bytes(key_data[0x4:0x8], 'little') * 4 # End of Key $MN2
+						
+						ext_print.append(mod_name) # Store Key name
+						ext_tag = int.from_bytes(key_data[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Key Extension Tag
+						loop_break = 0 # To trigger break at infinite loop
+						
+						while True :
+							
+							# Break loop just in case it becomes infinite
+							loop_break += 1
+							if loop_break > 100 :
+								gen_msg(err_stor, col_r + 'Error: Forced $CPD Extension Analysis break after 100 loops at FTPR > %s, please report it!' % cpd_entry_name.decode('utf-8') + col_e, 'unp')
+								if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue...') # Debug
+								
+								break
+				
+							# Skip parsing of unimplemented $CPD Extensions & notify user
+							if ext_tag not in ext_tag_all :
+								gen_msg(err_stor, col_r + 'Error: Found unimplemented $CPD Extension 0x%0.2X at FTPR > %s, please report it!' % (ext_tag, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+								ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Key Extension Tag
+								if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue...') # Debug
+							
+							cpd_ext_size = int.from_bytes(key_data[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+							
+							if 'CPD_Ext_%0.2X' % ext_tag in ext_dict :
+								ext_struct = ext_dict['CPD_Ext_%0.2X' % ext_tag]
+								ext_length = ctypes.sizeof(ext_struct)
+				
+								ext_hdr_p = get_struct(key_data, cpd_ext_offset, ext_struct)
+								ext_print_temp.append(ext_hdr_p.ext_print())
+				
+								if 'CPD_Ext_%0.2X_Mod' % ext_tag in ext_dict :
+									mod_struct = ext_dict['CPD_Ext_%0.2X_Mod' % ext_tag]
+									cpd_mod_offset = cpd_ext_offset + ext_length
+					
+									while cpd_mod_offset < cpd_ext_offset + cpd_ext_size :
+										mod_hdr_p = get_struct(key_data, cpd_mod_offset, mod_struct)
+										mod_length = ctypes.sizeof(mod_struct)
+										ext_print_temp.append(mod_hdr_p.ext_print())
+						
+										cpd_mod_offset += mod_length
+									
+							cpd_ext_offset += cpd_ext_size
+				
+							if cpd_ext_offset + 1 > len(key_data) : break # End of Key reached
+				
+							ext_tag = int.from_bytes(key_data[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Key Extension Tag
+					
+						ext_print.append(ext_print_temp) # Store Key Extension Info
+				
+				# Microcode
+				elif 'upatch' in mod_name :
+					if mod_hash == 0 : print(col_g + '\n    Checksum of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					else :
+						print(col_r + '\n    Checksum of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						if param.me11_mod_bug : input() # Debug
+						
+					os.rename(mod_fname, mod_fname[:-4] + '.bin') # Change Microcode extension from .mod to .bin
+				
+				# Data
+				elif mod_hash == 0 :
 					print(col_m + '\n    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					
-					os.rename(mod_fname, mod_fname[:-5] + '.encr') # Change Module extension from .lzma to .encr
-					
-					continue # Module Encryption on top of Compression, skip decompression
-				else :
-					print(col_y + '\n--> Stored %s %s "%s" [0x%.6X - 0x%.6X]' % (comp[mod_comp], mod_type, mod_name, mod_start, mod_end - 0x1) + col_e)
+					os.rename(mod_fname, mod_fname[:-4]) # Change Data extension from .mod to default
 				
-				# Extract & Validate Uncompressed Data
-				if mod_comp == 0 :
+				# Module
+				else :
+					mea_hash = sha_256(mod_data).upper()
 					
-					# Manifest
-					if '.man' in mod_name :
-						if param.me11_mod_bug :
-							print('\n    MN2: %s' % mn2_sig_dec) # Debug
-							print('    MEA: %s' % mn2_sig_sha) # Debug
-						
-						if mn2_error : print(col_m + '\n    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
-						elif mn2_valid : print(col_g + '\n    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
-						else :
-							print(col_r + '\n    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
-							if param.me11_mod_bug : input() # Debug
-					
-					# Metadata
-					elif '.met' in mod_name :
-						mea_hash = sha_256(mod_data).upper()
-						
-						if param.me11_mod_bug :
-							print('\n    MOD: %s' % mod_hash) # Debug
-							print('    MEA: %s' % mea_hash) # Debug
-					
-						if mod_hash == mea_hash : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						else :
-							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							if param.me11_mod_bug : input() # Debug
-					
-					# Key
-					elif '.key' in mod_name :
-						if param.me11_mod_bug :
-							print('\n    MN2: %s' % mn2_sig_dec) # Debug
-							print('    MEA: %s' % mn2_sig_sha) # Debug
-						
-						if mn2_error : print(col_m + '\n    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
-						elif mn2_valid : print(col_g + '\n    RSA Signature of key "%s" is VALID' % mod_name + col_e)
-						else :
-							print(col_r + '\n    RSA Signature of key "%s" is INVALID' % mod_name + col_e)
-							if param.me11_mod_bug : input() # Debug
-
-						os.rename(mod_fname, mod_fname[:-4]) # Change Key extension from .mod to .key
-						
-						mod_fname = mod_fname[:-4] # To save Key Extension info file
-						
-						# Analyze all Key Extensions (Key Metadata stored within equivalent Module)
-						# Almost identical parent code at ext_anl > Manifest & Metadata Analysis > Extensions
-						with open(mod_fname, 'r+b') as key_file :
-							key_data = key_file.read()
-							cpd_ext_offset = int.from_bytes(key_data[0x4:0x8], 'little') * 4 # End of Key $MN2
-							
-							ext_print.append(mod_name) # Store Key name
-							ext_tag = int.from_bytes(key_data[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Initial Key Extension Tag
-							loop_break = 0 # To trigger break at infinite loop
-							
-							while True :
-								
-								# Break loop just in case it becomes infinite
-								loop_break += 1
-								if loop_break > 100 :
-									gen_msg(err_stor, col_r + 'Error: Forced $CPD Extension Analysis break after 100 loops at FTPR > %s, please report it!' % cpd_entry_name.decode('utf-8') + col_e, 'unp')
-									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue...') # Debug
-									
-									break
-					
-								# Skip parsing of unimplemented $CPD Extensions & notify user
-								if ext_tag not in ext_tag_all :
-									gen_msg(err_stor, col_r + 'Error: Found unimplemented $CPD Extension 0x%0.2X at FTPR > %s, please report it!' % (ext_tag, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
-									ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Key Extension Tag
-									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue...') # Debug
-								
-								cpd_ext_size = int.from_bytes(key_data[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
-								
-								if 'CPD_Ext_%0.2X' % ext_tag in ext_dict :
-									ext_struct = ext_dict['CPD_Ext_%0.2X' % ext_tag]
-									ext_length = ctypes.sizeof(ext_struct)
-					
-									ext_hdr_p = get_struct(key_data, cpd_ext_offset, ext_struct)
-									ext_print_temp.append(ext_hdr_p.ext_print())
-					
-									if 'CPD_Ext_%0.2X_Mod' % ext_tag in ext_dict :
-										mod_struct = ext_dict['CPD_Ext_%0.2X_Mod' % ext_tag]
-										cpd_mod_offset = cpd_ext_offset + ext_length
-						
-										while cpd_mod_offset < cpd_ext_offset + cpd_ext_size :
-											mod_hdr_p = get_struct(key_data, cpd_mod_offset, mod_struct)
-											mod_length = ctypes.sizeof(mod_struct)
-											ext_print_temp.append(mod_hdr_p.ext_print())
-							
-											cpd_mod_offset += mod_length
-										
-								cpd_ext_offset += cpd_ext_size
-					
-								if cpd_ext_offset + 1 > len(key_data) : break # End of Key reached
-					
-								ext_tag = int.from_bytes(key_data[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Key Extension Tag
-						
-							ext_print.append(ext_print_temp) # Store Key Extension Info
-					
-					# Microcode
-					elif 'upatch' in mod_name :
-						if mod_hash == 0 : print(col_g + '\n    Checksum of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						else :
-							print(col_r + '\n    Checksum of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							if param.me11_mod_bug : input() # Debug
-							
-						os.rename(mod_fname, mod_fname[:-4] + '.bin') # Change Microcode extension from .mod to .bin
-					
-					# Data
-					elif mod_hash == 0 :
-						print(col_m + '\n    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						
-						os.rename(mod_fname, mod_fname[:-4]) # Change Data extension from .mod to default
-					
-					# Module
+					if param.me11_mod_bug :
+						print('\n    MOD: %s' % mod_hash) # Debug
+						print('    MEA: %s' % mea_hash) # Debug
+				
+					if mod_hash == mea_hash : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					else :
-						mea_hash = sha_256(mod_data).upper()
-						
-						if param.me11_mod_bug :
-							print('\n    MOD: %s' % mod_hash) # Debug
-							print('    MEA: %s' % mea_hash) # Debug
-					
-						if mod_hash == mea_hash : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						else :
-							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							if param.me11_mod_bug : input() # Debug
-					
-				# Extract & Decompress LZMA Modules
-				if mod_comp == 2 :
-					try :
-						# Decompress LZMA Module via Python
-						# noinspection PyArgumentList
-						mod_data = lzma.LZMADecompressor().decompress(mod_data)
-						
-						# Add missing EOF Padding when needed (usually at NFTP.ptt Module)
-						data_size_uncomp = len(mod_data)
-						if data_size_uncomp != mod_size_uncomp : mod_data += b'\xFF' * (mod_size_uncomp - data_size_uncomp) 
-						
-						mod_fname = mod_fname[:-5] + '.mod'
-						with open(mod_fname, 'w+b') as mod_file : mod_file.write(mod_data)
-						print(col_c + '\n    Decompressed %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						
-						mea_hash_u = sha_256(mod_data).upper() # Uncompressed (few LZMA Modules)
-						
-						if param.me11_mod_bug :
-							print('\n    MOD  : %s' % mod_hash) # Debug
-							print('    MEA C: %s' % mea_hash_c) # Debug
-							print('    MEA U: %s' % mea_hash_u) # Debug
-							
-						if mod_hash in [mea_hash_c,mea_hash_u] : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						else :
-							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							if param.me11_mod_bug : input() # Debug
-					except :
-						print(col_r + '\n    Failed to decompress %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						if param.me11_mod_bug : input() # Debug
 				
-				# Extract & Decompress or Separate Huffman Modules
-				if mod_comp == 1 :
-					# Decompress Huffman Module via Huffman11 by IllegalArgument (https://github.com/IllegalArgument/Huffman11)
-					# Download Huffman11.py and place it at MEA dir
+			# Extract & Decompress LZMA Modules
+			if mod_comp == 2 :
+				try :
+					# Decompress LZMA Module via Python
+					# noinspection PyArgumentList
+					mod_data = lzma.LZMADecompressor().decompress(mod_data)
 					
-					try :
-						sys.dont_write_bytecode = True
-						import Huffman11
+					# Add missing EOF Padding when needed (usually at NFTP.ptt Module)
+					data_size_uncomp = len(mod_data)
+					if data_size_uncomp != mod_size_uncomp : mod_data += b'\xFF' * (mod_size_uncomp - data_size_uncomp) 
 					
-						mod_dname = mod_fname[:-5] + '.mod'
+					mod_fname = mod_fname[:-5] + '.mod'
+					with open(mod_fname, 'w+b') as mod_file : mod_file.write(mod_data)
+					print(col_c + '\n    Decompressed %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					
-						# noinspection PyUnusedLocal
-						with open(mod_fname, 'r+b') as mod_cfile :
+					mea_hash_u = sha_256(mod_data).upper() # Uncompressed (few LZMA Modules)
+					
+					if param.me11_mod_bug :
+						print('\n    MOD  : %s' % mod_hash) # Debug
+						print('    MEA C: %s' % mea_hash_c) # Debug
+						print('    MEA U: %s' % mea_hash_u) # Debug
+						
+					if mod_hash in [mea_hash_c,mea_hash_u] : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					else :
+						print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						if param.me11_mod_bug : input() # Debug
+				except :
+					print(col_r + '\n    Failed to decompress %s %s "%s" via Python' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					if param.me11_mod_bug : input() # Debug
+			
+			# Extract Huffman Modules & Decompress via Huffman11
+			if mod_comp == 1 :					
+				try :
+					mod_dname = mod_fname[:-5] + '.mod'
+				
+					# noinspection PyUnusedLocal
+					with open(mod_fname, 'r+b') as mod_cfile :
+						
+						if param.me11_mod_bug :
+							mod_ddata = huffman11.huffman_decompress(mod_cfile.read(), mod_size_comp, mod_size_uncomp) # Debug
+						else :
+							with open(os.devnull, 'w') as devnull:
+								with contextlib.redirect_stdout(devnull): # Hide output
+									mod_ddata = huffman11.huffman_decompress(mod_cfile.read(), mod_size_comp, mod_size_uncomp)
+					
+						with open(mod_dname, 'w+b') as mod_dfile : mod_dfile.write(mod_ddata)
+						
+					if os.path.isfile(mod_dname) :
+						print(col_c + '\n    Decompressed %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+								
+						# Open decompressed Huffman module for hash validation
+						with open(mod_dname, 'r+b') as mod_dfile :
+							mea_hash = sha_256(mod_dfile.read()).upper()
 							
 							if param.me11_mod_bug :
-								mod_ddata = Huffman11.huffman_decompress(mod_cfile.read(), mod_size_comp, mod_size_uncomp) # Debug
-							else :
-								with open(os.devnull, 'w') as devnull:
-									with contextlib.redirect_stdout(devnull): # Hide output
-										mod_ddata = Huffman11.huffman_decompress(mod_cfile.read(), mod_size_comp, mod_size_uncomp)
-						
-							with open(mod_dname, 'w+b') as mod_dfile : mod_dfile.write(mod_ddata)
-							
-						if os.path.isfile(mod_dname) :
-							print(col_c + '\n    Decompressed %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+								print('\n    MOD: %s' % mod_hash) # Debug
+								print('    MEA: %s' % mea_hash) # Debug
 									
-							# Open decompressed Huffman module for hash validation
-							with open(mod_dname, 'r+b') as mod_dfile :
-								mea_hash = sha_256(mod_dfile.read()).upper()
-								
-								if param.me11_mod_bug :
-									print('\n    MOD: %s' % mod_hash) # Debug
-									print('    MEA: %s' % mea_hash) # Debug
-										
-								if mod_hash == mea_hash : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-								else :
-									print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-									if param.me11_mod_bug : input() # Debug
-						else :
-							raise Exception('Decompressed file not found!')
-					
-					except ModuleNotFoundError :
-						print(col_r + '\n    Huffman11 by IllegalArgument not found! Place Huffman11.py at MEA folder' + col_e)
-						print(col_r + '\n    Failed to decompress %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						if param.me11_mod_bug : input() # Debug
-					except :
-						print(col_r + '\n    Failed to decompress %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						if param.me11_mod_bug : input() # Debug
-					
-				# Print Manifest/Metadata/Key Extension Info
-				ext_print_len = len(ext_print) # Length of Extension Info list (must be after Key extraction)
-				if mod_type == 'metadata' or '.key' in mod_name :
-					ansi_escape = re.compile(r'\x1b[^m]*m') # Generate ANSI Color and Font Escape Character Sequences
-					for index in range(0, ext_print_len, 2) : # Only Name (index), skip Info (index + 1)
-						if str(ext_print[index]).startswith(mod_name) :
-							if param.me11_mod_ext : print() # Print Manifest/Metadata/Key Extension Info
-							for ext in ext_print[index + 1] :
-								ext_str = ansi_escape.sub('', str(ext)) # Ignore Colorama ANSI Escape Character Sequences
-								with open(mod_fname + '.txt', 'a') as text_file : text_file.write('\n%s' % ext_str)
-								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
-							break
+							if mod_hash == mea_hash : print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							else :
+								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+								if param.me11_mod_bug : input() # Debug
+					else :
+						raise Exception('Decompressed file not found!')
 				
-				if in_mod_name == mod_name : break # Store only requested Module
-				elif in_mod_name == '*' : pass # Store all Modules
-		
-	return ker_start, ker_end
+				except :
+					print(col_r + '\n    Failed to decompress %s %s "%s" via Huffman11 by IllegalArgument' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					if param.me11_mod_bug : input() # Debug
+				
+			# Print Manifest/Metadata/Key Extension Info
+			ext_print_len = len(ext_print) # Length of Extension Info list (must be after Key extraction)
+			if mod_type == 'metadata' or '.key' in mod_name :
+				ansi_escape = re.compile(r'\x1b[^m]*m') # Generate ANSI Color and Font Escape Character Sequences
+				for index in range(0, ext_print_len, 2) : # Only Name (index), skip Info (index + 1)
+					if str(ext_print[index]).startswith(mod_name) :
+						if param.me11_mod_ext : print() # Print Manifest/Metadata/Key Extension Info
+						for ext in ext_print[index + 1] :
+							ext_str = ansi_escape.sub('', str(ext)) # Ignore Colorama ANSI Escape Character Sequences
+							with open(mod_fname + '.txt', 'a') as text_file : text_file.write('\n%s' % ext_str)
+							if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
+						break
+			
+			if in_mod_name == mod_name : break # Store only requested Module
+			elif in_mod_name == '*' : pass # Store all Modules
 
 # Analyze Engine x86 KROD block	
 def krod_anl() :
@@ -2651,8 +2639,8 @@ for file_in in source :
 	fit_platform = 'NaN'
 	text_ubu_pre = 'NaN'
 	fw_in_db_found = 'No'
-	pos_sku_ker = 'Unknown'
-	pos_sku_fit = 'Unknown'
+	pos_sku_ker = 'Invalid'
+	pos_sku_fit = 'Invalid'
 	pos_sku_ext = 'Unknown'
 	byp_match = None
 	man_match = None
@@ -3433,7 +3421,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if fpt_pre_hdr is not None and ((variant == "ME" and major >= 11) or (variant == "TXE" and major >= 3) or (variant == "SPS" and major >= 4)) :
 					# noinspection PyUnboundLocalVariable
 					byp_x86 = fpt_pre_hdr.ROMB_Instr_0 # Check x86 Engine ROM-Bypass Instruction 0
-					if not fpt_romb_used and byp_x86 == 0 : fpt_romb_found = False # x86 Engine ROMB depends on $FPT Offset/Size + Instructions
+					if not fpt_romb_used or byp_x86 == 0 : fpt_romb_found = False # x86 Engine ROMB depends on $FPT Offset/Size + Instructions
 			
 			# PRD/PRE/BYP must be after ME-REC Module Release Detection
 			if me_rec_ffs : release = "ME Recovery Module"
@@ -4067,7 +4055,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					sku_init_db = 'SLM'
 				
 				# Set SKU Platform via Extension 0C Attributes (>= 11.0.0.1205)
-				if (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1205))) or minor > 0 :
+				if minor > 0 or (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1205))) :
 					if fw_0C_sku2 == 0 : pos_sku_ext = 'H'
 					elif fw_0C_sku2 == 1 : pos_sku_ext = 'LP'
 				else : pos_sku_ext = 'Invalid'
@@ -4077,47 +4065,32 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				elif fw_0C_lbg == 1 : lbg_support = 'Yes'
 				else : lbg_support = 'Unknown'
 				
-				ker_start,ker_end = mod_anl('anl', cpd_offset, cpd_mod_attr, cpd_ext_attr, '', [], {}, []) # Module Analysis for all 11.x
-				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
 				# Some early firmware are reported as PRD even though they are PRE
 				if release == "Production" and rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95" :
 					release = "Pre-Production"
 					rel_db = 'PRE'
-				
-				# Kernel Analysis for all 11.x
-				ker_sku = reading[ker_start + 0x700:ker_start + 0x900] # Actual range is 0x780 - 0x840
-						
-				match_1_h = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x15')).search(ker_sku)
-				match_1_lp = (re.compile(br'\x56\xA6\xF5\x9A\xC4\xA6\xDB\x69\x3C\x7A\x11')).search(ker_sku)
-				
-				match_2_h = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x50')).search(ker_sku)
-				match_2_lp = (re.compile(br'\x6A\x6F\x59\xAC\x4A\x6D\xB6\x93\xC7\xA1\x11')).search(ker_sku)
-				
-				match_3_h = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x0A')).search(ker_sku)
-				match_3_lp = (re.compile(br'\xAB\x53\x7A\xCD\x62\x53\x6D\xB4\x9E\x3D\x08')).search(ker_sku)
-						
-				match_4_h = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\xA8')).search(ker_sku)
-				match_4_lp = (re.compile(br'\xB5\x37\xAC\xD6\x25\x36\xDB\x49\xE3\xD0\x88')).search(ker_sku)
-					
-				match_5_h = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x54')).search(ker_sku)
-				match_5_lp = (re.compile(br'\x5A\x9B\xD6\x6B\x12\x9B\x6D\xA4\xF1\xE8\x44')).search(ker_sku)
-					
-				match_6_h = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\x42')).search(ker_sku)
-				#match_6_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x85\xXX')).search(ker_sku)
-
-				#match_7_h = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x84\xXX')).search(ker_sku)
-				match_7_lp = (re.compile(br'\xA9\xBD\x66\xB1\x29\xB6\xDA\x4F\x1E\x84\x46')).search(ker_sku)
-					
-				match_8_h = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x2A')).search(ker_sku)
-				match_8_lp = (re.compile(br'\xAD\x4D\xEB\x35\x89\x4D\xB6\xD2\x78\xF4\x22')).search(ker_sku)
-						
-				match_9_h = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\xA1')).search(ker_sku)
-				match_9_lp = (re.compile(br'\xD4\xDE\xB3\x58\x94\xDB\x6D\x27\x8F\x42\x23')).search(ker_sku)
-				
-				if any(m is not None for m in (match_1_h,match_2_h,match_3_h,match_4_h,match_5_h,match_6_h,match_8_h,match_9_h)) : pos_sku_ker = "H"
-				elif any(m is not None for m in (match_1_lp,match_2_lp,match_3_lp,match_4_lp,match_5_lp,match_7_lp,match_8_lp,match_9_lp)) : pos_sku_ker = "LP"
+							
+				# SKU not in Extension 0C, scan decompressed FTPR > kernel
+				if pos_sku_ext == 'Invalid' :
+					for mod in cpd_mod_attr :
+						if mod[0] == 'kernel' :
+							with open(os.devnull, 'w') as devnull:
+								with contextlib.redirect_stdout(devnull): # Hide output
+									ker_decomp = huffman11.huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5])
+								
+							# 0F22D88D65F85B5E5DC355B8 (56 & AA for H, 60 & A0 for LP)
+							sku_pat = re.compile(br'\x0F\x22\xD8\x8D\x65\xF8\x5B\x5E\x5D\xC3\x55\xB8').search(ker_decomp)
+							
+							if sku_pat :
+								sku_byte_1 = ker_decomp[sku_pat.end():sku_pat.end() + 0x1]
+								sku_byte_2 = ker_decomp[sku_pat.end() + 0x17:sku_pat.end() + 0x18]
+								sku_bytes = binascii.b2a_hex(sku_byte_1 + sku_byte_2).decode('utf-8').upper()
+								if sku_bytes == '56AA' : pos_sku_ker = 'H'
+								elif sku_bytes == '60A0' : pos_sku_ker = 'LP'
+								
+							break # Skip rest of FTPR modules
 				
 				# FIT Platform SKU for all 11.x
 				if sku_check != "NaN" :
@@ -4179,9 +4152,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				elif '-H' in fit_platform : pos_sku_fit = "H"
 				
 				if pos_sku_ext in ['Unknown','Invalid'] : # SKU not retreived from Extension 0C
-					if pos_sku_ker == 'Unknown' : # SKU not retreived from Kernel
+					if pos_sku_ker == 'Invalid' : # SKU not retreived from Kernel
 						if sku == 'NaN' : # SKU not retreived from manual MEA DB entry
-							if pos_sku_fit == 'Unknown' : # SKU not retreived from Flash Image Tool
+							if pos_sku_fit == 'Invalid' : # SKU not retreived from Flash Image Tool
 								sku = col_r + 'Error' + col_e + ', unknown ME %s.%s %s SKU!' % (major,minor,sku_init) + col_r + ' *' + col_e
 								err_rep += 1
 								err_stor.append(sku)
@@ -4242,13 +4215,13 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					
 					platform = "KBP"
 				
-				# 11.6 : Skylake/Kabylake, Sunrise/Union Point
+				# 11.6 : Skylake/Kabylake, Sunrise Point/Union Point
 				elif minor == 6 :
 					platform = "SPT/KBP"
 				
-				# 11.7 : Skylake/Kabylake/Kabylake-R, Sunrise/Union Point
+				# 11.7 : Skylake/Kabylake/Kabylake-R, Sunrise Point/Union Point/Union Point Refresh
 				elif minor == 7 :
-					platform = "SPT/KBP"
+					platform = "SPT/KBP/KBP-R"
 					
 				# 11.10 : Skylake-X/Kabylake-X, Basin Falls
 				elif minor == 10 :
@@ -4264,21 +4237,34 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					err_rep += 1
 					err_stor.append(sku)
 				
-				# Power Down Mitigation (PDM) is an SPT-LP C0 erratum, first fixed at ~11.0.0.1183
-				# Hardcoded in FTPR > BUP, cannot detect compression patterns to separate PDM/NOPDM
-				# Assumed fixed at KBP-LP A0 but 11.6 has PDM firmware for KBL-upgraded SPT-LP C0
-				# 11.0 PDM firmware is tagged accordingly at separate binaries (trustworthy)
-				# 11.6-7 PDM firmware tags cannot be trusted, two Kits (SPT/different & KBP/copy)
-				# PDM status can be seen at LSB of FW Status Register 3, not trustworthy at 11.6-7
+				# Power Down Mitigation (PDM) is a SPT-LP C0 erratum, first fixed at ~11.0.0.1183
+				# Hardcoded in FTPR > BUP, decompression required to detect NPDM/YPDM via pattern
+				# Hard-fixed at KBP-LP A0 but 11.6-7 have PDM firmware for KBL-upgraded SPT-LP C0
 				if ' H' in sku :
-					pdm_status = 'NaN'
+					pdm_status = 'NaN' # LP-only
 				else :
-					if 'YPDM' in sku_pdm : pdm_status = 'Yes'
-					elif 'NPDM' in sku_pdm : pdm_status = 'No'
-					elif 'UPDM1' in sku_pdm : pdm_status = 'Unknown 1'
-					elif 'UPDM2' in sku_pdm : pdm_status = 'Unknown 2'
+					# PDM not in DB, scan decompressed FTPR > bup
+					if sku_pdm not in ['NPDM','YPDM'] :
+						for mod in cpd_mod_attr :
+							if mod[0] == 'bup' :
+								with open(os.devnull, 'w') as devnull:
+									with contextlib.redirect_stdout(devnull): # Hide output
+										bup_decomp = huffman11.huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5])
+								
+								# C355B00189E55D (FFFF8D65F45B5E5F5DC355B00189E55DC3)
+								pdm_pat = re.compile(br'\xFF\xFF\x8D\x65\xF4\x5B\x5E\x5F\x5D\xC3\x55\xB0\x01\x89\xE5\x5D\xC3').search(bup_decomp)
+								
+								if pdm_pat : sku_pdm = 'YPDM'
+								else : sku_pdm = 'NPDM'
+								
+								break # Skip rest of FTPR modules
+					
+					if sku_pdm == 'YPDM' : pdm_status = 'Yes'
+					elif sku_pdm == 'NPDM' : pdm_status = 'No'
+					elif sku_pdm == 'UPDM1' : pdm_status = 'Unknown 1'
+					elif sku_pdm == 'UPDM2' : pdm_status = 'Unknown 2'
 					else : pdm_status = 'Unknown'
-						
+					
 					sku_db += '_%s' % sku_pdm
 				
 				if ('Error' in sku) or param.me11_sku_disp: me11_sku_anl = True

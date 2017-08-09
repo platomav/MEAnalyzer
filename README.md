@@ -100,6 +100,7 @@ To run ME Analyzer's python script, you need to have the following 3rd party Pyt
 
 * [Colorama](https://pypi.python.org/pypi/colorama/)
 * [PTable](https://github.com/kxxoling/PTable/tree/master/)
+* [Huffman11](https://github.com/IllegalArgument/Huffman11/)
 
 To build/freeze/compile ME Analyzer's python script, you can use whatever you like. The following are verified to work:
 
@@ -115,10 +116,9 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 2. Use pip to install colorama (PyPi)
 3. Use pip to install PTable (Github, master branch)
 4. Use pip to install PyInstaller (Github, develop branch)
-5. Open a command prompt and execute:
+5. Place huffman11.py at MEA.py's directory (Github)
+6. Open a command prompt and execute:
 
 > pyinstaller --noupx --onefile MEA.py
 
 At dist folder you should find the final MEA executable
-
-**Note:** You need to use the [develop PyInstaller branch](https://github.com/pyinstaller/pyinstaller/tree/develop/) to build with Python 3.6 currently.
