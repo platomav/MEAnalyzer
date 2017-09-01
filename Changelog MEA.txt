@@ -1,3 +1,14 @@
+v1.18.0
+
+Added Integrated Firmware Image (IFWI) support
+Added support for ME 12.0 CannonLake firmware
+Improved detection of Engine x86 ME/TXE Family
+Improved support of TXE 3 ApolloLake firmware
+Fixed crash at ME 11.x SKU Type detection
+Fixed missing SPS Unknown Major detection
+Various Engine x86 fixes and improvements
+Updated Engine Firmware Repository Database to r98
+
 v1.16.7
 
 Added detection of ME 11.x Power Down Mitigation (PDM)

@@ -15,7 +15,7 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 
 #### **A1. ME Analyzer Features**
 
-- Supports all Engine firmware generations (ME 1 - 11, TXE 1 - 3 & SPS 1 - 4)
+- Supports all Engine firmware generations (ME 1 - 12, TXE 1 - 3 & SPS 1 - 4)
 - Supports all types of file images (Engine Regions, SPI/BIOS images etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
 - Detection of Production, Pre-Production, ROM-Bypass, MERecovery etc Releases
@@ -30,7 +30,7 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 - Detection of unique mobile Apple Macintosh Engine firmware SKUs
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to analyze multiple files by drag & drop or by input path
-- Ability to unpack all Engine x86 firmware (ME >= 11, TXE >= 3, SPS >= 4)
+- Ability to unpack Engine x86 firmware (ME >= 11, TXE >= 3, SPS >= 4)
 - Ability to detect & categorize firmware which require attention
 - Ability to validate Engine region's $FPT checksums & entries counter
 - Ability to detect various important firmware problems and corruptions
@@ -65,10 +65,11 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -enuf   : Enables UEFIFind Engine GUID detection
 * -pdb    : Writes input firmware's DB entries to file
 * -dbname : Renames input file based on DB name
-* -dfpt   : Shows info about the $FPT header (Research)
-* -dsku   : Shows verbose info about ME 11+ SKU (Research)
-* -unp86  : Unpacks fully all Engine x86 firmware (Research)
-* -ext86  : Prints Extension info at Engine x86 unpacking (Research)
+* -dfpt   : Shows info about the $FPT or IFWI headers (Research)
+* -dsku   : Shows verbose detection info for ME 11.x SKU (Research)
+* -unp86  : Unpacks all Engine x86 $FPT/IFWI/$CPD firmware (Research)
+* -ext86  : Prints all Extension info at Engine x86 unpacking (Research)
+* -bug86  : Enables debug/verbose mode at Engine x86 unpacking (Research)
 
 The following are Windows specific:
 
@@ -86,7 +87,7 @@ During operation, ME Analyzer may encounter some issues that can trigger Notes, 
 
 ## **C. Download ME Analyzer**
 
-ME Analyzer is developed using Python 3.6 and can work under Windows, Linux and macOS operating systems. It consists of two files, the executable (MEA.exe or MEA) and the database (MEA.dat). Regarding the executable, already built/frozen/compiled binaries are provided by me for Windows only. Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should be "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bunled with the latest executable release, title should be "DB rXX". For Linux and macOS or courageous Windows users, the build/freeze/compile instructions for all three OS can be found below.
+ME Analyzer is developed using Python 3.6 and can work under Windows, Linux and macOS operating systems. It consists of two files, the executable (MEA.exe or MEA) and the database (MEA.dat). Regarding the executable, already built/frozen/compiled binaries are provided by me for Windows only (icon designed by [Those Icons](https://thoseicons.com/)). Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should be "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bunled with the latest executable release, title should be "DB rXX". For Linux and macOS or courageous Windows users, the build/freeze/compile instructions for all three OS can be found below.
 
 **Note:** To extract the already built/frozen/compiled ME Analyzer archive, you need to use programs which support RAR5 compression!
 
