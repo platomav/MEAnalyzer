@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.18.0'
+title = 'ME Analyzer v1.20.0'
 
 import os
 import re
@@ -68,14 +68,17 @@ uint16_t = ctypes.c_ushort
 uint32_t = ctypes.c_uint
 uint64_t = ctypes.c_uint64
 
+# Initialize input counter
+cur_count = 0
+
 # Process MEA Parameters
 class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.all = ['-?','-skip','-multi','-ubupre','-ubu','-extr','-msg','-hid','-adir','-aecho','-unp86','-ext86','-bug86','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
+		self.all = ['-?','-skip','-check','-extr','-msg','-hid','-adir','-unp86','-ext86','-bug86','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
 
-		self.win = ['-ubupre','-ubu','-extr','-msg','-hid','-aecho','-adir'] # Windows only
+		self.win = ['-extr','-msg','-hid','-adir'] # Windows only
 		
 		if mea_os == 'win32' :
 			self.val = self.all
@@ -85,13 +88,10 @@ class MEA_Param :
 		self.help_scr = False
 		self.skip_intro = False
 		self.multi = False
-		self.ubu_mea_pre = False
-		self.ubu_mea = False
 		self.extr_mea = False
 		self.print_msg = False
 		self.alt_dir = False
 		self.hid_find = False
-		self.alt_msg_echo = False
 		self.me11_mod_extr = False
 		self.me11_mod_ext = False
 		self.me11_mod_bug = False
@@ -105,7 +105,7 @@ class MEA_Param :
 		for i in source :
 			if i == '-?' : self.help_scr = True # Displays MEA help text for end-users.
 			if i == '-skip' : self.skip_intro = True # Skips the MEA options intro screen.
-			if i == '-multi' : self.multi = True # Checks multiple files, copies those with messages to new folder.
+			if i == '-check' : self.multi = True # Copies all files with messages to new folder.
 			if i == '-unp86' : self.me11_mod_extr = True # Unpack Engine x86 firmware ($FPT + $CPD).
 			if i == '-ext86' : self.me11_mod_ext = True # Print $CPD Extension info at Engine x86 unpacking.
 			if i == '-bug86' : self.me11_mod_bug = True # Engine x86 unpacking Debug mode.
@@ -118,15 +118,11 @@ class MEA_Param :
 			
 			if mea_os == 'win32' : # Windows only options
 				if i == '-adir' : self.alt_dir = True # Sets UEFIFind to the previous directory.
-				if i == '-ubupre' : self.ubu_mea_pre = True # UBU Pre-Menu mode, 9 --> Engine FW found, 8 --> Engine FW not found.
-				if i == '-ubu' : self.ubu_mea = True # UBU mode, prints everything without some headers.
 				if i == '-extr' : self.extr_mea = True # UEFI Strip mode, prints special one-line outputs.
 				if i == '-msg' : self.print_msg = True # Prints all messages without any headers.
 				if i == '-hid' : self.hid_find = True # Forces MEA to display any firmware found. Works with -msg.
-				if i == '-aecho' : self.alt_msg_echo = True # Enables an alternative display of empty lines. Works with -msg and -hid.
 			
-		if self.ubu_mea_pre or self.ubu_mea or self.extr_mea or self.print_msg or self.mass_scan \
-		or self.db_print_new : self.skip_intro = True
+		if self.extr_mea or self.print_msg or self.mass_scan or self.db_print_new : self.skip_intro = True
 
 # Engine Structures
 class FPT_Pre_Header(ctypes.LittleEndianStructure) :
@@ -1001,7 +997,7 @@ class CPD_Ext_0F_Mod(ctypes.LittleEndianStructure) :
 		return pt
 
 # noinspection PyTypeChecker
-class CPD_Ext_10(ctypes.LittleEndianStructure) : # APL IUNP
+class CPD_Ext_10(ctypes.LittleEndianStructure) : # IUNP
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1025,7 +1021,7 @@ class CPD_Ext_10(ctypes.LittleEndianStructure) : # APL IUNP
 		
 		pt, pt_empty = ext_table(['Field', 'Value'], False, 0)
 		
-		pt.title = col_b + 'Extension 10, APL IUNP' + col_e
+		pt.title = col_b + 'Extension 10, IUNP' + col_e
 		pt.add_row(['Tag', '%0.2X' % self.Tag])
 		pt.add_row(['Size', '%0.8X' % self.Size])
 		pt.add_row(['ModuleCount', '%0.8X' % self.ModuleCount])
@@ -1041,7 +1037,7 @@ class CPD_Ext_10(ctypes.LittleEndianStructure) : # APL IUNP
 		return pt
 	
 # noinspection PyTypeChecker
-class CPD_Ext_12(ctypes.LittleEndianStructure) : # TXE FTPR
+class CPD_Ext_12(ctypes.LittleEndianStructure) : # Unknown (FTPR)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1056,7 +1052,7 @@ class CPD_Ext_12(ctypes.LittleEndianStructure) : # TXE FTPR
 		
 		pt, pt_empty = ext_table(['Field', 'Value'], False, 0)
 		
-		pt.title = col_b + 'Extension 12, TXE FTPR' + col_e
+		pt.title = col_b + 'Extension 12, Unknown (FTPR)' + col_e
 		pt.add_row(['Tag', '%0.2X' % self.Tag])
 		pt.add_row(['Size', '%0.8X' % self.Size])
 		pt.add_row(['ModuleCount', '%0.8X' % self.ModuleCount])
@@ -1451,7 +1447,7 @@ def ext_table(row_col_names,header,padd) :
 # Detect DB version
 def mea_hdr_init() :
 	if not param.extr_mea and not param.print_msg :
-		db_rev = "None"
+		db_rev = col_r + 'Unknown' + col_e
 		try :
 			fw_db = db_open()
 			for line in fw_db :
@@ -1466,8 +1462,7 @@ def mea_hdr_init() :
 
 # Print MEA Header
 def mea_hdr(db_rev) :	
-	print("\n-------[ %s ]-------" % title)
-	print("            Database %s" % db_rev)
+	print("\n-------[ %s %s ]-------" % (title, db_rev))
 
 # Print MEA Help screen
 def mea_help() :
@@ -1475,7 +1470,7 @@ def mea_help() :
 	text = "\nUsage: MEA [FilePath] {Options}\n\n{Options}\n\n"
 	text += "-?      : Displays help & usage screen\n"
 	text += "-skip   : Skips options intro screen\n"
-	text += "-multi  : Scans multiple files and copies on messages\n"
+	text += "-check  : Copies files with messages to check\n"
 	text += "-mass   : Scans all files of a given directory\n"
 	text += "-enuf   : Enables UEFIFind Engine GUID detection\n"
 	text += "-pdb    : Writes input firmware's DB entries to file\n"
@@ -1488,12 +1483,9 @@ def mea_help() :
 	
 	if mea_os == 'win32' :
 		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
-		text += "-ubu    : SoniX/LS_29's UEFI BIOS Updater mode\n"
-		text += "-ubupre : SoniX/LS_29's UEFI BIOS Updater Pre-Menu mode\n"
 		text += "-extr   : Lordkag's UEFIStrip mode\n"
 		text += "-msg    : Prints only messages without headers\n"
-		text += "-hid    : Displays all firmware even without messages (-msg)\n"
-		text += "-aecho  : Alternative display of empty lines (-msg, -hid)"
+		text += "-hid    : Displays all firmware even without messages (-msg)"
 	
 	print(text)
 	mea_exit(0)
@@ -1520,7 +1512,7 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 # Execute final actions
 def mea_exit(code=0) :
 	colorama.deinit() # Stop Colorama
-	if param.ubu_mea_pre or param.ubu_mea or param.extr_mea or param.print_msg : sys.exit(code)
+	if param.extr_mea or param.print_msg : sys.exit(code)
 	input("\nPress enter to exit")
 	sys.exit(code)
 
@@ -2604,14 +2596,7 @@ def rsa_anl() :
 	
 # Print all Errors, Warnings & Notes (must be Errors > Warnings > Notes)
 # Rule 1: If -msg -hid or -msg only: none at the beginning & one empty line at the end (only when messages exist)
-# Rule 2: If -msg -aecho: one empty line at the beginning & none at the end (only when messages exist)
-# Note: Does not work properly with Partial Update images, ignored due to irrelevance
-def msg_rep() :
-	global name_db # Must be global to avoid python error
-	
-	if (err_stor or warn_stor or note_stor) and param.alt_msg_echo : print("") # Rule 2
-	elif param.alt_msg_echo and param.hid_find : print("") # When both -hid and -aecho, aecho prefered due to Rule 2
-	
+def msg_rep(name_db) :
 	if param.hid_find : # Parameter -hid always prints a message whether the error/warning/note arrays are empty or not
 		if me_rec_ffs : print(col_y + "MEA: Found Intel %s Recovery Module %s_NaN_REC in file!" % (variant, fw_ver(major,minor,hotfix,build)) + col_e)
 		else : print(col_y + "MEA: Found Intel %s firmware %s in file!" % (variant, name_db) + col_e)
@@ -2622,8 +2607,7 @@ def msg_rep() :
 	for i in range(len(warn_stor)) : print(warn_stor[i])
 	for i in range(len(note_stor)) : print(note_stor[i])
 	
-	if (err_stor or warn_stor or note_stor) and not param.alt_msg_echo : print("") # Rule 1
-	elif not param.alt_msg_echo and param.hid_find : print("") # Rule 1, -hid without any other messages
+	if (err_stor or warn_stor or note_stor) or param.hid_find : print("") # Rule 1
 
 # Force string to be printed as ASCII, ignore errors
 def force_ascii(string) :
@@ -2655,7 +2639,7 @@ arg_num = len(sys.argv)
 # Set dependencies paths
 db_path = mea_dir + os_dir + 'MEA.dat'
 if param.alt_dir :
-	top_dir = os.path.dirname(mea_dir) # Get parent dir of mea_dir -> UBU folder or UEFI_Strip folder
+	top_dir = os.path.dirname(mea_dir) # Get parent dir of mea_dir -> ex: UEFI_Strip folder
 	uf_path = top_dir + os_dir + uf_exec
 else :
 	uf_path = mea_dir + os_dir + uf_exec
@@ -2701,8 +2685,8 @@ if (arg_num < 2 and not param.help_scr and not param.mass_scan) or param.help_sc
 	mea_help()
 	mea_exit(5)
 
-# Actions for MEA but not UBU or UEFIStrip
-if param.ubu_mea_pre or param.ubu_mea or param.extr_mea or param.print_msg :
+# Actions for MEA but not UEFIStrip
+if param.extr_mea or param.print_msg :
 	pass
 else :
 	sys.excepthook = show_exception_and_exit # Pause after any unexpected python exception
@@ -2728,6 +2712,8 @@ else :
 if param.enable_uf and not depend_uf :
 	if not param.print_msg : print(col_r + "\nError: UEFIFind file is missing!" + col_e)
 	mea_exit(1)
+
+in_count = len(source)
 	
 for file_in in source :
 	
@@ -2759,7 +2745,6 @@ for file_in in source :
 	fuj_version = 'NaN'
 	no_man_text = 'NaN'
 	fit_platform = 'NaN'
-	text_ubu_pre = 'NaN'
 	fw_in_db_found = 'No'
 	pos_sku_ker = 'Invalid'
 	pos_sku_fit = 'Invalid'
@@ -2832,6 +2817,7 @@ for file_in in source :
 	mod_end = 0xFFFFFFFF
 	p_max_size = 0xFFFFFFFF
 	eng_fw_end = 0xFFFFFFFF
+	cur_count += 1
 	
 	if not os.path.isfile(file_in) :
 		if any(p in file_in for p in param.val) : continue # Next input file
@@ -2847,13 +2833,7 @@ for file_in in source :
 	reading = f.read()
 	
 	# Show file name & extension
-	if not param.ubu_mea and not param.ubu_mea_pre and not param.extr_mea and not param.print_msg :
-		print("\nFile:     %s" % force_ascii(os.path.basename(file_in)))
-		print("")
-	elif param.ubu_mea :
-		print(col_m + "\nMEA shows the Intel Engine firmware of the BIOS/SPI\n\
-image that you opened with UBU. It does NOT show the\n\
-current Intel Engine firmware running on your system!\n" + col_e)
+	if not param.extr_mea and not param.print_msg : print("\nFile:     %s (%d/%d)\n" % (force_ascii(os.path.basename(file_in)), cur_count, in_count))
 		
 	# UEFIFind Engine GUID Detection
 	if param.enable_uf : # UEFI Strip is expected to call MEA without UEFIFind
@@ -2921,21 +2901,18 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			# ME Region is Fujitsu UMEM compressed
 			if fuj_version != "NaN" :
 				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
-				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
 			# ME Region is Foxconn X58 Test?
 			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
 				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
-				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
 			
 			# ME Region is Unknown
 			else :
 				no_man_text = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine firmware"
-				text_ubu_pre = "Found" + col_y + " unidentifiable " + col_e + "Intel Engine firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_UNK NaN NaN NaN" # For UEFI Strip (-extr)
 		
@@ -2952,8 +2929,6 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				elif param.print_msg :
 					no_man_text = col_m + "\n\nWarning: This is not a valid Intel Engine firmware image!" + col_e + \
 					col_y + "\n\nNote: Further analysis not possible without manifest header." + col_e
-				elif param.ubu_mea_pre :
-					no_man_text = "File does not contain Intel Engine firmware"
 				else :
 					no_man_text = "Release:  MERecovery Module\nGUID:     821D110C-D0A3-4CF7-AEF3-E28088491704" + \
 					col_m + "\n\nWarning: This is not a valid Intel Engine firmware image!" + col_e + \
@@ -2962,14 +2937,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			# Image is ME Fujitsu UMEM compressed
 			elif fuj_version != "NaN" :
 				no_man_text = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
-				text_ubu_pre = "Found" + col_y + " Fujitsu Compressed " + col_e + ("Intel Engine firmware v%s" % fuj_version)
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
 			# Image is Foxconn X58 Test?
 			elif reading[0:8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
 				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
-				text_ubu_pre = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
 			
@@ -2981,13 +2954,11 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				if fpt_hdr.FitBuild != 0 and fpt_hdr.FitBuild != 65535 :
 					fitc_ver = "%s.%s.%s.%s" % (fpt_hdr.FitMajor, fpt_hdr.FitMinor, fpt_hdr.FitHotfix, fpt_hdr.FitBuild)
 					no_man_text = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
-					text_ubu_pre = "Found" + col_y + " Unknown " + col_e + ("Intel Engine Flash Partition Table v%s" % fitc_ver)
 					
 					if param.extr_mea : no_man_text = "NaN %s_NaN_FPT %s NaN NaN" % (fitc_ver, fitc_ver) # For UEFI Strip (-extr)
 				
 				else :
 					no_man_text = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table"
-					text_ubu_pre = "Found" + col_y + " Unknown " + col_e + "Intel Engine Flash Partition Table"
 					
 					if param.extr_mea : no_man_text = "NaN NaN_NaN_FPT NaN NaN NaN" # For UEFI Strip (-extr)
 				
@@ -2999,20 +2970,11 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			if no_man_text != "NaN" : print(no_man_text)
 			else : pass
 		elif param.print_msg :
-			if param.alt_msg_echo : print("\nMEA: %s" % no_man_text) # Rule 2, one empty line at the end
-			else : print("MEA: %s\n" % no_man_text) # Rule 1, one empty line at the beginning
+			print("MEA: %s\n" % no_man_text) # Rule 1, one empty line at the beginning
 			if found_guid != "" :
 				gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 				for i in range(len(note_stor)) : print(note_stor[i])
 				print("")
-		elif param.ubu_mea_pre : # Must be before param.ubu_mea
-			if 'File does not contain Intel Engine firmware' not in no_man_text :
-				print(text_ubu_pre + ', use ME Analyzer for details!')
-			else : pass
-		elif param.ubu_mea :
-			print("%s" % no_man_text)
-			if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
-			print("")
 		else :
 			print("%s" % no_man_text)
 			if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
@@ -3032,7 +2994,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			# Detect all $FPT and/or BPDT Starting Offsets (both allowed unless proven otherwise)
 			fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading)) # $FPT detection
-			bpdt_matches = list((re.compile(br'\xAA\x55\x00\x00..\x01\x00{9}', re.DOTALL)).finditer(reading)) # BPDT Header detection
+			bpdt_matches = list((re.compile(br'\xAA\x55\x00\x00..\x01\x00{5}', re.DOTALL)).finditer(reading)) # BPDT Header detection
 			
 			# Parse IFWI/BPDT Starting Offsets
 			for ifwi_bpdt in range(len(bpdt_matches)):
@@ -3328,7 +3290,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			variant = db_pkey()
 			
 			if variant == "NaN" : # Variant detection by RSA Public Key in DB failed
-				# 5FB2D04BC4D8B4E90AECB5C708458F95 = RSA PKEY used at both ME & TXE PRE-BYP
+				# 5FB2D04BC4D8B4E90AECB5C708458F95 = RSA PKEY used at ME 6-11 & TXE 1-2 PRE/BYP
+				# 71A94E95C932B9C1742EA6D21E86280B = RSA PKEY used at ME 12 & TXE 3-4 PRE/BYP
 				
 				x1,cpd_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9 = ext_anl('$MN2', start_man_match, file_end) # Detect FTPR x86 Attributes
 				
@@ -3390,8 +3353,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
 				if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
 				
-				# TXE3 EXTR checksum from FIT is a placeholder (0x00), ignore
-				if [variant,major,fpt_chk_fail] == ['TXE',3,True] : fpt_chk_fail = False
+				# ME12+, TXE3+ EXTR checksum from FIT is a placeholder (0x00), ignore
+				if fpt_chk_fail and ((variant == 'ME' and major >= 12) or (variant == 'TXE' and major >= 3)) : fpt_chk_fail = False
 				
 				# Check SPS3 $FPT Checksum validity (from Lordkag's UEFIStrip)
 				if variant == 'SPS' and major == 3 :
@@ -3604,7 +3567,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			# $FPT Firmware Type detection (Stock, Extracted, Update)
 			if rgn_exist : # SPS 1-3 have their own Firmware Types
 				if variant == 'SPS' and major < 4 : fw_type = 'Region' # SPS is built manually so EXTR
-				elif variant == 'ME' and (1 < major < 8) :
+				elif variant == 'ME' and (2 <= major <= 7) :
 					# Check 1, FOVD section
 					if (major > 2 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Region, Extracted'
 					else :
@@ -3615,7 +3578,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 							else : fw_type = 'Region, Extracted'
 						elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
 						else : fw_type = 'Region, Stock'
-				elif (variant == 'ME' and 7 < major < 12) or (variant == 'TXE' and major < 3) or (variant == 'SPS' and major == 4) :
+				elif (variant == 'ME' and 8 <= major <= 11) or (variant == 'TXE' and major <= 2) or (variant == 'SPS' and major == 4) :
 					# Check 1, FITC Version
 					# noinspection PyUnboundLocalVariable
 					fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
@@ -3632,7 +3595,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 						fitc_minor = fpt_hdr.FitMinor
 						fitc_hotfix = fpt_hdr.FitHotfix
 						fitc_build = fpt_hdr.FitBuild
-				elif (variant == 'ME' and major > 11) or (variant == 'TXE' and major > 2) or (variant == 'SPS' and major > 4) :
+				elif (variant == 'ME' and major >= 12) or (variant == 'TXE' and major >= 3) or (variant == 'SPS' and major >= 5) :
 					# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
 					if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
 					reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' : fw_type = 'Region, Extracted'
@@ -3717,6 +3680,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		if variant == "ME" : # Management Engine
 			
+			# noinspection PyUnboundLocalVariable
 			if me1_match is None and sku_match is not None : # Found $SKU entry
 			
 				if 1 < major < 7:
@@ -4322,9 +4286,9 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
-				# Some early firmware are reported as PRD even though they are PRE
-				if release == "Production" and rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95" :
-					release = "Pre-Production"
+				# Early firmware are reported as PRD even though they are PRE
+				if release == 'Production' and rsa_pkey == '5FB2D04BC4D8B4E90AECB5C708458F95' :
+					release = 'Pre-Production'
 					rel_db = 'PRE'
 							
 				# SKU not in Extension 0C, scan decompressed FTPR > kernel
@@ -4549,6 +4513,11 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				sku = sku_init + ' ' + pos_sku_ext # SKU retreived from Extension 0C
 				
+				# Early firmware are reported as PRD even though they are PRE
+				if release == 'Production' and rsa_pkey == '71A94E95C932B9C1742EA6D21E86280B' :
+					release = 'Pre-Production'
+					rel_db = 'PRE'
+				
 				# Store SKU and check Latest version for all 12.x
 				if sku_stp == "NaN" : sku_db = "%s_%s_XX" % (sku_init_db, pos_sku_ext)
 				else : sku_db = "%s_%s" % (sku_init_db, pos_sku_ext) + "_" + sku_stp
@@ -4580,11 +4549,12 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		elif variant == "TXE" : # Trusted Execution Engine (SEC)
 		
+			# noinspection PyUnboundLocalVariable
 			if sku_match is not None :
 				sku_txe = reading[start_sku_match + 8:start_sku_match + 0x10]
 				sku_txe = binascii.b2a_hex(sku_txe).decode('utf-8').upper() # Hex value with Little Endianess
 			
-			if major == 1 or major == 0 :
+			if major in [0,1] :
 				if rsa_pkey == "C7E5538622F3A6EC90F5F7CCD76FA8F1" or rsa_pkey == "5FB2D04BC4D8B4E90AECB5C708458F95" :
 					txe_sub = " M/D"
 					txe_sub_db = "_MD"
@@ -4707,30 +4677,41 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				
 				platform = "BSW/CHT"
 				
-			elif major == 3 :
+			elif major in [3,4] :
 				cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext_dict,ext_tag_all = ext_anl('$MN2', start_man_match, file_end) # Detect x86 Attributes
 				
 				db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 				
-				# Simultaneous branches
-				if minor in [0,2] : # 2 is "Slim" ???
+				# Early firmware are reported as PRD even though they are PRE
+				if release == 'Production' and rsa_pkey == '71A94E95C932B9C1742EA6D21E86280B' :
+					release = 'Pre-Production'
+					rel_db = 'PRE'
+				
+				if major == 3 and minor in [0,2] : # Simultaneous branches, 2 is "Slim"
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_%s_%s%s' % (variant, major, minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					
 					# Adjust SoC Stepping if not from DB
-					if minor == 0 and sku_stp == "NaN" :
-						if release == "Production" : sku_stp = 'Bx' # PRD
-						else : sku_stp = 'Ax' # PRE, BYP
-					elif minor == 2 and sku_stp == "NaN" :
-						if release == "Production" : sku_stp = 'Cx' # PRD (Joule_C0-X64-Release)
+					if minor == 0 :
+						if sku_stp == 'NaN' :
+							if release == 'Production' : sku_stp = 'Bx' # PRD
+							else : sku_stp = 'Ax' # PRE, BYP
+						elif minor == 2 and sku_stp == 'NaN' :
+							if release == 'Production' : sku_stp = 'Cx' # PRD (Joule_C0-X64-Release)
+							
+				elif major == 4 and minor == 0 :
+					db_maj,db_min,db_hot,db_bld = check_upd('Latest_%s_%s%s' % (variant, major, minor))
+					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+					
+					# Adjust SoC Stepping if not from DB (TBD)
 				
 				else :
-					sku = col_r + "Error" + col_e + ", unknown TXE 3.x Minor version!" + col_r + " *" + col_e
+					sku = col_r + 'Error' + col_e + ', unknown TXE %s.x Minor version!' % major + col_r + ' *' + col_e
 					err_rep += 1
 					err_stor.append(sku)
 					
-				# Single/No SKU for TXE3, Rev only
-				if sku_stp == "NaN" : sku_db = "XX"
+				# Single/No SKU for TXE x86, Rev only
+				if sku_stp == 'NaN' : sku_db = 'XX'
 				else : sku_db = sku_stp
 				
 				# Module Extraction for all x86
@@ -4739,16 +4720,18 @@ current Intel Engine firmware running on your system!\n" + col_e)
 					
 					continue # Next input file
 				
-				platform = "APL"
+				if major == 3 : platform = 'APL'
+				elif major == 4 : platform = 'GLK'
 			
-			elif major > 3 :
+			elif major > 4 :
 				unk_major = True
-				sku = col_r + "Error" + col_e + ", unknown TXE SKU due to unknown Major version" + col_r + " *" + col_e
+				sku = col_r + 'Error' + col_e + ', unknown TXE SKU due to unknown Major version' + col_r + ' *' + col_e
 				err_rep += 1
 				err_stor.append(sku)
 				
 		elif variant == 'SPS' :
 			
+			# noinspection PyUnboundLocalVariable
 			if sku_match is not None :
 				sku_sps = reading[start_sku_match + 8:start_sku_match + 0xC]
 				sku_sps = binascii.b2a_hex(sku_sps).decode('utf-8').upper() # Hex value with Little Endianess
@@ -4805,6 +4788,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
 		locl_start = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10])
+		# noinspection PyUnboundLocalVariable
 		if variant == 'ME' and major >= 11 and locl_start is not None :
 			if locl_start.start() == 0 : # Partial Update has "$CPD + [0x8] + LOCL" at first 0x10
 				wcod_found = True
@@ -4822,6 +4806,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 				err_rep = 0
 		
 		# ME Firmware non Partial Update without $SKU
+		# noinspection PyUnboundLocalVariable
 		if sku_match is None and fw_type != "Partial Update" and not me_rec_ffs :
 			if (variant == "ME" and 1 < major < 11) or (variant == "TXE" and major < 3) or (variant == "SPS" and major < 4) :
 				sku_missing = True
@@ -4894,14 +4879,8 @@ current Intel Engine firmware running on your system!\n" + col_e)
 			
 			continue # Next input file
 		
-		# UEFI Bios Updater Pre-Menu Integration (must be after processing but before message printing)
-		if param.ubu_mea_pre :
-			if can_search_db and not rgn_over_extr_found and fw_in_db_found == "No" :
-				print(col_y + "Engine firmware not found at the database, run ME Analyzer for details!" + col_e)
-			mea_exit(9)
-		
 		# UEFI Strip Integration (must be after Printed Messages)
-		elif param.extr_mea :
+		if param.extr_mea :
 			if variant == 'ME' and major >= 11 and sku not in ['Consumer H','Consumer LP','Corporate H','Corporate LP','Slim H','Slim LP'] :
 				if sku_init == "Consumer" : sku_db = "CON_X"
 				elif sku_init == "Corporate" : sku_db = "COR_X"
@@ -5044,9 +5023,7 @@ current Intel Engine firmware running on your system!\n" + col_e)
 		if found_guid != "" : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
 		
 		# Print Error/Warning/Note Messages
-		if param.print_msg : msg_rep()
-		
-		if param.ubu_mea : print()
+		if param.print_msg : msg_rep(name_db)
 		
 		if param.multi : multi_drop()
 		

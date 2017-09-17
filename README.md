@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/VMFKT8Y.png)
+![](https://i.imgur.com/TZfsR0b.png)
 
 ## **A. About ME Analyzer**
 
@@ -15,13 +15,14 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 
 #### **A1. ME Analyzer Features**
 
-- Supports all Engine firmware generations (ME 1 - 12, TXE 1 - 3 & SPS 1 - 4)
+- Supports all Engine firmware generations (ME 1 - 12, TXE 1 - 4 & SPS 1 - 4)
 - Supports all types of file images (Engine Regions, SPI/BIOS images etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
 - Detection of Production, Pre-Production, ROM-Bypass, MERecovery etc Releases
 - Detection of Region (Stock/clean or Extracted/dirty), Update etc Types
 - Detection of Security Version Number (SVN), Version Control Number (VCN) & PV
 - Detection of firmware's Flash Image Tool platform configuration for ME 11 & up
+- Detection of ME 11.x PCH-LP firmware Power Down Mitigation (PDM) erratum
 - Detection of Intel SPI Flash Descriptor region's Access Permissions
 - Detection of whether the imported Engine firmware is updated
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)
@@ -31,10 +32,11 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to analyze multiple files by drag & drop or by input path
 - Ability to unpack Engine x86 firmware (ME >= 11, TXE >= 3, SPS >= 4)
+- Ability to detect & analyze Integrated Firmware Image (IFWI)
 - Ability to detect & categorize firmware which require attention
 - Ability to validate Engine region's $FPT checksums & entries counter
 - Ability to detect various important firmware problems and corruptions
-- Supports SoniX/LS_29's UBU, Lordkag's UEFIStrip & CodeRush's UEFIFind
+- Supports Lordkag's UEFIStrip & CodeRush's UEFIFind utility integration
 - Reports all firmware which are not found at the Engine Repository Database
 - Reports any new, unknown, problematic, incomplete etc Engine firmware images
 - Features command line parameters to enhance functionality & assist research
@@ -60,7 +62,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 
 * -?      : Displays help & usage screen
 * -skip   : Skips options intro screen
-* -multi  : Scans multiple files and copies on messages
+* -check  : Copies files with messages to check
 * -mass   : Scans all files of a given directory
 * -enuf   : Enables UEFIFind Engine GUID detection
 * -pdb    : Writes input firmware's DB entries to file
@@ -74,12 +76,9 @@ There are various parameters which enhance or modify the default behavior of ME 
 The following are Windows specific:
 
 * -adir   : Sets UEFIFind to the previous directory
-* -ubu    : SoniX/LS_29's UEFI BIOS Updater mode
-* -ubupre : SoniX/LS_29's UEFI BIOS Updater Pre-Menu mode
 * -extr   : Lordkag's UEFIStrip mode
 * -msg    : Prints only messages without headers
 * -hid    : Displays all firmware even without messages (-msg)
-* -aecho  : Alternative display of empty lines (-msg, -hid)
 
 #### **B3. ME Analyzer Error Control**
 

@@ -1,3 +1,13 @@
+v1.20.0 r99
+
+Added support for TXE 4.0 GeminiLake firmware
+Added input file scanning progress counter (x/y)
+Improved ME 12.x & TXE 3.x PRE Release detection
+Improved Integrated Firmware Image (IFWI) detection
+Dropped UEFI BIOS Updater support (-ubu, -ubupre)
+Renamed parameter -multi to -check, same function
+Removed parameter -aecho for alt empty line display
+
 v1.18.0
 
 Added Integrated Firmware Image (IFWI) support
@@ -251,7 +261,7 @@ Updated Intel Engine Firmware Repository Database to r64
 v1.6.1
 
 Added ME 11.6 KBL firmware detection
-Impoved ME 11.x SKU detection based on Kernel
+Improved ME 11.x SKU detection based on Kernel
 Updated Intel Engine Firmware Repository Database to r63
 
 v1.6.0
