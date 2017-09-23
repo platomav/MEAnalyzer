@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.20.0'
+title = 'ME Analyzer v1.20.1'
 
 import os
 import re
@@ -1338,16 +1338,16 @@ class CPD_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID
 class BPDT_Header(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table
 	_pack_ = 1
 	_fields_ = [
-		("Signature",		uint32_t),		# 0x00 (AA550000)
+		("Signature",		uint32_t),		# 0x00 AA550000 Boot, AA55AA00 Recovery (Pattern)
 		("DescCount",		uint16_t),		# 0x04
-		("VersionBPDT",		uint16_t),		# 0x06
-		("Checksum",		uint32_t),		# 0x08
-		("VersionIFWI",		uint32_t),		# 0x0C
+		("VersionBPDT",		uint16_t),		# 0x06 0001 (Pattern)
+		("RedundantChk",	uint32_t),		# 0x08 For Redundant block, from BPDT up to and including S-BPDT
+		("VersionIFWI",		uint32_t),		# 0x0C Unique mark from build server
 		("FitMajor",		uint16_t),		# 0x10
 		("FitMinor",		uint16_t),		# 0x12
 		("FitHotfix",		uint16_t),		# 0x14
 		("FitBuild",		uint16_t),		# 0x16
-		# 0x18 (Header + Entries >= 0x200)
+		# 0x18 (0x200 <= Header + Entries <= 0x1000)
 	]
 	
 	def info_print(self) :
@@ -1355,14 +1355,14 @@ class BPDT_Header(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Ta
 		
 		pt.title = col_b + 'BPDT Header' + col_e
 		pt.add_row(['Signature', '%0.8X' % self.Signature])
-		pt.add_row(['DescCount', '%d' % self.DescCount])
-		pt.add_row(['VersionBPDT', '%d' % self.VersionBPDT])
-		pt.add_row(['Checksum', '%0.8X' % self.Checksum])
-		pt.add_row(['VersionIFWI', '%d' % self.VersionIFWI])
-		pt.add_row(['FitMajor', '%d' % self.FitMajor])
-		pt.add_row(['FitMinor', '%d' % self.FitMinor])
-		pt.add_row(['FitHotfix', '%d' % self.FitHotfix])
-		pt.add_row(['FitBuild', '%d' % self.FitBuild])
+		pt.add_row(['Description Count', '%d' % self.DescCount])
+		pt.add_row(['BPDT Version', '%d' % self.VersionBPDT])
+		pt.add_row(['Redundant Checksum', '%0.8X' % self.RedundantChk])
+		pt.add_row(['IFWI Version', '%d' % self.VersionIFWI])
+		pt.add_row(['FIT Major', '%d' % self.FitMajor])
+		pt.add_row(['FIT Minor', '%d' % self.FitMinor])
+		pt.add_row(['FIT Hotfix', '%d' % self.FitHotfix])
+		pt.add_row(['FIT Build', '%d' % self.FitBuild])
 		
 		return pt
 		
@@ -2994,7 +2994,7 @@ for file_in in source :
 			
 			# Detect all $FPT and/or BPDT Starting Offsets (both allowed unless proven otherwise)
 			fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading)) # $FPT detection
-			bpdt_matches = list((re.compile(br'\xAA\x55\x00\x00..\x01\x00{5}', re.DOTALL)).finditer(reading)) # BPDT Header detection
+			bpdt_matches = list((re.compile(br'\xAA\x55([\x00\xAA])\x00.\x00\x01\x00', re.DOTALL)).finditer(reading)) # BPDT Header detection
 			
 			# Parse IFWI/BPDT Starting Offsets
 			for ifwi_bpdt in range(len(bpdt_matches)):
@@ -4418,9 +4418,9 @@ for file_in in source :
 				elif minor == 6 :
 					platform = "SPT/KBP"
 				
-				# 11.7 : Skylake/Kabylake/Kabylake-R, Sunrise Point/Union Point/Union Point Refresh
+				# 11.7 : Skylake/Kabylake(R)/Coffeelake, Sunrise Point/Union Point/Cannon Point
 				elif minor == 7 :
-					platform = "SPT/KBP(R)"
+					platform = "SPT/KBP/CNP"
 					
 				# 11.10 : Skylake-X/Kabylake-X, Basin Falls
 				elif minor == 10 :

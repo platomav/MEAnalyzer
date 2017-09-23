@@ -92,7 +92,7 @@ ME Analyzer is developed using Python 3.6 and can work under Windows, Linux and 
 
 #### **C1. Compatibility**
 
-ME Analyzer has been tested to be compatible with Windows Vista-10, Ubuntu 16.04 and macOS Sierra operating systems. It is generally expected to work at all Windows, Linux or macOS operating systems which have Python 3.6 support but feel free to test it. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible.
+ME Analyzer has been tested to be compatible with Windows Vista-10, Ubuntu 16.04 and macOS Sierra operating systems. It is generally expected to work at all Windows, Linux or macOS operating systems which have Python 3.6 support but feel free to test it. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. Windows Vista-8.1 users who plan to use the already built/frozen/compiled binaries must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
 
 #### **C2. Code Prerequisites**
 
@@ -106,7 +106,7 @@ To build/freeze/compile ME Analyzer's python script, you can use whatever you li
 
 * [Py2exe](https://pypi.python.org/pypi/py2exe/) (Windows)
 * [Py2app](https://pypi.python.org/pypi/py2app/) (macOS)
-* [PyInstaller](https://github.com/pyinstaller/pyinstaller/tree/develop/) (Windows/Linux/macOS)
+* [PyInstaller](https://github.com/pyinstaller/pyinstaller/tree/master/) (Windows/Linux/macOS)
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
@@ -115,7 +115,7 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 1. Make sure you have Python 3.6 installed
 2. Use pip to install colorama (PyPi)
 3. Use pip to install PTable (Github, master branch)
-4. Use pip to install PyInstaller (Github, develop branch)
+4. Use pip to install PyInstaller (Github, master branch)
 5. Place huffman11.py at MEA.py's directory (Github)
 6. Open a command prompt and execute:
 

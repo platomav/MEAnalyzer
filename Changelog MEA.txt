@@ -1,3 +1,7 @@
+v1.20.1 r99
+
+Improved IFWI detection, Recovery BPDT (00AA55AA)
+
 v1.20.0 r99
 
 Added support for TXE 4.0 GeminiLake firmware
