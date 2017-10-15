@@ -1,3 +1,16 @@
+v1.30.0 r100
+
+Added parsing of all Bit-Flag/Mask/Map fields in structures
+Vastly improved Engine x86 unpacking & info display (-unp86)
+Improved Empty $FPT/BPDT Partition detection & display (-dfpt)
+Improved Family (ME/TXE/SPS/CSME/CSTXE/CSSPS) & RSA PKey detection
+Fixed missing CPD_Ext_05.MainThreadID field, thanks IllegalArgument
+MEA now deletes Engine x86 compressed files with OK hash (-unp86)
+MEA can now decompress all CSME 11 Huffman modules via Huffman11
+MEA can now run without Huffman11, error when needed but missing
+Removed OEM ME Recovery UEFI FFS 821D110C[...] module detection
+Multiple general other code & text fixes and improvements
+
 v1.20.1 r99
 
 Improved IFWI detection, Recovery BPDT (00AA55AA)

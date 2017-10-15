@@ -7,34 +7,34 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/TZfsR0b.png)
+![](https://i.imgur.com/yBawAsx.png)
 
 ## **A. About ME Analyzer**
 
-ME Analyzer is a tool which can show various details about Intel Engine Firmware (Management Engine, Trusted Execution Engine, Service Platform Services) images. It can be used to identify whether the firmware is updated, healthy, what Release, Type, SKU it is etc.
+ME Analyzer is a tool which shows various details about Intel Engine firmware images from the Converged Security Management Engine, Converged Security Trusted Execution Engine, Converged Security Server Platform Services, Management Engine, Trusted Execution Engine & Server Platform Services families. It can be used by both end-users and researchers to identify what Release, Type, SKU the firmware is, whether it is healthy, updated etc, dissaseble its contents and many more.
 
 #### **A1. ME Analyzer Features**
 
-- Supports all Engine firmware generations (ME 1 - 12, TXE 1 - 4 & SPS 1 - 4)
+- Supports all Engine firmware families (CS)ME 1-12, (CS)TXE 1-4, (CS)SPS 1-4
 - Supports all types of file images (Engine Regions, SPI/BIOS images etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
-- Detection of Production, Pre-Production, ROM-Bypass, MERecovery etc Releases
+- Detection of Production, Pre-Production, ROM-Bypass etc Releases
 - Detection of Region (Stock/clean or Extracted/dirty), Update etc Types
 - Detection of Security Version Number (SVN), Version Control Number (VCN) & PV
 - Detection of firmware's Flash Image Tool platform configuration for ME 11 & up
 - Detection of ME 11.x PCH-LP firmware Power Down Mitigation (PDM) erratum
 - Detection of Intel SPI Flash Descriptor region's Access Permissions
-- Detection of whether the imported Engine firmware is updated
+- Detection of whether the imported Engine firmware is updated or not
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)
 - Detection of multiple Engine regions in input file, number only
 - Detection of special Engine firmware BIOS GUIDs via UEFIFind
 - Detection of unique mobile Apple Macintosh Engine firmware SKUs
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to analyze multiple files by drag & drop or by input path
-- Ability to unpack Engine x86 firmware (ME >= 11, TXE >= 3, SPS >= 4)
-- Ability to detect & analyze Integrated Firmware Image (IFWI)
+- Ability to unpack Engine x86 firmware CSME 11+, CSTXE 3+, CSSPS 4+
+- Ability to detect & analyze Integrated Firmware Image (IFWI/BPDT)
 - Ability to detect & categorize firmware which require attention
-- Ability to validate Engine region's $FPT checksums & entries counter
+- Ability to validate Engine RSA Signature and Region table checksums
 - Ability to detect various important firmware problems and corruptions
 - Supports Lordkag's UEFIStrip & CodeRush's UEFIFind utility integration
 - Reports all firmware which are not found at the Engine Repository Database
@@ -46,11 +46,11 @@ ME Analyzer is a tool which can show various details about Intel Engine Firmware
 
 #### **A2. Engine Firmware Repository Database**
 
-ME Analyzer's main goal is to allow users to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine Firmware Repositories](http://www.win-raid.com/t832f39-Intel-Management-amp-Trusted-Execution-Engine-Firmware-Repository.html) is a collection of every ME, TXE & SPS firmware we have found. Its existence is very important for ME Analyzer as it allows us to find new types of firmware, compare same major version releases for similarities, check for updated firmware etc. Bundled with ME Analyzer there's a file called MEA.dat which is required for the program to run. It includes all Engine firmware that are available at the Repository thread. This accommodates two actions: a) Check whether the imported firmware is up to date and b) Help find new Engine firmware releases sooner by reporting them at the [Intel Management Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t596f39-Intel-Management-Engine-Drivers-Firmware-amp-System-Tools.html) or [Intel Trusted Execution Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t624f39-Intel-Trusted-Execution-Engine-Drivers-Firmware-amp-System-Tools.html) threads respectively.
+ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine Firmware Repositories](http://www.win-raid.com/t832f39-Intel-Management-amp-Trusted-Execution-Engine-Firmware-Repository.html) is a collection of every (CS)ME, (CS)TXE & (CS)SPS firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities, check for updated firmware etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine firmware that are available to us. This accommodates two actions: a) Check whether the imported firmware is up to date and b) Help find new Engine firmware releases sooner by reporting them at the [Intel Management Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t596f39-Intel-Management-Engine-Drivers-Firmware-amp-System-Tools.html) or [Intel Trusted Execution Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t624f39-Intel-Trusted-Execution-Engine-Drivers-Firmware-amp-System-Tools.html) threads respectively.
 
 ## **B. How to use ME Analyzer**
 
-There are two ways to use ME Analyzer, MEA executable & Command Prompt. The MEA executable allows you to drag & drop one or more firmware and view them one by one. To manually call ME Analyzer, a Command Prompt can be used with -skip as parameter.
+There are two ways to use ME Analyzer, MEA executable & Command Prompt. The MEA executable allows you to drag & drop one or more firmware and analyze them one by one. To manually call ME Analyzer, a Command Prompt can be used with -skip as parameter.
 
 #### **B1. ME Analyzer Executable**
 
@@ -92,7 +92,7 @@ ME Analyzer is developed using Python 3.6 and can work under Windows, Linux and 
 
 #### **C1. Compatibility**
 
-ME Analyzer has been tested to be compatible with Windows Vista-10, Ubuntu 16.04 and macOS Sierra operating systems. It is generally expected to work at all Windows, Linux or macOS operating systems which have Python 3.6 support but feel free to test it. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. Windows Vista-8.1 users who plan to use the already built/frozen/compiled binaries must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
+ME Analyzer has been tested to be compatible with Windows Vista-10, Ubuntu 16.04+ and macOS Sierra+ operating systems. It is generally expected to work at all Windows, Linux or macOS operating systems which have Python 3.6 support but feel free to test it. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. Windows Vista-8.1 users who plan to use the already built/frozen/compiled binaries must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
 
 #### **C2. Code Prerequisites**
 
