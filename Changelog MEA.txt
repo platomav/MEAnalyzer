@@ -1,3 +1,12 @@
+v1.31.0_6 r101_4
+
+Added support for CSME 11.8, 11.11, 11.21 firmware
+Added support for CSME 12 SPI FD Region structure
+Added CSE Extension 22 for proper CSME 12 parsing
+Improved CSE Extensions 1,13 with CSME 12 support
+Fixed Engine x86 crash when unpacking Key modules
+Fixed wrong CSME 11 FIT PCH-H Z370 SKU detection
+
 v1.30.0 r100
 
 Added parsing of all Bit-Flag/Mask/Map fields in structures
