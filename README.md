@@ -31,7 +31,7 @@ ME Analyzer is a tool which shows various details about Intel Engine firmware im
 - Detection of unique mobile Apple Macintosh Engine firmware SKUs
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to analyze multiple files by drag & drop or by input path
-- Ability to unpack Engine x86 firmware CSME 11+, CSTXE 3+, CSSPS 4+
+- Ability to unpack CSE firmware CSME 11+, CSTXE 3+ and CSSPS 4+
 - Ability to detect & analyze Integrated Firmware Image (IFWI/BPDT)
 - Ability to detect & categorize firmware which require attention
 - Ability to validate Engine RSA Signature and Region table checksums
@@ -65,13 +65,13 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -check  : Copies files with messages to check
 * -mass   : Scans all files of a given directory
 * -enuf   : Enables UEFIFind Engine GUID detection
-* -pdb    : Writes input firmware's DB entries to file
+* -pdb    : Writes input file DB entry to text file
 * -dbname : Renames input file based on DB name
-* -dfpt   : Shows info about the $FPT or IFWI headers (Research)
-* -dsku   : Shows verbose detection info for ME 11.x SKU (Research)
-* -unp86  : Unpacks all Engine x86 $FPT/IFWI/$CPD firmware (Research)
-* -ext86  : Prints all Extension info at Engine x86 unpacking (Research)
-* -bug86  : Enables debug/verbose mode at Engine x86 unpacking (Research)
+* -dfpt   : Shows info about the $FPT and/or BPDT headers (Research)
+* -dsku   : Shows debug/verbose SKU detection info for CSE ME 11 (Research)
+* -unp86  : Unpacks all CSE Converged Security Engine firmware (Research)
+* -ext86  : Prints Extension info at CSE unpacking (Research)
+* -bug86  : Enables debug/verbose mode at CSE unpacking (Research)
 
 The following are Windows specific:
 

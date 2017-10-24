@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.31.0_6'
+title = 'ME Analyzer v1.32.0'
 
 import os
 import re
@@ -82,9 +82,9 @@ def mea_help() :
 	text += "-dbname : Renames input file based on DB name\n"
 	text += "-dfpt   : Shows info about the $FPT and/or BPDT headers (Research)\n"
 	text += "-dsku   : Shows debug/verbose SKU detection info for CSE ME 11 (Research)\n"
-	text += "-unp86  : Unpacks all Converged Security Engine firmware (Research)\n"
-	text += "-ext86  : Prints Extension info at Converged Security Engine unpacking (Research)\n"
-	text += "-bug86  : Enables debug/verbose mode at Converged Security Engine unpacking (Research)"
+	text += "-unp86  : Unpacks all CSE Converged Security Engine firmware (Research)\n"
+	text += "-ext86  : Prints Extension info at CSE unpacking (Research)\n"
+	text += "-bug86  : Enables debug/verbose mode at CSE unpacking (Research)"
 	
 	if mea_os == 'win32' :
 		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
@@ -280,8 +280,8 @@ class TBD_Header(ctypes.LittleEndianStructure) : # Unknown TBD (Not in XML, Reve
 	_fields_ = [
 		('Reserved0',		uint64_t),		# 0x00
 		('Reserved1',		uint64_t),		# 0x08
-		('EngineOffset',	uint32_t),		# 0x10
-		('EngineSize',		uint32_t),		# 0x14
+		('FPTOffset',		uint32_t),		# 0x10
+		('FPTSize',			uint32_t),		# 0x14
 		('LBP1Offset',		uint32_t),		# 0x18
 		('LBP1Size',		uint32_t),		# 0x1C
 		('LBP2Offset',		uint32_t),		# 0x20
@@ -303,8 +303,8 @@ class TBD_Header(ctypes.LittleEndianStructure) : # Unknown TBD (Not in XML, Reve
 		pt.title = col_y + 'TBD Header' + col_e
 		pt.add_row(['Reserved 0', '0x0' if self.Reserved0 == 0 else '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x0' if self.Reserved1 == 0 else '0x%X' % self.Reserved1])
-		pt.add_row(['Engine Offset', '0x%X' % self.EngineOffset])
-		pt.add_row(['Engine Size', '0x%X' % self.EngineSize])
+		pt.add_row(['Engine Offset', '0x%X' % self.FPTOffset])
+		pt.add_row(['Engine Size', '0x%X' % self.FPTSize])
 		pt.add_row(['LBP 1 Offset', '0x%X' % self.LBP1Offset])
 		pt.add_row(['LBP 1 Size', '0x%X' % self.LBP1Size])
 		pt.add_row(['LBP 2 Offset', '0x%X' % self.LBP2Offset])
@@ -539,7 +539,7 @@ class CPD_Entry_GetOffsetAttrib(ctypes.Union):
 	]
 
 # noinspection PyTypeChecker
-class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Info (SYSTEM_INFO_EXTENSION)
+class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Information (SYSTEM_INFO_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -558,12 +558,12 @@ class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Info (SYSTEM_INFO_EXTE
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 0, System Info' + col_e
+		pt.title = col_y + 'Extension 0, System Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Minimum UMA Size', '0x%X' % self.MinUMASize])
 		pt.add_row(['Chipset Version', '0x%X' % self.ChipsetVersion])
-		pt.add_row(['IMG Default Hash', '%s' % IMGDefaultHash])
+		pt.add_row(['Image Default Hash', '%s' % IMGDefaultHash])
 		pt.add_row(['Pageable UMA Size', '0x%X' % self.PageableUMASize])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
@@ -584,10 +584,10 @@ class CSE_Ext_00_Mod(ctypes.LittleEndianStructure) : # (INDEPENDENT_PARTITION_EN
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 0 Module' + col_e
+		pt.title = col_y + 'Extension 0, Independent Partition' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
 		pt.add_row(['Version', '0x%X' % self.Version])
-		pt.add_row(['User ID', '0x%X' % self.UserID])
+		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		
 		return pt
@@ -615,7 +615,7 @@ class CSE_Ext_01(ctypes.LittleEndianStructure) : # Initialization Script (InitSc
 		return pt
 	
 # noinspection PyTypeChecker
-class CSE_Ext_01_Mod_11(ctypes.LittleEndianStructure) : # (InitScriptEntry)
+class CSE_Ext_01_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (InitScriptEntry)
 	_pack_ = 1
 	_fields_ = [
 		("PartitionName",	char*4),		# 0x00
@@ -631,7 +631,7 @@ class CSE_Ext_01_Mod_11(ctypes.LittleEndianStructure) : # (InitScriptEntry)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 1 Module' + col_e
+		pt.title = col_y + 'Extension 1, Entry' + col_e
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Module Name', self.ModuleName.decode('utf-8')])
 		pt.add_row(['IBL', fvalue[f1]])
@@ -664,7 +664,7 @@ class CSE_Ext_01_Mod_11(ctypes.LittleEndianStructure) : # (InitScriptEntry)
 			   b_flags.b.TempDisable, b_flags.b.Recovery, b_flags.b.SafeMode, b_flags.b.FWUpdate, b_flags.b.Reserved
 
 # noinspection PyTypeChecker
-class CSE_Ext_01_Mod_12(ctypes.LittleEndianStructure) : # (InitScriptEntry)
+class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (InitScriptEntry)
 	_pack_ = 1
 	_fields_ = [
 		("PartitionName",	char*4),		# 0x00
@@ -681,7 +681,7 @@ class CSE_Ext_01_Mod_12(ctypes.LittleEndianStructure) : # (InitScriptEntry)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 1 Module' + col_e
+		pt.title = col_y + 'Extension 1, Entry' + col_e
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Module Name', self.ModuleName.decode('utf-8')])
 		pt.add_row(['IBL', fvalue[f1]])
@@ -785,7 +785,7 @@ class CSE_Ext_02(ctypes.LittleEndianStructure) : # Feature Permissions (FEATURE_
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
-		("FeatureCount",	uint32_t),		# 0x08
+		("ModuleCount",		uint32_t),		# 0x08
 		# 0x0C
 	]
 	
@@ -795,7 +795,7 @@ class CSE_Ext_02(ctypes.LittleEndianStructure) : # Feature Permissions (FEATURE_
 		pt.title = col_y + 'Extension 2, Feature Permissions' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Feature Count', '%d' % self.FeatureCount])
+		pt.add_row(['Feature Count', '%d' % self.ModuleCount])
 		
 		return pt
 
@@ -811,14 +811,14 @@ class CSE_Ext_02_Mod(ctypes.LittleEndianStructure) : # (FEATURE_PERMISION_ENTRY)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 2 Module' + col_e
-		pt.add_row(['User ID', '0x%X' % self.UserID])
+		pt.title = col_y + 'Extension 2, Entry' + col_e
+		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		
 		return pt
 	
 # noinspection PyTypeChecker
-class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Info (MANIFEST_PARTITION_INFO_EXT)
+class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Information (MANIFEST_PARTITION_INFO_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -836,13 +836,15 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Info (MANIFEST_PART
 		# 0x58
 	]
 	
+	# Used at $FPT size calculation as well, remember to change in case of new Extension Revision!
+	
 	def ext_print(self) :
 		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
 		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 3, Partition Info' + col_e
+		pt.title = col_y + 'Extension 3, Partition Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
@@ -851,7 +853,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Info (MANIFEST_PART
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
 		pt.add_row(['Partition Version', '0x%X' % self.PartitionVer])
 		pt.add_row(['Data Format Version', '0x%X' % self.DataFormatVer])
-		pt.add_row(['Instance ID', '0x%X' % self.InstanceID])
+		pt.add_row(['Instance ID', '0x%0.8X' % self.InstanceID])
 		pt.add_row(['Flags', '0x%X' % self.Flags])
 		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
 		pt.add_row(['Unknown', '0x%X' % self.Unknown])
@@ -859,7 +861,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Info (MANIFEST_PART
 		return pt
 	
 # noinspection PyTypeChecker
-class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # (MANIFEST_MODULE_INFO_EXT)
+class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # Module Information (MANIFEST_MODULE_INFO_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
@@ -876,7 +878,7 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # (MANIFEST_MODULE_INFO_EXT
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 3 Module' + col_e
+		pt.title = col_y + 'Extension 3, Module Information' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
 		pt.add_row(['Type', ['Process','Shared Library','Data','TBD'][self.Type]])
 		pt.add_row(['Compression', ['Uncompressed','Huffman','LZMA'][self.Compression]])
@@ -956,7 +958,7 @@ class CSE_Ext_05(ctypes.LittleEndianStructure) : # Process Manifest (MAN_PROCESS
 		pt.add_row(['Public SendReceive Receiver', fvalue[f6]])
 		pt.add_row(['Public Notify Receiver', fvalue[f7]])
 		pt.add_row(['Reserved', '0x%X' % f8])
-		pt.add_row(['Main Thread ID', '0x%X' % self.MainThreadID])
+		pt.add_row(['Main Thread ID', '0x%0.8X' % self.MainThreadID])
 		pt.add_row(['Code Base Address', '0x%X' % self.CodeBaseAddress])
 		pt.add_row(['Code Size Uncompressed', '0x%X' % self.CodeSizeUncomp])
 		pt.add_row(['CM0 Heap Size', '0x%X' % self.CM0HeapSize])
@@ -964,11 +966,11 @@ class CSE_Ext_05(ctypes.LittleEndianStructure) : # Process Manifest (MAN_PROCESS
 		pt.add_row(['Default Heap Size', '0x%X' % self.DefaultHeapSize])
 		pt.add_row(['Main Thread Entry', '0x%X' % self.MainThreadEntry])
 		pt.add_row(['Allowed System Calls', AllowedSysCalls])
-		pt.add_row(['User ID', '0x%X' % self.UserID])
+		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
 		pt.add_row(['Reserved 2', '0x%X' % self.Reserved2])
-		pt.add_row(['Group ID', '0x%X' % self.GroupID])
+		pt.add_row(['Group ID', '0x%0.4X' % self.GroupID])
 		
 		return pt
 		
@@ -978,7 +980,23 @@ class CSE_Ext_05(ctypes.LittleEndianStructure) : # Process Manifest (MAN_PROCESS
 		
 		return flags.b.FaultTolerant, flags.b.PermanentProcess, flags.b.SingleInstance, flags.b.TrustedSendReceiveSender,\
 		       flags.b.TrustedNotifySender, flags.b.PublicSendReceiveReceiver, flags.b.PublicNotifyReceiver, flags.b.Reserved
+
+# noinspection PyTypeChecker
+class CSE_Ext_05_Mod(ctypes.LittleEndianStructure) : # Group ID (PROCESS_GROUP_ID)
+	_pack_ = 1
+	_fields_ = [
+		('GroupID',			uint16_t),		# 0x00
+		# 0x02
+	]
 	
+	def ext_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 5, Group ID' + col_e
+		pt.add_row(['Data', '0x%0.4X' % self.GroupID])
+		
+		return pt			   
+
 class CSE_Ext_05_Flags(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('FaultTolerant', uint32_t, 1), # (EXCEPTION_HANDLE_TYPES)
@@ -1033,7 +1051,7 @@ class CSE_Ext_06_Mod(ctypes.LittleEndianStructure) : # (Thread)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 6 Module' + col_e
+		pt.title = col_y + 'Extension 6, Entry' + col_e
 		pt.add_row(['Stack Size', '0x%X' % self.StackSize])
 		pt.add_row(['Flags Type', f1value[f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
@@ -1108,8 +1126,8 @@ class CSE_Ext_07_Mod(ctypes.LittleEndianStructure) : # (Device)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 7 Module' + col_e
-		pt.add_row(['Device ID', '0x%X' % self.DeviceID])
+		pt.title = col_y + 'Extension 7, Entry' + col_e
+		pt.add_row(['Device ID', '0x%0.8X' % self.DeviceID])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		
 		return pt
@@ -1145,7 +1163,7 @@ class CSE_Ext_08_Mod(ctypes.LittleEndianStructure) : # (MmioRange)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 8 Module' + col_e
+		pt.title = col_y + 'Extension 8, Entry' + col_e
 		pt.add_row(['Base Address', '0x%X' % self.BaseAddress])
 		pt.add_row(['Size Limit', '0x%X' % self.SizeLimit])
 		pt.add_row(['Access', '%s' % ['N/A','Read Only','Write Only','Read & Write'][self.Flags]])
@@ -1191,7 +1209,7 @@ class CSE_Ext_09_Mod(ctypes.LittleEndianStructure) : # (SPECIAL_FILE_DEF)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 9 Module' + col_e
+		pt.title = col_y + 'Extension 9, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
 		pt.add_row(['Access Mode', '0x%X' % self.AccessMode])
 		pt.add_row(['User ID', '0x%X' % self.UserID])
@@ -1234,8 +1252,8 @@ class CSE_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes (MOD_ATTR_E
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
 		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
 		pt.add_row(['Size Compressed', '0x%X' % self.SizeComp])
-		pt.add_row(['Device ID', '0x%X' % self.DEV_ID])
-		pt.add_row(['Vendor ID', '0x%X' % self.VEN_ID])
+		pt.add_row(['Device ID', '0x%0.4X' % self.DEV_ID])
+		pt.add_row(['Vendor ID', '0x%0.4X' % self.VEN_ID])
 		pt.add_row(['Hash', Hash])
 		
 		return pt
@@ -1270,14 +1288,14 @@ class CSE_Ext_0B_Mod(ctypes.LittleEndianStructure) : # (LockedRange)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 11 Module' + col_e
+		pt.title = col_y + 'Extension 11, Entry' + col_e
 		pt.add_row(['Range Base', '0x%X' % self.RangeBase])
 		pt.add_row(['Range Size', '0x%X' % self.RangeSize])
 		
 		return pt
 	
 # noinspection PyTypeChecker
-class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Info (CLIENT_SYSTEM_INFO_EXTENSION)
+class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Information (CLIENT_SYSTEM_INFO_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1302,13 +1320,14 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Info (CLIENT_SY
 		
 		FWSKUCapsReserv = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.FWSKUCapsReserv))
 		
-		if self.variant != 'CSME' : sku = ['N/A','N/A']
-		elif self.major == 11 and self.minor == 0 and self.hotfix == 0 and (self.build < 1205 or self.build == 7101) : sku = ['N/A','N/A']
-		else : sku = ['H','LP']
+		if [self.variant,self.major,self.minor,self.hotfix] == ['CSME',11,0,0] and (self.build < 1205 or self.build == 7101) :
+			sku = ['N/A','N/A','Unknown','Unknown']
+		else :
+			sku = ['H','LP','Unknown','Unknown']
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 12, Client System Info' + col_e
+		pt.title = col_y + 'Extension 12, Client System Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['SKU Capabilities', '0x%X' % self.FWSKUCaps])
@@ -1350,7 +1369,7 @@ class CSE_Ext_0C_GetFWSKUAttrib(ctypes.Union):
 	]
 	
 # noinspection PyTypeChecker
-class CSE_Ext_0D(ctypes.LittleEndianStructure) : # User Info (USER_INFO_EXTENSION)
+class CSE_Ext_0D(ctypes.LittleEndianStructure) : # User Information (USER_INFO_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1361,14 +1380,14 @@ class CSE_Ext_0D(ctypes.LittleEndianStructure) : # User Info (USER_INFO_EXTENSIO
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 13, User Info' + col_e
+		pt.title = col_y + 'Extension 13, User Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		
 		return pt
 	
 # noinspection PyTypeChecker
-class CSE_Ext_0D_Mod_11(ctypes.LittleEndianStructure) : # CSME 11 (USER_INFO_ENTRY)
+class CSE_Ext_0D_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (USER_INFO_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("UserID",			uint16_t),		# 0x00
@@ -1383,8 +1402,8 @@ class CSE_Ext_0D_Mod_11(ctypes.LittleEndianStructure) : # CSME 11 (USER_INFO_ENT
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 13 Module' + col_e
-		pt.add_row(['User ID', '0x%X' % self.UserID])
+		pt.title = col_y + 'Extension 13, Entry' + col_e
+		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['NV Storage Quota', '0x%X' % self.NVStorageQuota])
 		pt.add_row(['RAM Storage Quota', '0x%X' % self.RAMStorageQuota])
@@ -1394,7 +1413,7 @@ class CSE_Ext_0D_Mod_11(ctypes.LittleEndianStructure) : # CSME 11 (USER_INFO_ENT
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_0D_Mod_12(ctypes.LittleEndianStructure) : # CSME 12 (not in XML, Reverse Engineered)
+class CSE_Ext_0D_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("UserID",			uint16_t),		# 0x00
@@ -1408,8 +1427,8 @@ class CSE_Ext_0D_Mod_12(ctypes.LittleEndianStructure) : # CSME 12 (not in XML, R
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 13 Module' + col_e
-		pt.add_row(['User ID', '0x%X' % self.UserID])
+		pt.title = col_y + 'Extension 13, Entry' + col_e
+		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['NV Storage Quota', '0x%X' % self.NVStorageQuota])
 		pt.add_row(['RAM Storage Quota', '0x%X' % self.RAMStorageQuota])
@@ -1442,8 +1461,8 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # Key Manifest (KEY_MANIFEST_EX
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Key Type', ['Unknown','RoT','OEM'][self.KeyType]])
 		pt.add_row(['Key SVN', '%d' % self.KeySVN])
-		pt.add_row(['OEM ID', '0x%X' % self.OEMID])
-		pt.add_row(['Key ID', '0x%X' % self.KeyID])
+		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
+		pt.add_row(['Key ID', '0x%0.2X' % self.KeyID])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x0' if Reserved1 == '00000000' * 4 else Reserved1])
 		
@@ -1471,7 +1490,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 14 Module' + col_e
+		pt.title = col_y + 'Extension 14, Entry' + col_e
 		pt.add_row(['Hash Usages', ', '.join(map(str, f3))])
 		pt.add_row(['Usage Bitmap Reserved', '%s' % format(self.UsageBitmapRes, '064b')])
 		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 4 else Reserved0])
@@ -1538,7 +1557,7 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # Signed Package Info (SIGNED_P
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 15, Signed Package Info' + col_e
+		pt.title = col_y + 'Extension 15, Signed Package Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
@@ -1587,7 +1606,7 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # (SIGNED_PACKAGE_INFO_EXT_
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 15 Module' + col_e
+		pt.title = col_y + 'Extension 15, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
 		pt.add_row(['Type', ['Process','Shared Library','Data','TBD'][self.Type]])
 		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
@@ -1745,7 +1764,7 @@ class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # (not in XML, Reverse Engi
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 18 Module' + col_e
+		pt.title = col_y + 'Extension 18, Entry' + col_e
 		pt.add_row(['Unknown 00_04', '0x%X' % self.Unknown00_04])
 		pt.add_row(['Unknown 04_08', '0x%X' % self.Unknown04_08])
 		pt.add_row(['Unknown 08_0C', '0x%X' % self.Unknown08_0C])
@@ -1825,7 +1844,7 @@ class CSE_Ext_13(ctypes.LittleEndianStructure) : # Boot Policy (BOOT_POLICY_META
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_14(ctypes.LittleEndianStructure) : # DNX (DnxManifestExtension)
+class CSE_Ext_14(ctypes.LittleEndianStructure) : # DnX Manifest (DnxManifestExtension)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1837,7 +1856,7 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # DNX (DnxManifestExtension)
 		("OEMID",			uint16_t),		# 0x0C
 		("PlatformID",		uint16_t),		# 0x0E
 		("MachineID",		uint32_t*4),	# 0x10
-		("IDSalt",			uint32_t),		# 0x20
+		("SaltID",			uint32_t),		# 0x20
 		("PublicKey",		uint32_t*64),	# 0x24
 		("PublicExponent",	uint32_t),		# 0x88
 		("RegionCount",		uint32_t),		# 0x8C
@@ -1846,7 +1865,7 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # DNX (DnxManifestExtension)
 		("Reserved3",		uint32_t),		# 0x98
 		("Reserved4",		uint32_t),		# 0x9C
 		("Reserved5",		uint32_t),		# 0xA0
-		("ChunkSize",		uint32_t),		# 0xA4
+		("ImageChunkSize",	uint32_t),		# 0xA4
 		("ChunkCount",		uint32_t),		# 0xA8
 		# 0xAC
 	]
@@ -1857,17 +1876,17 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # DNX (DnxManifestExtension)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 20, DNX' + col_e
+		pt.title = col_y + 'Extension 20, DnX Manifest' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Minor', '%d' % self.Minor])
 		pt.add_row(['Major', '%d' % self.Major])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
-		pt.add_row(['OEM ID', '0x%X' % self.OEMID])
-		pt.add_row(['Platform ID', '0x%X' % self.PlatformID])
+		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
+		pt.add_row(['Platform ID', '0x%0.4X' % self.PlatformID])
 		pt.add_row(['Machine ID', '0x0' if MachineID == '00000000' * 4 else MachineID])
-		pt.add_row(['ID Salt', '0x%X' % self.IDSalt])
+		pt.add_row(['Salt ID', '0x%0.8X' % self.SaltID])
 		pt.add_row(['Public Key', '%s [...]' % PublicKey[:7]])
 		pt.add_row(['Public Exponent', '0x%X' % self.PublicExponent])
 		pt.add_row(['Region Count', '%d' % self.RegionCount])
@@ -1876,8 +1895,28 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # DNX (DnxManifestExtension)
 		pt.add_row(['Reserved 3', '0x%X' % self.Reserved3])
 		pt.add_row(['Reserved 4', '0x%X' % self.Reserved4])
 		pt.add_row(['Reserved 5', '0x%X' % self.Reserved5])
-		pt.add_row(['Chunk Size', '0x%X' % self.ChunkSize])
+		pt.add_row(['Image Chunk Size', '0x%X' % self.ImageChunkSize])
 		pt.add_row(['Chunk Count', '%d' % self.ChunkCount])
+		
+		return pt
+		
+# noinspection PyTypeChecker
+class CSE_Ext_14_RegionMap(ctypes.LittleEndianStructure) : # DnX Region Map (not in XML, Reverse Engineered)
+	_pack_ = 1
+	_fields_ = [
+		('IFWIAlign',		uint32_t),		# 0x00 in 4K pages (guess)
+		('RegionSize',		uint32_t),		# 0x04 Divided by ChunkCount
+		('IFWISize',		uint32_t),		# 0x08 BIOS/IAFW
+		# 0xC
+	]
+	
+	def ext_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 20, Region Map' + col_e
+		pt.add_row(['IFWI Alignment', '0x%X' % (self.IFWIAlign * 4096)])
+		pt.add_row(['Chunk Region Size', '0x%X' % self.RegionSize])
+		pt.add_row(['IFWI Size', '0x%X' % self.IFWISize])
 		
 		return pt
 		
@@ -2033,7 +2072,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_16(ctypes.LittleEndianStructure) : # Unknown Partition Info (not in XML, Reverse Engineered)
+class CSE_Ext_16(ctypes.LittleEndianStructure) : # Unknown Partition Information (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2061,14 +2100,14 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # Unknown Partition Info (not i
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 22, Unknown Partition Info' + col_e
+		pt.title = col_y + 'Extension 22, Unknown Partition Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Partition Size', '0x%X' % self.PartitionSize])
 		pt.add_row(['Partition Version', '0x%X' % self.PartitionVer])
 		pt.add_row(['Data Format Version', '0x%X' % self.DataFormatVer])
-		pt.add_row(['Instance ID', '0x%X' % self.InstanceID])
+		pt.add_row(['Instance ID', '0x%0.8X' % self.InstanceID])
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
 		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256'][self.HashType]])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
@@ -2221,6 +2260,18 @@ bpdt_dict = {
 # CSE Extensions 0x00-0x16 (0x11 excluded) and 0x32
 ext_tag_all = list(range(17)) + list(range(18,23)) + [50]
 
+# CSE Extensions with Revisions
+ext_tag_rev_hdr = []
+
+# CSE Extension Modules with Revisions
+ext_tag_rev_mod = [0x1,0xD]
+
+# CSE Extensions without Modules
+ext_tag_mod_none = [0x4,0xA,0xC,0x10,0x13,0x16,0x32]
+
+# CSE Extensions with Module Count
+ext_tag_mod_count = [0x1,0x2,0x10,0x12,0x14,0x15]
+
 # CSE Extension Structures
 ext_dict = {
 			'CSE_Ext_00' : CSE_Ext_00,
@@ -2247,20 +2298,22 @@ ext_dict = {
 			'CSE_Ext_16' : CSE_Ext_16,
 			'CSE_Ext_32' : CSE_Ext_32,
 			'CSE_Ext_00_Mod' : CSE_Ext_00_Mod,
-			'CSE_Ext_01_Mod_11' : CSE_Ext_01_Mod_11,
-			'CSE_Ext_01_Mod_12' : CSE_Ext_01_Mod_12,
+			'CSE_Ext_01_Mod' : CSE_Ext_01_Mod,
+			'CSE_Ext_01_Mod_R2' : CSE_Ext_01_Mod_R2,
 			'CSE_Ext_02_Mod' : CSE_Ext_02_Mod,
 			'CSE_Ext_03_Mod' : CSE_Ext_03_Mod,
+			'CSE_Ext_05_Mod' : CSE_Ext_05_Mod,
 			'CSE_Ext_06_Mod' : CSE_Ext_06_Mod,
 			'CSE_Ext_07_Mod' : CSE_Ext_07_Mod,
 			'CSE_Ext_08_Mod' : CSE_Ext_08_Mod,
 			'CSE_Ext_09_Mod' : CSE_Ext_09_Mod,
 			'CSE_Ext_0B_Mod' : CSE_Ext_0B_Mod,
-			'CSE_Ext_0D_Mod_11' : CSE_Ext_0D_Mod_11,
-			'CSE_Ext_0D_Mod_12' : CSE_Ext_0D_Mod_12,
+			'CSE_Ext_0D_Mod' : CSE_Ext_0D_Mod,
+			'CSE_Ext_0D_Mod_R2' : CSE_Ext_0D_Mod_R2,
 			'CSE_Ext_0E_Mod' : CSE_Ext_0E_Mod,
 			'CSE_Ext_0F_Mod' : CSE_Ext_0F_Mod,
 			'CSE_Ext_12_Mod' : CSE_Ext_12_Mod,
+			'CSE_Ext_14_RegionMap' : CSE_Ext_14_RegionMap,
 			'CSE_Ext_15_PartID' : CSE_Ext_15_PartID,
 			'CSE_Ext_15_Payload' : CSE_Ext_15_Payload,
 			'CSE_Ext_15_Payload_Knob' : CSE_Ext_15_Payload_Knob,
@@ -2479,7 +2532,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 			ext_print_temp = []
 			cpd_ext_offset = 0
 			loop_break = 0
-			ext_empty = 0
+			entry_empty = 0
 			
 			if b'.man' in cpd_entry_name or b'.met' in cpd_entry_name :
 				
@@ -2501,41 +2554,108 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 					# Break loop just in case it becomes infinite
 					loop_break += 1
 					if loop_break > 100 :
-						gen_msg(err_stor, col_r + 'Error: Forced CSE Extension Analysis break after 100 loops at %s > %s, please report it!' % (cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+						gen_msg(err_stor, col_r + 'Error: Forced CSE Extension Analysis break after 100 loops at %s > %s, please report it!' %
+						       (cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue...') # Debug
 						
 						break
 					
-					# Skip parsing of unimplemented CSE Extensions & notify user
+					cpd_ext_size = int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+					cpd_ext_end = cpd_ext_offset + cpd_ext_size
+					
+					# Detect unknown CSE Extension & notify user
 					if ext_tag not in ext_tag_all :
-						gen_msg(err_stor, col_r + 'Error: Found unimplemented CSE Extension 0x%0.2X at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
-						ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
+						gen_msg(err_stor, col_r + 'Error: Detected unknown CSE Extension 0x%0.2X at %s > %s, please report it!' %
+						       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
-					cpd_ext_size = int.from_bytes(reading[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+					# Detect CSE Extension data overflow & notify user
+					if cpd_ext_end > cpd_entry_offset + cpd_entry_size : # Manifest/Metadata Entry overflow
+						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X data overflow at %s > %s, please report it!' %
+						       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					hdr_rev_tag = '' # CSE Extension Header Revision Tag
+					mod_rev_tag = '' # CSE Extension Module Revision Tag
+					
+					if (variant,major) == ('CSME',12) and (minor,hotfix,build) not in [(0,0,7070),(0,0,7075)] :
+						if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
+						if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
+					else :
+						pass # These CSE use the original Header/Module Structures
+					
+					ext_dict_name = 'CSE_Ext_%0.2X%s' % (ext_tag, hdr_rev_tag)
+					ext_struct_name = ext_dict[ext_dict_name] if ext_dict_name in ext_dict else None
+					ext_dict_mod = 'CSE_Ext_%0.2X_Mod%s' % (ext_tag, mod_rev_tag)
+					ext_struct_mod = ext_dict[ext_dict_mod] if ext_dict_mod in ext_dict else None
 					
 					# Analyze Manifest/Metadata Extension Info
 					if param.me11_mod_extr :
-						if 'CSE_Ext_%0.2X' % ext_tag in ext_dict :
-							ext_struct = ext_dict['CSE_Ext_%0.2X' % ext_tag]
-							ext_length = ctypes.sizeof(ext_struct)
+						if ext_dict_name in ext_dict :
+							ext_length = ctypes.sizeof(ext_struct_name)
 							
-							if ext_tag in [1,13] :
-								if major == 11 : mod_tag = '_11'
-								else : mod_tag = '_12'
-							else :
-								mod_tag = ''
+							# Detect CSE Extension without Modules different size & notify user
+							if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+								gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s, please report it!' %
+								       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+								if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 							
 							if ext_tag == 12 : # CSE_Ext_0C requires Variant & Version input
-								ext_hdr_p = get_struct(reading, cpd_ext_offset, ext_struct, var_ver)
+								ext_hdr_p = get_struct(reading, cpd_ext_offset, ext_struct_name, var_ver)
 							else :
-								ext_hdr_p = get_struct(reading, cpd_ext_offset, ext_struct)
+								ext_hdr_p = get_struct(reading, cpd_ext_offset, ext_struct_name)
 							
 							ext_print_temp.append(ext_hdr_p.ext_print())
 							
-							if ext_tag == 21 : # CSE_Ext_15 has a unique structure
+							if ext_tag == 20 : # CSE_Ext_14 has a unique structure
+								CSE_Ext_14_RegionMap_length = ctypes.sizeof(CSE_Ext_14_RegionMap)
+								
+								region_count = ext_hdr_p.RegionCount
+								chunk_count = ext_hdr_p.ChunkCount
+								rgn_map_offset = cpd_ext_offset + ext_length
+								total_rgn_size = 0
+								
+								for _ in range(region_count) :
+									rgn_map_struct = get_struct(reading, rgn_map_offset, CSE_Ext_14_RegionMap)
+									chunk_rgn_size = rgn_map_struct.RegionSize
+									total_rgn_size += chunk_rgn_size
+									
+									# Check if Chunk data is divisible by Chunk count
+									if chunk_rgn_size % chunk_count != 0 :
+										gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at %s > %s, please report it!' %
+										       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+										if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+									
+									chunk_size = int(chunk_rgn_size / chunk_count)
+									chunk_start = rgn_map_offset + CSE_Ext_14_RegionMap_length
+									
+									ext_print_temp.append(rgn_map_struct.ext_print())
+									
+									for chunk in range(chunk_count) :
+										chunk_data = '%X' % int.from_bytes(reading[chunk_start:chunk_start + chunk_size], 'little')
+										
+										pt = ext_table(['Field', 'Value'], False, 1)
+										pt.title = col_y + 'Extension 20 Chunk %d/%d' % (chunk + 1, chunk_count) + col_e
+										pt.add_row(['Data', chunk_data])
+										
+										ext_print_temp.append(pt)
+										chunk_start += chunk_size
+										
+									rgn_map_offset += CSE_Ext_14_RegionMap_length + chunk_rgn_size
+									
+								# Check Extension full size when Module Counter exists
+								if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + region_count * CSE_Ext_14_RegionMap_length + total_rgn_size) :
+									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+									       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+							
+							elif ext_tag == 21 : # CSE_Ext_15 has a unique structure
+								CSE_Ext_15_PartID_length = ctypes.sizeof(CSE_Ext_15_PartID)
+								CSE_Ext_15_Payload_length = ctypes.sizeof(CSE_Ext_15_Payload)
+								CSE_Ext_15_Payload_Knob_length = ctypes.sizeof(CSE_Ext_15_Payload_Knob)
+								
 								part_id_count = ext_hdr_p.PartIDCount
-								cpd_part_id_offset = cpd_ext_offset + ext_length
+								cpd_part_id_offset = cpd_ext_offset + ext_length # CSE_Ext_15 structure size (not entire Extension 15)
 								cpd_payload_offset = cpd_part_id_offset + part_id_count * 0x14
 								cpd_payload_knob_offset = cpd_payload_offset + 0x4
 								
@@ -2547,32 +2667,96 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 								payload_struct = get_struct(reading, cpd_payload_offset, CSE_Ext_15_Payload)
 								ext_print_temp.append(payload_struct.ext_print())
 								payload_knob_count = payload_struct.KnobCount
+								payload_knob_area = cpd_ext_end - cpd_payload_knob_offset
+								
+								# Check Extension full size when Module Counter exists
+								if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + part_id_count * CSE_Ext_15_PartID_length + CSE_Ext_15_Payload_length +
+								payload_knob_count * CSE_Ext_15_Payload_Knob_length) :
+									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+										   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+								
+								# Check if Knob data is divisible by Knob size
+								if payload_knob_area % CSE_Ext_15_Payload_Knob_length != 0 :
+									gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at %s > %s, please report it!' %
+									       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 								
 								for knob in range(payload_knob_count) :
 									payload_knob_struct = get_struct(reading, cpd_payload_knob_offset, CSE_Ext_15_Payload_Knob)
 									ext_print_temp.append(payload_knob_struct.ext_print())
 									cpd_payload_knob_offset += 0x08
 									
-							elif 'CSE_Ext_%0.2X_Mod%s' % (ext_tag, mod_tag) in ext_dict :
-								mod_struct = ext_dict['CSE_Ext_%0.2X_Mod%s' % (ext_tag, mod_tag)]
+							elif ext_dict_mod in ext_dict :
+								mod_length = ctypes.sizeof(ext_struct_mod)
 								cpd_mod_offset = cpd_ext_offset + ext_length
-						
-								while cpd_mod_offset < cpd_ext_offset + cpd_ext_size :
-									mod_hdr_p = get_struct(reading, cpd_mod_offset, mod_struct)
-									mod_length = ctypes.sizeof(mod_struct)
+								cpd_mod_area = cpd_ext_end - cpd_mod_offset
+								
+								# Check Extension full size when Module Counter exists
+								if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + ext_hdr_p.ModuleCount * mod_length) :
+									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+										   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+								
+								# Check if Mod data is divisible by Mod size
+								if cpd_mod_area % mod_length != 0 :
+									gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at %s > %s, please report it!' %
+									       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+								
+								while cpd_mod_offset < cpd_ext_end :
+									mod_hdr_p = get_struct(reading, cpd_mod_offset, ext_struct_mod)
 									ext_print_temp.append(mod_hdr_p.ext_print())
 							
 									cpd_mod_offset += mod_length
 					
-					if ext_tag == 3 : # Unique, .man
-						ext_hdr = get_struct(reading, cpd_ext_offset, CSE_Ext_03)
-						ext3_pname = ext_hdr.PartitionName.decode('utf-8')
-						vcn = ext_hdr.VCN
-						in_id = ext_hdr.InstanceID # LOCL/WCOD identifier
+					if ext_tag == 1 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						CSE_Ext_01_length = ctypes.sizeof(ext_struct_name)
+						cpd_mod_offset = cpd_ext_offset + CSE_Ext_01_length
+						CSE_Ext_01_Mod_length = ctypes.sizeof(ext_struct_mod)
 						
-						cpd_mod_offset = cpd_ext_offset + ctypes.sizeof(CSE_Ext_03)
-						while cpd_mod_offset < cpd_ext_offset + cpd_ext_size :
-							mod_hdr_p = get_struct(reading, cpd_mod_offset, CSE_Ext_03_Mod)
+						# Check Extension full size when Module Counter exists
+						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_01_length + ext_hdr.ModuleCount * CSE_Ext_01_Mod_length) :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					elif ext_tag == 2 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						CSE_Ext_02_length = ctypes.sizeof(ext_struct_name)
+						cpd_mod_offset = cpd_ext_offset + CSE_Ext_02_length
+						CSE_Ext_02_Mod_length = ctypes.sizeof(ext_struct_mod)
+						
+						# Check Extension full size when Module Counter exists
+						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_02_length + ext_hdr.ModuleCount * CSE_Ext_02_Mod_length) :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					elif ext_tag == 3 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						ext3_pname = ext_hdr.PartitionName.decode('utf-8')
+						vcn = ext_hdr.VCN # Version Control Number
+						in_id = ext_hdr.InstanceID # LOCL/WCOD identifier
+						CSE_Ext_03_length = ctypes.sizeof(ext_struct_name)
+						cpd_mod_offset = cpd_ext_offset + CSE_Ext_03_length
+						CSE_Ext_03_Mod_length = ctypes.sizeof(ext_struct_mod)
+						CSE_Ext_03_Mod_area = cpd_ext_end - cpd_mod_offset
+						
+						# Check Extension full size when Module Counter exists
+						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_03_length + ext_hdr.ModuleCount * CSE_Ext_03_Mod_length) :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+						
+						# Check if Mod data is divisible by Mod size
+						if CSE_Ext_03_Mod_area % CSE_Ext_03_Mod_length != 0 :
+							gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+							
+						while cpd_mod_offset < cpd_ext_end :
+							mod_hdr_p = get_struct(reading, cpd_mod_offset, ext_struct_mod)
 							met_name = mod_hdr_p.Name.decode('utf-8') + '.met'
 							# APL may include both 03 & 0F, may have 03 & 0F MetadataHash missmatch, may have Met name with ".met" included (GREAT WORK INTEL/OEMs...)
 							if met_name.endswith('.met.met') : met_name = met_name[:-4]
@@ -2580,29 +2764,51 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 							
 							cpd_ext_hash.append([cpd_name, met_name, met_hash])
 							
-							cpd_mod_offset += ctypes.sizeof(CSE_Ext_03_Mod)
+							cpd_mod_offset += CSE_Ext_03_Mod_length
 						
-					elif ext_tag == 10 : # Unique, .met
-						ext_hdr = get_struct(reading, cpd_ext_offset, CSE_Ext_0A)
+					elif ext_tag == 10 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						ext_length = ctypes.sizeof(ext_struct_name)
+						
+						# Detect CSE Extension without Modules different size & notify user
+						if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+						
 						mod_comp_type = ext_hdr.Compression # Metadata's Module Compression Type (0-2)
 						mod_encr_type = ext_hdr.Encryption # Metadata's Module Encryption Type (0-1)
 						mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
 						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
 						mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Metadata's Module Hash
+						
 						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 					
-					elif ext_tag == 12 : # Unique, .man
-						ext_hdr = get_struct(reading, cpd_ext_offset, CSE_Ext_0C, var_ver)
+					elif ext_tag == 12 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name, var_ver)
+						ext_length = ctypes.sizeof(ext_struct_name)
+						
+						# Detect CSE Extension without Modules different size & notify user
+						if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 						
 						fw_0C_cse,fw_0C_sku1,fw_0C_lbg,fw_0C_m3,fw_0C_m0,fw_0C_sku2,fw_0C_sicl,fw_0C_res2 = ext_hdr.get_flags()
 					
-					elif ext_tag == 15 : # Unique, .man
-						ext_hdr = get_struct(reading, cpd_ext_offset, CSE_Ext_0F)
-						vcn = ext_hdr.VCN
+					elif ext_tag == 15 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						vcn = ext_hdr.VCN # Version Control Number
+						CSE_Ext_0F_length = ctypes.sizeof(ext_struct_name)
+						cpd_mod_offset = cpd_ext_offset + CSE_Ext_0F_length
+						CSE_Ext_0F_Mod_length = ctypes.sizeof(ext_struct_mod)
+						CSE_Ext_0F_Mod_area = cpd_ext_end - cpd_mod_offset
 						
-						cpd_mod_offset = cpd_ext_offset + ctypes.sizeof(CSE_Ext_0F)
-						while cpd_mod_offset < cpd_ext_offset + cpd_ext_size :
-							mod_hdr_p = get_struct(reading, cpd_mod_offset, CSE_Ext_0F_Mod)
+						# Check if Mod data is divisible by Mod size
+						if CSE_Ext_0F_Mod_area % CSE_Ext_0F_Mod_length != 0 :
+							gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+						
+						while cpd_mod_offset < cpd_ext_end :
+							mod_hdr_p = get_struct(reading, cpd_mod_offset, ext_struct_mod)
 							met_name = mod_hdr_p.Name.decode('utf-8') + '.met'
 							# APL may include both 03 & 0F, may have 03 & 0F MetadataHash missmatch, may have Met name with ".met" included (GREAT WORK INTEL/OEMs...)
 							if met_name.endswith('.met.met') : met_name = met_name[:-4]
@@ -2610,16 +2816,42 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 							
 							cpd_ext_hash.append([cpd_name, met_name, met_hash])
 							
-							cpd_mod_offset += ctypes.sizeof(CSE_Ext_0F_Mod)
+							cpd_mod_offset += CSE_Ext_0F_Mod_length
 					
-					elif ext_tag == 16 : # Unique, IUNP
-						ext_hdr = get_struct(reading, cpd_ext_offset, CSE_Ext_10)
+					elif ext_tag == 16 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						ext_length = ctypes.sizeof(ext_struct_name)
+						
+						# Detect CSE Extension without Modules different size & notify user
+						if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+						
 						mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
 						mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.Hash) # Metadata's Module Hash (BE)
+						
 						cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, mod_uncomp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 					
-					elif ext_tag == 19 : # Unique, IBBP
-						ext_hdr = get_struct(reading, cpd_ext_offset, CSE_Ext_13)
+					elif ext_tag == 18 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						CSE_Ext_12_length = ctypes.sizeof(ext_struct_name)
+						cpd_mod_offset = cpd_ext_offset + CSE_Ext_12_length
+						CSE_Ext_12_Mod_length = ctypes.sizeof(ext_struct_mod)
+						
+						# Check Extension full size when Module Counter exists
+						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_12_length + ext_hdr.ModuleCount * CSE_Ext_12_Mod_length) :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					elif ext_tag == 19 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						ext_length = ctypes.sizeof(ext_struct_name)
+						
+						# Detect CSE Extension without Modules different size & notify user
+						if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s, please report it!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
+							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 						
 						ibbl_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.IBBLHash) # IBBL Hash (BE)
 						ibb_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.IBBHash) # IBB Hash (BE)
@@ -2628,16 +2860,16 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						if ibb_hash not in ['00' * ext_hdr.IBBHashSize, 'FF' * ext_hdr.IBBHashSize] : cpd_mod_attr.append(['IBB', 0, 0, 0, 0, 0, 0, ibb_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 						if obb_hash not in ['00' * ext_hdr.OBBHashSize, 'FF' * ext_hdr.OBBHashSize] : cpd_mod_attr.append(['OBB', 0, 0, 0, 0, 0, 0, obb_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 					
-					cpd_ext_offset += cpd_ext_size
+					cpd_ext_offset += cpd_ext_size # Next Extension Offset
 					
-					if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_hdr.Size : # End of Extension reached
-						ext_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
-						if ext_data == b'\xFF' * cpd_entry_size or cpd_entry_offset > file_end : ext_empty = 1 # Determine if Extension is Empty/Missing
+					if cpd_ext_offset + 1 > cpd_entry_offset + cpd_entry_size : # End of Manifest/Metadata Entry reached
+						entry_data = reading[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
+						if entry_data == b'\xFF' * cpd_entry_size or cpd_entry_offset > file_end : entry_empty = 1 # Determine if Entry is Empty/Missing
 						
-						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, ext_empty, 0, cpd_name, in_id, mn2_sigs, cpd_offset, cpd_valid])
-						cpd_ext_names.append(cpd_entry_name.decode('utf-8')[:-4]) # Store Module names which have Metadata
+						cpd_ext_attr.append([cpd_entry_name.decode('utf-8'), 0, 0, cpd_entry_offset, cpd_entry_size, cpd_entry_size, entry_empty, 0, cpd_name, in_id, mn2_sigs, cpd_offset, cpd_valid])
+						cpd_ext_names.append(cpd_entry_name.decode('utf-8')[:-4]) # Store Module names which have Manifest/Metadata
 						
-						break # Stop Extension scanning at the end of .man/.met
+						break # Stop Extension scanning at the end of Manifest/Metadata Entry
 					
 					ext_tag = int.from_bytes(reading[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Extension Tag
 				
@@ -3043,7 +3275,6 @@ def key_anl(mod_fname, ext_print, mod_name) :
 	if mn2_key_hdr.Tag == b'$MN2' : # Sanity check
 		
 		cpd_ext_offset = mn2_key_hdr.HeaderLength * 4 # End of Key $MN2 Header
-		cpd_ext_end = mn2_key_hdr.Size * 4 # End of Key Data
 		
 		mn2_hdr_print = mn2_key_hdr.hdr_print_cse()
 		print('\n%s' % mn2_hdr_print) # Show $MN2 details
@@ -3080,29 +3311,56 @@ def key_anl(mod_fname, ext_print, mod_name) :
 			# Break loop just in case it becomes infinite
 			loop_break += 1
 			if loop_break > 100 :
-				gen_msg(err_stor, col_r + 'Error: Forced CSE Extension Analysis break after 100 loops at FTPR > %s, please report it!' % mod_name + col_e, 'unp')
+				gen_msg(err_stor, col_r + 'Error: Forced CSE Extension Analysis break after 100 loops at FTPR/UTOK > %s, please report it!' % mod_name + col_e, 'unp')
 				if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue...') # Debug
 				
 				break
 			
-			# Skip parsing of unimplemented CSE Extensions & notify user
-			if ext_tag not in ext_tag_all :
-				gen_msg(err_stor, col_r + 'Error: Found unimplemented CSE Extension 0x%0.2X at FTPR > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
-				ext_tag = int.from_bytes(key_data[cpd_ext_offset:cpd_ext_offset + 0x4], 'little') # Next Key Extension Tag
-				if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
-				
 			cpd_ext_size = int.from_bytes(key_data[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+			cpd_ext_end = cpd_ext_offset + cpd_ext_size
 			
-			if 'CSE_Ext_%0.2X' % ext_tag in ext_dict :
-				ext_struct = ext_dict['CSE_Ext_%0.2X' % ext_tag]
-				ext_length = ctypes.sizeof(ext_struct)
+			# Detect unknown CSE Extension & notify user
+			if ext_tag not in ext_tag_all :
+				gen_msg(err_stor, col_r + 'Error: Detected unknown CSE Extension 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+				if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+			
+			# Detect CSE Extension data overflow & notify user
+			if cpd_ext_end > cpd_ext_end : # Key Entry overflow
+				gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X data overflow at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+				if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+			
+			hdr_rev_tag = '' # CSE Extension Header Revision Tag
+			mod_rev_tag = '' # CSE Extension Module Revision Tag
+			
+			if (variant,major) == ('CSME',12) and (minor,hotfix,build) not in [(0,0,7070),(0,0,7075)] :
+				if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
+				if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
+			else :
+				pass # These CSE use the original Header/Module Structures
+			
+			ext_dict_name = 'CSE_Ext_%0.2X%s' % (ext_tag, hdr_rev_tag)
+			ext_struct_name = ext_dict[ext_dict_name] if ext_dict_name in ext_dict else None
+			ext_dict_mod = 'CSE_Ext_%0.2X_Mod%s' % (ext_tag, mod_rev_tag)
+			ext_struct_mod = ext_dict[ext_dict_mod] if ext_dict_mod in ext_dict else None
+			
+			if ext_dict_name in ext_dict :
+				ext_length = ctypes.sizeof(ext_struct_name)
 				
-				ext_hdr_p = get_struct(key_data, cpd_ext_offset, ext_struct)
+				# Detect CSE Extension without Modules different size & notify user
+				if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+					gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+					if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+				
+				ext_hdr_p = get_struct(key_data, cpd_ext_offset, ext_struct_name)
 				ext_print_temp.append(ext_hdr_p.ext_print())
 				
-				if ext_tag == 21 :
+				if ext_tag == 21 : # CSE_Ext_15 has a unique structure
+					CSE_Ext_15_PartID_length = ctypes.sizeof(CSE_Ext_15_PartID)
+					CSE_Ext_15_Payload_length = ctypes.sizeof(CSE_Ext_15_Payload)
+					CSE_Ext_15_Payload_Knob_length = ctypes.sizeof(CSE_Ext_15_Payload_Knob)
+					
 					part_id_count = ext_hdr_p.PartIDCount
-					cpd_part_id_offset = cpd_ext_offset + ext_length
+					cpd_part_id_offset = cpd_ext_offset + ext_length # CSE_Ext_15 structure size (not entire Extension 15)
 					cpd_payload_offset = cpd_part_id_offset + part_id_count * 0x14
 					cpd_payload_knob_offset = cpd_payload_offset + 0x4
 					
@@ -3110,23 +3368,45 @@ def key_anl(mod_fname, ext_print, mod_name) :
 						part_id_struct = get_struct(key_data, cpd_part_id_offset, CSE_Ext_15_PartID)
 						ext_print_temp.append(part_id_struct.ext_print())
 						cpd_part_id_offset += 0x14
-					
+								
 					payload_struct = get_struct(key_data, cpd_payload_offset, CSE_Ext_15_Payload)
 					ext_print_temp.append(payload_struct.ext_print())
 					payload_knob_count = payload_struct.KnobCount
+					payload_knob_area = cpd_ext_end - cpd_payload_knob_offset
+					
+					# Check Extension full size when Module Counter exists
+					if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + part_id_count * CSE_Ext_15_PartID_length + CSE_Ext_15_Payload_length +
+					payload_knob_count * CSE_Ext_15_Payload_Knob_length) :
+						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					# Check if Knob data is divisible by Knob size
+					if payload_knob_area % CSE_Ext_15_Payload_Knob_length != 0 :
+						gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
 					for knob in range(payload_knob_count) :
 						payload_knob_struct = get_struct(key_data, cpd_payload_knob_offset, CSE_Ext_15_Payload_Knob)
 						ext_print_temp.append(payload_knob_struct.ext_print())
 						cpd_payload_knob_offset += 0x08
 				
-				elif 'CSE_Ext_%0.2X_Mod' % ext_tag in ext_dict :
-					mod_struct = ext_dict['CSE_Ext_%0.2X_Mod' % ext_tag]
+				elif ext_dict_mod in ext_dict :
+					mod_length = ctypes.sizeof(ext_struct_mod)
 					cpd_mod_offset = cpd_ext_offset + ext_length
+					cpd_mod_area = cpd_ext_end - cpd_mod_offset
 					
-					while cpd_mod_offset < cpd_ext_offset + cpd_ext_size :
-						mod_hdr_p = get_struct(key_data, cpd_mod_offset, mod_struct)
-						mod_length = ctypes.sizeof(mod_struct)
+					# Check Extension full size when Module Counter exists
+					if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + ext_hdr_p.ModuleCount * mod_length) :
+						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					# Check if Mod data is divisible by Mod size
+					if cpd_mod_area % mod_length != 0 :
+						gen_msg(err_stor, col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
+					
+					while cpd_mod_offset < cpd_ext_end :
+						mod_hdr_p = get_struct(key_data, cpd_mod_offset, ext_struct_mod)
 						ext_print_temp.append(mod_hdr_p.ext_print())
 						
 						cpd_mod_offset += mod_length
@@ -4128,8 +4408,8 @@ for file_in in source :
 					
 					# Analyze TBD Header information
 					tbd_hdr = get_struct(reading, tbd_hdr_off, TBD_Header)
-					tbd_fpt_offset = tbd_hdr.EngineOffset
-					tbd_fpt_size = tbd_hdr.EngineSize
+					tbd_fpt_offset = tbd_hdr.FPTOffset
+					tbd_fpt_size = tbd_hdr.FPTSize
 					tbd_lbp1_offset = tbd_hdr.LBP1Offset
 					tbd_lbp1_size = tbd_hdr.LBP1Size
 					tbd_lbp2_offset = tbd_hdr.LBP2Offset
@@ -5084,7 +5364,7 @@ for file_in in source :
 						sku = "1.5MB"
 						sku_db = "1.5MB_ALL"
 						platform = "CPT/PBG"
-				if sku_me == "775CFF0D0A430000" or sku_me == "775CFF0D8A430000": # 5MB (775C) , 7.1.x (FF0D) , CPT or PBG (0A43 or 8A43)
+				if sku_me == "775CFF0D0A430000" or sku_me == "775CFF0D8A430000" : # 5MB (775C) , 7.1.x (FF0D) , CPT or PBG (0A43 or 8A43)
 					if (20 < hotfix < 30 and hotfix != 21 and build != 1056 and build != 1165) or (41 < hotfix < 50) : # Versions that, if exist, require manual investigation
 						sku = "5MB"
 						sku_db = "NaN"
