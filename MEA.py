@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.32.0'
+title = 'ME Analyzer v1.32.1_1'
 
 import os
 import re
@@ -2492,17 +2492,17 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 	if input_type == '$MN2' :
 		start_man_match = input_offset
 		
-		# Scan backwards for $CPD (should be <= 0x500B, works with both RGN --> $FPT & UPD --> 0x0)
-		for offset in range(start_man_match + 2, start_man_match - 0x1000, -4): # Start from MN2 (no $) to catch $CPD at 1, before "for" break at 0
+		# Scan backwards for $CPD (max $CPD size = 0x2000, .$MN2 Tag starts at 0x1B, works with both RGN --> $FPT & UPD --> 0x0)
+		for offset in range(start_man_match + 2, start_man_match + 2 - 0x201D, -4) : # Search from MN2 (no .$) to find CPD (no $) at 1, before loop break at 0
 			if b'$CPD' in reading[offset - 1:offset - 1 + 4] :
-				cpd_offset = offset - 1 # Catch UPD $CPD at offset 0 (offset - 1 = 1 - 1 = 0)
+				cpd_offset = offset - 1 # Adjust $CPD to 0 (offset - 1 = 1 - 1 = 0)
 				break # Stop at first detected $CPD
 	
 	elif input_type == '$CPD' :
 		cpd_offset = input_offset
 		
-		# Scan forward for $MN2 (should be <= 0x500B)
-		mn2_pat = re.compile(br'\x00\x24\x4D\x4E\x32').search(reading[cpd_offset:cpd_offset + 0x1000]) # .$MN2 detection, 0x00 adds old ME RGN support
+		# Scan forward for .$MN2 (max $CPD size = 0x2000, .$MN2 Tag ends at 0x20, works with both RGN --> $FPT & UPD --> 0x0)
+		mn2_pat = re.compile(br'\x00\x24\x4D\x4E\x32').search(reading[cpd_offset:cpd_offset + 0x2020]) # .$MN2 detection, 0x00 for extra sanity check
 		if mn2_pat is not None :
 			(start_man_match, end_man_match) = mn2_pat.span()
 			start_man_match += cpd_offset

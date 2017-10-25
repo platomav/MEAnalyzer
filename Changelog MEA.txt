@@ -1,3 +1,7 @@
+v1.32.1_1 r101
+
+Fixed CSE parsing issue with $CPD & $MN2 detection
+
 v1.32.0 r101
 
 Added support for CSME 11.8, 11.11 & 11.21 firmware
