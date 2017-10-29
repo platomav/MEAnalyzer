@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.32.1_1'
+title = 'ME Analyzer v1.32.2'
 
 import os
 import re
@@ -35,9 +35,10 @@ col_m = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
 col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
 
 # Import Huffman11 by IllegalArgument
+# https://github.com/IllegalArgument/Huffman11
 try :
 	sys.dont_write_bytecode = True
-	import huffman11 # https://github.com/IllegalArgument/Huffman11
+	from Huffman11 import huffman11 # Initialize Git Submodule
 	sys.dont_write_bytecode = False
 	huff11_exist = True
 except :
@@ -3504,9 +3505,9 @@ def mea_exit(code=0) :
 # Huffman11 not found
 def huff11_404() :
 	if param.me11_mod_extr :
-		print(col_r + '\n    Failed to import Huffman11 by IllegalArgument, huffman11.py not found!' + col_e)
+		print(col_r + '\n    Failed to import Huffman11 by IllegalArgument!' + col_e)
 	else :
-		gen_msg(err_stor, col_r + 'Error: Failed to import Huffman11 by IllegalArgument, huffman11.py not found!' + col_e, 'unp')
+		gen_msg(err_stor, col_r + 'Error: Failed to import Huffman11 by IllegalArgument!' + col_e, 'unp')
 
 # Calculate SHA1 hash of data
 def sha_1(data) :
@@ -5702,7 +5703,7 @@ for file_in in source :
 					if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or 20 > minor > 0 :
 						if sku_result == 'LP' : sku_stp = 'C0'
 						elif sku_result == 'H' : sku_stp = 'D0'
-					elif release == 'Production' and minor == 20 and ' H' in sku : sku_stp = 'B0-S0' # PRD Bx/Sx (C620 Datasheet, 1.6 PCH Markings)
+					elif release == 'Production' and minor in [20,21] and ' H' in sku : sku_stp = 'B0-S0' # PRD Bx/Sx (C620 Datasheet, 1.6 PCH Markings)
 				
 				sku_db, upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
 				

@@ -1,6 +1,8 @@
-v1.32.1_1 r101
+v1.32.2 r102
 
-Fixed CSE parsing issue with $CPD & $MN2 detection
+Added Huffman11 as git submodule, thanks rickmark
+Fixed CSE parsing bug at max-padded (0x2000) $CPD
+Fixed PCH Revision display for CSME 11.21 firmware
 
 v1.32.0 r101
 

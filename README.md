@@ -116,7 +116,7 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 2. Use pip to install colorama (PyPi)
 3. Use pip to install PTable (Github, master branch)
 4. Use pip to install PyInstaller (Github, master branch)
-5. Place huffman11.py at MEA.py's directory (Github)
+5. Place huffman11.py at Huffman11 sub-directory (Github)
 6. Open a command prompt and execute:
 
 > pyinstaller --noupx --onefile MEA.py
