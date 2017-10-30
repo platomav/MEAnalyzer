@@ -1,3 +1,7 @@
+v1.32.3_1 r102
+
+Improved CSME 12 SPI FD Region structures detection
+
 v1.32.2 r102
 
 Added Huffman11 as git submodule, thanks rickmark
