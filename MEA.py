@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.32.2'
+title = 'ME Analyzer v1.32.3_1'
 
 import os
 import re
@@ -4403,7 +4403,8 @@ for file_in in source :
 				
 				# Detect if $FPT is proceeded by CSME 12+ TBD Header
 				tbd_hdr_off = start_fw_start_match - 0x1000 # TBD size is 0x1000
-				if start_fw_start_match == tbd_hdr_off + int.from_bytes(reading[tbd_hdr_off + 0x10:tbd_hdr_off + 0x14], 'little') :
+				if start_fw_start_match == tbd_hdr_off + int.from_bytes(reading[tbd_hdr_off + 0x10:tbd_hdr_off + 0x14], 'little') and \
+				reading[tbd_hdr_off:tbd_hdr_off + 0x10] == b'\xFF' * 16 :
 					tbd_exist = True
 					tbd_size = 0x1000
 					
@@ -4493,7 +4494,7 @@ for file_in in source :
 					if p_name in [b'\xFF\xFF\xFF\xFF', b''] :
 						p_name = '' # If appears, wrong NumPartitions
 						fpt_num_diff -= 1 # Check for less $FPT Entries
-					elif p_name == b'\xE0\x15': p_name = '' # ME8 (E0150020)
+					elif p_name == b'\xE0\x15' : p_name = '' # ME8 (E0150020)
 					else : p_name = p_name.decode('utf-8', 'ignore')
 					
 					if param.fpt_disp :
