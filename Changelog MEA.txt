@@ -1,4 +1,4 @@
-v1.32.3_1 r102
+v1.32.3 r103
 
 Improved CSME 12 SPI FD Region structures detection
 

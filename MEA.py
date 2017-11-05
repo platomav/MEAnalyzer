@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.32.3_1'
+title = 'ME Analyzer v1.32.3'
 
 import os
 import re
@@ -833,7 +833,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Information (MANIFE
 		("InstanceID", 		uint32_t),  	# 0x3C
 		("Flags", 			uint32_t),  	# 0x40 Support multiple instances Y/N (for independently updated WCOD/LOCL partitions with multiple instances)
 		("Reserved", 		uint32_t*4),  	# 0x44
-		("Unknown", 		uint32_t),  	# 0x54 Unknown (>= 11.6.0.1109, 1 SPS, 3 ME)
+		("Unknown", 		uint32_t),  	# 0x54 Unknown (>= 11.6.0.1109, 1 CSSPS, 3 CSME)
 		# 0x58
 	]
 	
@@ -1334,7 +1334,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Information (CL
 		pt.add_row(['SKU Capabilities', '0x%X' % self.FWSKUCaps])
 		pt.add_row(['SKU Capabilities Reserved', 'FF * 28' if FWSKUCapsReserv == 'FF' * 28 else '%s' % FWSKUCapsReserv])
 		pt.add_row(['CSE Size', '0x%X' % f1])
-		pt.add_row(['SKU Type', ['Corporate','Consumer','Slim','SPS'][f2]])
+		pt.add_row(['SKU Type', ['Corporate','Consumer','Slim','LBG'][f2]])
 		pt.add_row(['Lewisburg', fvalue[f3]])
 		pt.add_row(['M3', fvalue[f4]])
 		pt.add_row(['M0', fvalue[f5]])
@@ -1354,7 +1354,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Information (CL
 class CSE_Ext_0C_FWSKUAttrib(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('CSESize', uint64_t, 4), # CSESize * 0.5MB, always 0
-		('SKUType', uint64_t, 3), # 0 COR, 1 CON, 2 SLM, 3 SPS
+		('SKUType', uint64_t, 3), # 0 COR, 1 CON, 2 SLM, 3 LBG (?)
 		('Lewisburg', uint64_t, 1), # 0 11.x, 1 11.20
 		('M3', uint64_t, 1), # 0 CON & SLM, 1 COR
 		('M0', uint64_t, 1), # 1 CON & SLM & COR
@@ -3825,6 +3825,65 @@ def krod_fit_sku(start_sku_match) :
 	
 	return sku_check
 
+# FIT Platform for CSME 11
+def fit_11_plat(sku_check, fit_platform, me11_sku_ranges) :
+	if sku_check != 'NaN' :
+		
+		while fit_platform == 'NaN' :
+		
+			# 3rd byte of 1st pattern is SKU Category from 0+ (ex: 91 01 04 80 00 --> 5th, 91 01 03 80 00 --> 4th)
+			if any(s in sku_check for s in (' 2C 01 03 80 00 ',' 02 D1 02 2C ')) : fit_platform = 'PCH-H No Emulation KBL'
+			elif any(s in sku_check for s in (' 2D 01 03 80 00 ',' 02 D1 02 2D ')) : fit_platform = 'PCH-H Q270'
+			elif any(s in sku_check for s in (' 2E 01 03 80 00 ',' 02 D1 02 2E ')) : fit_platform = 'PCH-H Q250'
+			elif any(s in sku_check for s in (' 2F 01 03 80 00 ',' 02 D1 02 2F ')) : fit_platform = 'PCH-H B250'
+			elif any(s in sku_check for s in (' 30 01 03 80 00 ',' 02 D1 02 30 ')) : fit_platform = 'PCH-H H270'
+			elif any(s in sku_check for s in (' 31 01 03 80 00 ',' 02 D1 02 31 ')) : fit_platform = 'PCH-H Z270'
+			elif any(s in sku_check for s in (' 32 01 01 80 00 ',' 02 D1 02 32 ')) : fit_platform = 'PCH-H QMU185'
+			elif any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = 'PCH-H Q170'
+			elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = 'PCH-H Q150'
+			elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = 'PCH-H B150'
+			elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 02 D1 02 67 ')) : fit_platform = 'PCH-H H170'
+			elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = 'PCH-H Z170'
+			elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = 'PCH-H H110'
+			elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = 'PCH-H QM170'
+			elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = 'PCH-H HM170'
+			elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = 'PCH-H No Emulation SKL'
+			elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = 'PCH-H C236'
+			elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = 'PCH-H CM236'
+			elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = 'PCH-H C232'
+			elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = 'PCH-H QMS180'
+			elif any(s in sku_check for s in (' 71 00 01 80 00 ',' 02 D1 02 71 ')) : fit_platform = 'PCH-H QMS185'
+			elif any(s in sku_check for s in (' 90 01 04 80 00 ',' 02 D1 02 90 ')) : fit_platform = 'PCH-H No Emulation BSF'
+			elif any(s in sku_check for s in (' 91 01 04 80 00 ',' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = 'PCH-H C422' # moved at 11.7
+			elif any(s in sku_check for s in (' 92 01 04 80 00 ',' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = 'PCH-H X299' # moved at 11.7
+			elif any(s in sku_check for s in (' 93 01 01 80 00 ',' 02 D1 02 93 ')) : fit_platform = 'PCH-H QM175'
+			elif any(s in sku_check for s in (' 94 01 01 80 00 ',' 02 D1 02 94 ')) : fit_platform = 'PCH-H HM175'
+			elif any(s in sku_check for s in (' 95 01 01 80 00 ',' 02 D1 02 95 ')) : fit_platform = 'PCH-H CM238'
+			elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = 'PCH-H C621'
+			elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = 'PCH-H C622'
+			elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = 'PCH-H C624'
+			elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = 'PCH-H No Emulation LBG'
+			elif any(s in sku_check for s in (' F4 01 05 80 00 ',' 02 D1 02 F4 ')) : fit_platform = 'PCH-H No Emulation Z370'
+			elif any(s in sku_check for s in (' F5 01 05 80 00 ',' 02 D1 02 F5 ')) : fit_platform = 'PCH-H Z370'
+			elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = 'PCH-LP Premium U SKL'
+			elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = 'PCH-LP Premium Y SKL'
+			elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = 'PCH-LP No Emulation'
+			elif any(s in sku_check for s in (' 04 00 00 80 00 ',' 02 B0 02 04 ',' 02 D0 02 04 ')) : fit_platform = 'PCH-LP Base U KBL'
+			elif any(s in sku_check for s in (' 05 00 00 80 00 ',' 02 B0 02 05 ',' 02 D0 02 05 ')) : fit_platform = 'PCH-LP Premium U KBL'
+			elif any(s in sku_check for s in (' 06 00 00 80 00 ',' 02 B0 02 06 ',' 02 D0 02 06 ')) : fit_platform = 'PCH-LP Premium Y KBL'
+			elif any(s in sku_check for s in (' 07 00 00 80 00 ',' 02 B0 02 07 ',' 02 D0 02 07 ')) : fit_platform = 'PCH-LP Base U KBL-R'
+			elif any(s in sku_check for s in (' 08 00 00 80 00 ',' 02 B0 02 08 ',' 02 D0 02 08 ')) : fit_platform = 'PCH-LP Premium U KBL-R'
+			elif any(s in sku_check for s in (' 09 00 00 80 00 ',' 02 B0 02 09 ',' 02 D0 02 09 ')) : fit_platform = 'PCH-LP Premium Y KBL-R'
+			elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = 'PCH-LP Base U SKL' # last, weak pattern
+			elif me11_sku_ranges :
+				(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
+				sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
+				me11_sku_ranges.pop(-1) # Remove last SKU range
+				continue # Invoke while, check fit_platform in new sku_check
+			else : break # Could not find FIT SKU at any KROD
+			
+	return fit_platform
+	
 # Search DB for manual Engine CSE values
 def db_skl(variant) :
 	fw_db = db_open()
@@ -5619,61 +5678,8 @@ for file_in in source :
 					else :
 						huff11_404()
 				
-				# FIT Platform SKU for all 11.x
-				if sku_check != 'NaN' :
-					
-					while fit_platform == 'NaN' :
-						
-						# 3rd byte of 1st pattern is SKU Category from 0+ (ex: 91 01 04 80 00 --> 5th, 91 01 03 80 00 --> 4th)
-						if any(s in sku_check for s in (' 2C 01 03 80 00 ',' 02 D1 02 2C ')) : fit_platform = 'PCH-H No Emulation KBL'
-						elif any(s in sku_check for s in (' 2D 01 03 80 00 ',' 02 D1 02 2D ')) : fit_platform = 'PCH-H Q270'
-						elif any(s in sku_check for s in (' 2E 01 03 80 00 ',' 02 D1 02 2E ')) : fit_platform = 'PCH-H Q250'
-						elif any(s in sku_check for s in (' 2F 01 03 80 00 ',' 02 D1 02 2F ')) : fit_platform = 'PCH-H B250'
-						elif any(s in sku_check for s in (' 30 01 03 80 00 ',' 02 D1 02 30 ')) : fit_platform = 'PCH-H H270'
-						elif any(s in sku_check for s in (' 31 01 03 80 00 ',' 02 D1 02 31 ')) : fit_platform = 'PCH-H Z270'
-						elif any(s in sku_check for s in (' 32 01 01 80 00 ',' 02 D1 02 32 ')) : fit_platform = 'PCH-H QMU185'
-						elif any(s in sku_check for s in (' 64 00 01 80 00 ',' 02 D1 02 64 ')) : fit_platform = 'PCH-H Q170'
-						elif any(s in sku_check for s in (' 65 00 01 80 00 ',' 02 D1 02 65 ')) : fit_platform = 'PCH-H Q150'
-						elif any(s in sku_check for s in (' 66 00 01 80 00 ',' 02 D1 02 66 ')) : fit_platform = 'PCH-H B150'
-						elif any(s in sku_check for s in (' 67 00 01 80 00 ',' 02 D1 02 67 ')) : fit_platform = 'PCH-H H170'
-						elif any(s in sku_check for s in (' 68 00 01 80 00 ',' 02 D1 02 68 ')) : fit_platform = 'PCH-H Z170'
-						elif any(s in sku_check for s in (' 69 00 01 80 00 ',' 02 D1 02 69 ')) : fit_platform = 'PCH-H H110'
-						elif any(s in sku_check for s in (' 6A 00 01 80 00 ',' 02 D1 02 6A ')) : fit_platform = 'PCH-H QM170'
-						elif any(s in sku_check for s in (' 6B 00 01 80 00 ',' 02 D1 02 6B ')) : fit_platform = 'PCH-H HM170'
-						elif any(s in sku_check for s in (' 6C 00 01 80 00 ',' 02 D1 02 6C ')) : fit_platform = 'PCH-H No Emulation SKL'
-						elif any(s in sku_check for s in (' 6D 00 01 80 00 ',' 02 D1 02 6D ')) : fit_platform = 'PCH-H C236'
-						elif any(s in sku_check for s in (' 6E 00 01 80 00 ',' 02 D1 02 6E ')) : fit_platform = 'PCH-H CM236'
-						elif any(s in sku_check for s in (' 6F 00 01 80 00 ',' 02 D1 02 6F ')) : fit_platform = 'PCH-H C232'
-						elif any(s in sku_check for s in (' 70 00 01 80 00 ',' 02 D1 02 70 ')) : fit_platform = 'PCH-H QMS180'
-						elif any(s in sku_check for s in (' 71 00 01 80 00 ',' 02 D1 02 71 ')) : fit_platform = 'PCH-H QMS185'
-						elif any(s in sku_check for s in (' 90 01 04 80 00 ',' 02 D1 02 90 ')) : fit_platform = 'PCH-H No Emulation BSF'
-						elif any(s in sku_check for s in (' 91 01 04 80 00 ',' 91 01 03 80 00 ',' 02 D1 02 91 ')) : fit_platform = 'PCH-H C422' # moved at 11.7
-						elif any(s in sku_check for s in (' 92 01 04 80 00 ',' 92 01 03 80 00 ',' 02 D1 02 92 ')) : fit_platform = 'PCH-H X299' # moved at 11.7
-						elif any(s in sku_check for s in (' 93 01 01 80 00 ',' 02 D1 02 93 ')) : fit_platform = 'PCH-H QM175'
-						elif any(s in sku_check for s in (' 94 01 01 80 00 ',' 02 D1 02 94 ')) : fit_platform = 'PCH-H HM175'
-						elif any(s in sku_check for s in (' 95 01 01 80 00 ',' 02 D1 02 95 ')) : fit_platform = 'PCH-H CM238'
-						elif any(s in sku_check for s in (' C8 00 02 80 00 ',' 04 11 06 C8 ')) : fit_platform = 'PCH-H C621'
-						elif any(s in sku_check for s in (' C9 00 02 80 00 ',' 04 11 06 C9 ')) : fit_platform = 'PCH-H C622'
-						elif any(s in sku_check for s in (' CA 00 02 80 00 ',' 04 11 06 CA ')) : fit_platform = 'PCH-H C624'
-						elif any(s in sku_check for s in (' CB 00 02 80 00 ',' 04 11 06 CB ')) : fit_platform = 'PCH-H No Emulation LBG'
-						elif any(s in sku_check for s in (' F4 01 05 80 00 ',' 02 D1 02 F4 ')) : fit_platform = 'PCH-H No Emulation Z370'
-						elif any(s in sku_check for s in (' F5 01 05 80 00 ',' 02 D1 02 F5 ')) : fit_platform = 'PCH-H Z370'
-						elif any(s in sku_check for s in (' 01 00 00 80 00 ',' 02 B0 02 01 ',' 02 D0 02 01 ')) : fit_platform = 'PCH-LP Premium U SKL'
-						elif any(s in sku_check for s in (' 02 00 00 80 00 ',' 02 B0 02 02 ',' 02 D0 02 02 ')) : fit_platform = 'PCH-LP Premium Y SKL'
-						elif any(s in sku_check for s in (' 03 00 00 80 00 ',' 02 B0 02 03 ',' 02 D0 02 03 ')) : fit_platform = 'PCH-LP No Emulation'
-						elif any(s in sku_check for s in (' 04 00 00 80 00 ',' 02 B0 02 04 ',' 02 D0 02 04 ')) : fit_platform = 'PCH-LP Base U KBL'
-						elif any(s in sku_check for s in (' 05 00 00 80 00 ',' 02 B0 02 05 ',' 02 D0 02 05 ')) : fit_platform = 'PCH-LP Premium U KBL'
-						elif any(s in sku_check for s in (' 06 00 00 80 00 ',' 02 B0 02 06 ',' 02 D0 02 06 ')) : fit_platform = 'PCH-LP Premium Y KBL'
-						elif any(s in sku_check for s in (' 07 00 00 80 00 ',' 02 B0 02 07 ',' 02 D0 02 07 ')) : fit_platform = 'PCH-LP Base U KBL-R'
-						elif any(s in sku_check for s in (' 08 00 00 80 00 ',' 02 B0 02 08 ',' 02 D0 02 08 ')) : fit_platform = 'PCH-LP Premium U KBL-R'
-						elif any(s in sku_check for s in (' 09 00 00 80 00 ',' 02 B0 02 09 ',' 02 D0 02 09 ')) : fit_platform = 'PCH-LP Premium Y KBL-R'
-						elif any(s in sku_check for s in (' 02 B0 02 00 ',' 02 D0 02 00 ')) : fit_platform = 'PCH-LP Base U SKL' # last, weak pattern
-						elif me11_sku_ranges :
-							(start_sku_match, end_sku_match) = me11_sku_ranges[-1] # Take last SKU range
-							sku_check = krod_fit_sku(start_sku_match) # Store the new SKU check bytes
-							me11_sku_ranges.pop(-1) # Remove last SKU range
-							continue # Invoke while, check fit_platform in new sku_check
-						else : break # Could not find FIT SKU at any KROD
+				# FIT Platform detection for CSME 11
+				fit_platform = fit_11_plat(sku_check, fit_platform, me11_sku_ranges)
 				
 				if '-LP' in fit_platform : pos_sku_fit = 'LP'
 				elif '-H' in fit_platform : pos_sku_fit = 'H'
@@ -6177,7 +6183,7 @@ for file_in in source :
 					print('FITC Ver: %s' % fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build))
 			
 			if fit_platform != 'NaN' :
-				if [variant,major] == ['CSME',11] : print("FIT SKU:  %s" % fit_platform)
+				if (variant,major) in [('CSME',11)] : print('FIT SKU:  %s' % fit_platform)
 			
 			if rgn_exist :
 				if major ==6 and release == "ROM-Bypass" : print('Size:     Unknown')
