@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.32.3'
+title = 'ME Analyzer v1.33.0_1'
 
 import os
 import re
@@ -4398,9 +4398,10 @@ for file_in in source :
 							
 							s_p_type = s_bpdt_entry.Type
 							s_p_offset = s_bpdt_entry.Offset
+							s_p_offset_spi = start_fw_start_match + s_p_offset
 							s_p_size = s_bpdt_entry.Size
 							
-							if p_offset in [4294967295, 0] or p_size in [4294967295, 0] or reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF' :
+							if s_p_offset in [4294967295, 0] or s_p_size in [4294967295, 0] or reading[s_p_offset_spi:s_p_offset_spi + s_p_size] == s_p_size * b'\xFF' :
 								s_p_empty = 'Yes'
 							else :
 								s_p_empty = 'No'
@@ -4419,7 +4420,7 @@ for file_in in source :
 							
 							# Store all BPDT Entries for extraction
 							if param.me11_mod_extr :
-								bpdt_part_all.append([s_p_name, p_offset_spi, p_offset_spi + s_p_size, s_p_type, s_p_empty, 'Secondary'])
+								bpdt_part_all.append([s_p_name, s_p_offset_spi, s_p_offset_spi + s_p_size, s_p_type, s_p_empty, 'Secondary'])
 								
 							s_bpdt_step += 0xC # 0xC BPDT Entry size
 					
@@ -5742,7 +5743,7 @@ for file_in in source :
 				
 				# Power Down Mitigation (PDM) is a SPT-LP C0 erratum, first fixed at ~11.0.0.1183
 				# Hardcoded in FTPR > BUP, decompression required to detect NPDM/YPDM via pattern
-				# Hard-fixed at KBP-LP A0 but 11.6-7 have PDM firmware for KBL-upgraded SPT-LP C0
+				# Hard-fixed at KBP-LP A0 but 11.6-8 have PDM firmware for KBL-upgraded SPT-LP C0
 				if sku_result == 'H' :
 					pdm_status = 'NaN' # LP-only
 				else :
@@ -5945,17 +5946,17 @@ for file_in in source :
 			
 			if major == 3 :
 				
-				if minor in [0,2] : # Simultaneous branches, 2 is "Slim"
+				if minor in [0,1,2,3] : # Simultaneous branches, 2-3 are "Slim"
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_%s_%s%s' % (variant, major, minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					
 					# Adjust SoC Stepping if not from DB
-					if minor == 0 :
-						if sku_stp == 'NaN' :
-							if release == 'Production' : sku_stp = 'Bx' # PRD
-							else : sku_stp = 'Ax' # PRE, BYP
-						elif minor == 2 and sku_stp == 'NaN' :
-							if release == 'Production' : sku_stp = 'Cx' # PRD (Joule_C0-X64-Release)
+					if minor in [0,1] and sku_stp == 'NaN' :
+						if release == 'Production' : sku_stp = 'Bx' # PRD
+						else : sku_stp = 'Ax' # PRE, BYP
+					elif minor in [2,3] and sku_stp == 'NaN' :
+						if release == 'Production' : sku_stp = 'Cx' # PRD (Joule_C0-X64-Release)
+						#else : sku_stp = 'Bx' # PRE, BYP (Joule_C0-X64-Release)
 					
 				platform = 'APL'
 				

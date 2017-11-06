@@ -1,3 +1,9 @@
+v1.33.0_1 r104_1
+
+Added support for CSTXE 3.1 & 3.3 firmware
+Fixed wrong Secondary BPDT Offset & Size detection
+Fixed wrong CSTXE 3.2 SoC Stepping detection
+
 v1.32.3 r103
 
 Improved CSME 12 SPI FD Region structures detection
