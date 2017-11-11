@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.33.0_1'
+title = 'ME Analyzer v1.33.0'
 
 import os
 import re
@@ -79,17 +79,17 @@ def mea_help() :
 	text += "-check  : Copies files with messages to check\n"
 	text += "-mass   : Scans all files of a given directory\n"
 	text += "-enuf   : Enables UEFIFind Engine GUID detection\n"
+	text += "-adir   : Sets UEFIFind to the previous directory\n"
 	text += "-pdb    : Writes input file DB entry to text file\n"
-	text += "-dbname : Renames input file based on DB name\n"
-	text += "-dfpt   : Shows info about the $FPT and/or BPDT headers (Research)\n"
-	text += "-dsku   : Shows debug/verbose SKU detection info for CSE ME 11 (Research)\n"
+	text += "-dbname : Renames input file based on unique DB name\n"
+	text += "-dfpt   : Shows info about the FPT and/or BPDT headers (Research)\n"
+	text += "-dsku   : Shows debug/verbose SKU detection info for CSME 11 (Research)\n"
 	text += "-unp86  : Unpacks all CSE Converged Security Engine firmware (Research)\n"
-	text += "-ext86  : Prints Extension info at CSE unpacking (Research)\n"
-	text += "-bug86  : Enables debug/verbose mode at CSE unpacking (Research)"
+	text += "-ext86  : Prints Extension info during CSE unpacking (Research)\n"
+	text += "-bug86  : Enables debug/verbose mode during CSE unpacking (Research)"
 	
 	if mea_os == 'win32' :
-		text += "\n-adir   : Sets UEFIFind to the previous directory\n"
-		text += "-extr   : Lordkag's UEFIStrip mode\n"
+		text += "\n-extr   : Lordkag's UEFIStrip mode\n"
 		text += "-msg    : Prints only messages without headers\n"
 		text += "-hid    : Displays all firmware even without messages (-msg)"
 	
@@ -103,7 +103,7 @@ class MEA_Param :
 	
 		self.all = ['-?','-skip','-check','-extr','-msg','-hid','-adir','-unp86','-ext86','-bug86','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
 
-		self.win = ['-extr','-msg','-hid','-adir'] # Windows only
+		self.win = ['-extr','-msg','-hid'] # Windows only
 		
 		if mea_os == 'win32' : self.val = self.all
 		else : self.val = [item for item in self.all if item not in self.win]
@@ -138,9 +138,9 @@ class MEA_Param :
 			if i == '-dbname' : self.give_db_name = True
 			if i == '-mass' : self.mass_scan = True
 			if i == '-dfpt' : self.fpt_disp = True
+			if i == '-adir' : self.alt_dir = True
 			
 			if mea_os == 'win32' : # Windows only options
-				if i == '-adir' : self.alt_dir = True
 				if i == '-extr' : self.extr_mea = True
 				if i == '-msg' : self.print_msg = True
 				if i == '-hid' : self.hid_find = True
