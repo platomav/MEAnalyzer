@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.33.0'
+title = 'ME Analyzer v1.34.0'
 
 import os
 import re
@@ -346,9 +346,9 @@ class MN2_Manifest(ctypes.LittleEndianStructure) : # Manifest $MAN/$MN2 (MANIFES
 		("Reserved",		uint32_t*16),	# 0x38
 		("ModulusSize",		uint32_t),		# 0x78 dwords
 		("ExponentSize",	uint32_t),		# 0x7C dwords
-		("RsaPubKey",		uint32_t*64),	# 0x80
-		("RsaPubExp",		uint32_t),		# 0x180
-		("RsaSig",			uint32_t*64),	# 0x184
+		("RSAPublicKey",	uint32_t*64),	# 0x80
+		("RSAExponent",		uint32_t),		# 0x180
+		("RSASignature",	uint32_t*64),	# 0x184
 		# 0x284
 	]
 	
@@ -358,8 +358,8 @@ class MN2_Manifest(ctypes.LittleEndianStructure) : # Manifest $MAN/$MN2 (MANIFES
 		
 		version = '%d.%d.%d.%d' % (self.Major,self.Minor,self.Hotfix,self.Build)
 		
-		RsaPubKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RsaPubKey))
-		RsaSig = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RsaSig))
+		RSAPublicKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RSAPublicKey))
+		RSASignature = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RSASignature))
 		Reserved3 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
@@ -383,9 +383,9 @@ class MN2_Manifest(ctypes.LittleEndianStructure) : # Manifest $MAN/$MN2 (MANIFES
 		pt.add_row(['Reserved 2', '0x0' if Reserved3 == '00000000' * 16 else Reserved3])
 		pt.add_row(['RSA Modulus Size', '0x%X' % (self.ModulusSize * 4)])
 		pt.add_row(['RSA Exponent Size', '0x%X' % (self.ExponentSize * 4)])
-		pt.add_row(['RSA Public Key', '%s [...]' % RsaPubKey[:8]])
-		pt.add_row(['RSA Exponent', '0x%X' % self.RsaPubExp])
-		pt.add_row(['RSA Signature', '%s [...]' % RsaSig[:8]])
+		pt.add_row(['RSA Public Key', '%s [...]' % RSAPublicKey[:8]])
+		pt.add_row(['RSA Exponent', '0x%X' % self.RSAExponent])
+		pt.add_row(['RSA Signature', '%s [...]' % RSASignature[:8]])
 		
 		return pt
 	
@@ -1331,10 +1331,10 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Information (CL
 		pt.title = col_y + 'Extension 12, Client System Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['SKU Capabilities', '0x%X' % self.FWSKUCaps])
-		pt.add_row(['SKU Capabilities Reserved', 'FF * 28' if FWSKUCapsReserv == 'FF' * 28 else '%s' % FWSKUCapsReserv])
+		pt.add_row(['SKU Capabilities', '0x%0.8X' % self.FWSKUCaps])
+		pt.add_row(['SKU Capabilities Reserved', 'FF * 28' if FWSKUCapsReserv == 'FF' * 28 else FWSKUCapsReserv])
 		pt.add_row(['CSE Size', '0x%X' % f1])
-		pt.add_row(['SKU Type', ['Corporate','Consumer','Slim','LBG'][f2]])
+		pt.add_row(['SKU Type', ['Corporate','Consumer','Slim','SPS-LBG'][f2]])
 		pt.add_row(['Lewisburg', fvalue[f3]])
 		pt.add_row(['M3', fvalue[f4]])
 		pt.add_row(['M0', fvalue[f5]])
@@ -2135,8 +2135,6 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID (MFT_EXT_MANI
 	]
 	
 	def ext_print(self) :
-		type_fw = {'RC': 'Recovery', 'OP': 'Operational'}
-		platform = {'GE': 'Greenlow', 'PU': 'Purley', 'HA': 'Harrisonville', 'PE': 'Purley EPO'}
 		type_str = self.Type.decode('utf-8')
 		platform_str = self.Platform.decode('utf-8')
 		
@@ -2145,8 +2143,8 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID (MFT_EXT_MANI
 		pt.title = col_y + 'Extension 50, SPS Platform ID' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Type', 'Unknown' if type_str not in type_fw else type_fw[type_str]])
-		pt.add_row(['Platform', 'Unknown' if platform_str not in platform else platform[platform_str]])
+		pt.add_row(['Type', 'Unknown' if type_str not in cssps_type_fw else cssps_type_fw[type_str]])
+		pt.add_row(['Platform', 'Unknown' if platform_str not in cssps_platform else cssps_platform[platform_str]])
 		pt.add_row(['Reserved', '0x0' if self.Reserved == 0 else '0x%X' % self.Reserved])
 		
 		return pt
@@ -2273,6 +2271,12 @@ ext_tag_mod_none = [0x4,0xA,0xC,0x10,0x13,0x16,0x32]
 # CSE Extensions with Module Count
 ext_tag_mod_count = [0x1,0x2,0x10,0x12,0x14,0x15]
 
+# CSE SPS SKU Type ID
+cssps_type_fw = {'RC': 'Recovery', 'OP': 'Operational'}
+
+# CSE SPS SKU Platform ID
+cssps_platform = {'GE': 'Greenlow', 'PU': 'Purley', 'HA': 'Harrisonville', 'PE': 'Purley EPO'}
+
 # CSE Extension Structures
 ext_dict = {
 			'CSE_Ext_00' : CSE_Ext_00,
@@ -2321,7 +2325,7 @@ ext_dict = {
 			}
 
 # Unpack Engine CSE firmware
-def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_match, fpt_chk_fail) :
+def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_chk_fail) :
 	cpd_match_ranges = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
@@ -2331,24 +2335,22 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_ma
 	fw_type, type_db = fw_types(fw_type)
 	
 	# Create firmware extraction folder
-	if variant == 'CSSPS' : fw_name = "%0.2d.%0.2d.%0.2d.%0.3d_%s_%s" % (major, minor, hotfix, build, rel_db, type_db) # No SKU at SPS 4
+	if variant == 'CSSPS' : fw_name = "%0.2d.%0.2d.%0.2d.%0.3d_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db)
 	else : fw_name = "%d.%d.%d.%0.4d_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db)
 	if os.path.isdir(mea_dir + os_dir + fw_name) : shutil.rmtree(mea_dir + os_dir + fw_name)
 	os.mkdir(mea_dir + os_dir + fw_name)
 	
 	# Parse all Flash Partition Table ($FPT) entries
 	if len_fpt_part_all :
-		if variant == 'CSME' and major >= 12 :
+		if reading[fpt_start:fpt_start + 0x4] == b'$FPT' :
 			fpt_romb_exist = False
-			fpt_cse_start = start_fw_start_match
-			fpt_hdr_1 = get_struct(reading, fpt_cse_start, FPT_Header)
+			fpt_hdr_1 = get_struct(reading, fpt_start, FPT_Header)
 		else :
 			fpt_romb_exist = True
-			fpt_cse_start = start_fw_start_match - 0x10
-			fpt_hdr_1 = get_struct(reading, fpt_cse_start + 0x10, FPT_Header)
+			fpt_hdr_1 = get_struct(reading, fpt_start + 0x10, FPT_Header)
 		
 		if fpt_romb_exist :
-			fpt_hdr_0 = get_struct(reading, fpt_cse_start, FPT_Pre_Header)
+			fpt_hdr_0 = get_struct(reading, fpt_start, FPT_Pre_Header)
 			fpt_hdr_0_print = fpt_hdr_0.hdr_print_cse()
 			print('%s\n' % fpt_hdr_0_print)
 		
@@ -2364,18 +2366,18 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_ma
 		
 		pt = ext_table([col_y + 'Name' + col_e, col_y + 'Start' + col_e, col_y + 'End' + col_e, col_y + 'ID' + col_e, col_y + 'Type' + col_e,
 		                col_y + 'Valid' + col_e, col_y + 'Empty' + col_e], True, 1)
-		pt.title = col_y + 'Detected %d Partition(s) at $FPT [0x%0.6X]' % (len_fpt_part_all, fpt_cse_start) + col_e
+		pt.title = col_y + 'Detected %d Partition(s) at $FPT [0x%0.6X]' % (len_fpt_part_all, fpt_start) + col_e
 		
 		for part in fpt_part_all :
 			pt.add_row([part[0].decode('utf-8'), '0x%0.6X' % part[1], '0x%0.6X' % part[2], part[3], part[4], part[5], part[6]]) # Store Partition details
 		
 		print(pt) # Show Partition details
 		
-		fpt_fname = mea_dir + os_dir + fw_name + os_dir + 'FPT [0x%0.6X]' % fpt_cse_start
+		fpt_fname = mea_dir + os_dir + fw_name + os_dir + 'FPT [0x%0.6X]' % fpt_start
 		
-		with open(fpt_fname + '.bin', 'w+b') as fpt_file : fpt_file.write(reading[fpt_cse_start:fpt_cse_start + 0x1000]) # $FPT size is 4K
+		with open(fpt_fname + '.bin', 'w+b') as fpt_file : fpt_file.write(reading[fpt_start:fpt_start + 0x1000]) # $FPT size is 4K
 		
-		print(col_y + '\n--> Stored Flash Partition Table [0x%0.6X - 0x%0.6X]' % (fpt_cse_start, fpt_cse_start + 0x1000) + col_e)
+		print(col_y + '\n--> Stored Flash Partition Table [0x%0.6X - 0x%0.6X]' % (fpt_start, fpt_start + 0x1000) + col_e)
 		
 		# Store Flash Partition Table ($FPT) Info
 		# Ignore Colorama ANSI Escape Character Sequences
@@ -2464,7 +2466,7 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_ma
 	for cpdrange in cpd_match_ranges :
 		(start_cpd_emod, end_cpd_emod) = cpdrange.span()
 		
-		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x1,x2,x3,x4,ext_print,x5 = ext_anl('$CPD', start_cpd_emod, file_end, [variant, major, minor, hotfix, build])
+		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x1,x2,x3,x4,ext_print,x5,x6 = ext_anl('$CPD', start_cpd_emod, file_end, [variant, major, minor, hotfix, build])
 		
 		mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print)
 	
@@ -2488,6 +2490,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 	cpd_mod_attr = []
 	cpd_ext_attr = []
 	cpd_ext_names = []
+	ext32_info = ['UNK', 'XX']
 	mn2_sigs = [False, -1, -1, True, -1, None]
 	
 	if input_type == '$MN2' :
@@ -2860,6 +2863,13 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						if ibbl_hash not in ['00' * ext_hdr.IBBLHashSize, 'FF' * ext_hdr.IBBLHashSize] : cpd_mod_attr.append(['IBBL', 0, 0, 0, 0, 0, 0, ibbl_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 						if ibb_hash not in ['00' * ext_hdr.IBBHashSize, 'FF' * ext_hdr.IBBHashSize] : cpd_mod_attr.append(['IBB', 0, 0, 0, 0, 0, 0, ibb_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
 						if obb_hash not in ['00' * ext_hdr.OBBHashSize, 'FF' * ext_hdr.OBBHashSize] : cpd_mod_attr.append(['OBB', 0, 0, 0, 0, 0, 0, obb_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
+						
+					elif ext_tag == 50 :
+						ext_hdr = get_struct(reading, cpd_ext_offset, ext_struct_name)
+						ext32_type = ext_hdr.Type.decode('utf-8') # OP/RC
+						ext32_plat = ext_hdr.Platform.decode('utf-8') # GE/HA/PU/PE
+						
+						ext32_info = [ext32_type, ext32_plat]
 					
 					cpd_ext_offset += cpd_ext_size # Next Extension Offset
 					
@@ -2959,7 +2969,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						
 			for mod_index in ibbp_del : del cpd_mod_attr[mod_index] # Delete missing Module's Attributes
 		
-	return cpd_offset, cpd_mod_attr, cpd_ext_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2, ext_print, ext3_pname
+	return cpd_offset, cpd_mod_attr, cpd_ext_attr, vcn, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2, ext_print, ext3_pname, ext32_info
 
 # Analyze & Store Engine CSE Modules
 def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print) :
@@ -3509,11 +3519,11 @@ def huff11_404() :
 	else :
 		gen_msg(err_stor, col_r + 'Error: Failed to import Huffman11 by IllegalArgument!' + col_e, 'unp')
 
-# Calculate SHA1 hash of data
+# Calculate SHA-1 hash of data
 def sha_1(data) :
 	return hashlib.sha1(data).hexdigest()
 	
-# Calculate SHA256 hash of data
+# Calculate SHA-256 hash of data
 def sha_256(data) :
 	return hashlib.sha256(data).hexdigest()
 
@@ -3582,7 +3592,7 @@ def gen_msg(msg_type, msg, command) :
 	if (not err_stor) and (not warn_stor) and (not note_stor): msg_type.append(msg)
 	else: msg_type.append('\n' + msg)
 
-# Detect SPI with Intel Flash Descriptor
+# Detect Intel Flash Descriptor (FD)
 def spi_fd_init() :
 	fd_match = (re.compile(br'\xFF\xFF\xFF\xFF\x5A\xA5\xF0\x0F')).search(reading) # 16xFF + Z¥π. detection (PCH)
 	if fd_match is None :
@@ -3599,35 +3609,17 @@ def spi_fd_init() :
 	else :
 		return False, 0, 0
 
-# Analyze Intel FD after Reading, Major, Variant
+# Analyze Intel Flash Descriptor (FD)
 def spi_fd(action,start_fd_match,end_fd_match) :
 	fd_reg_exist = [] # BIOS/IAFW + Engine
 	
-	if action == 'unlocked' :
-		# 0xh FF FF = 0b 1111 1111 1111 1111 --> All 8 (0-7) regions Read/Write unlocked by CPU/BIOS
-		if variant == 'ME' or variant == 'TXE' : # CPU/BIOS, ME, GBE check
-			fd_bytes = reading[end_fd_match + 0x4E:end_fd_match + 0x50] + reading[end_fd_match + 0x52:end_fd_match + 0x54] \
-					   + reading[end_fd_match + 0x56:end_fd_match + 0x58]
-			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
-			if fd_bytes == 'FFFFFFFFFFFF' : return 2 # Unlocked FD
-			else : return 1 # Locked FD
-		elif variant == 'CSME' : # CPU/BIOS, ME, GBE, EC check
-			fd_bytes = reading[end_fd_match + 0x6D:end_fd_match + 0x70] + reading[end_fd_match + 0x71:end_fd_match + 0x74] \
-					   + reading[end_fd_match + 0x75:end_fd_match + 0x78] + reading[end_fd_match + 0x7D:end_fd_match + 0x80]
-			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
-			if fd_bytes == 'FFFFFFFFFFFFFFFFFFFFFFFF' : return 2 # Unlocked FD
-			else : return 1 # Locked FD
-		elif variant == 'CSTXE' :
-			fd_bytes = reading[end_fd_match + 0x6D:end_fd_match + 0x70] + reading[end_fd_match + 0x71:end_fd_match + 0x74]
-			fd_bytes = binascii.b2a_hex(fd_bytes).decode('utf-8').upper()
-			if fd_bytes == 'FFFFFFFFFFFF' : return 2 # Unlocked FD
-			else : return 1 # Locked FD
-	
-	elif action == 'region' :
+	if action == 'region' :
 		bios_fd_base = int.from_bytes(reading[end_fd_match + 0x30:end_fd_match + 0x32], 'little')
 		bios_fd_limit = int.from_bytes(reading[end_fd_match + 0x32:end_fd_match + 0x34], 'little')
 		me_fd_base = int.from_bytes(reading[end_fd_match + 0x34:end_fd_match + 0x36], 'little')
 		me_fd_limit = int.from_bytes(reading[end_fd_match + 0x36:end_fd_match + 0x38], 'little')
+		devexp_fd_base = int.from_bytes(reading[end_fd_match + 0x40:end_fd_match + 0x42], 'little')
+		devexp_fd_limit = int.from_bytes(reading[end_fd_match + 0x42:end_fd_match + 0x44], 'little')
 		
 		if bios_fd_limit != 0 :
 			bios_fd_start = bios_fd_base * 0x1000 + start_fd_match # fd_match required in case FD is not at the start of image
@@ -3635,13 +3627,20 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 			fd_reg_exist.extend((True,bios_fd_start,bios_fd_size)) # BIOS/IAFW Region exists
 		else :
 			fd_reg_exist.extend((False,0,0)) # BIOS/IAFW Region missing
-		
+			
 		if me_fd_limit != 0 :
 			me_fd_start = me_fd_base * 0x1000 + start_fd_match
 			me_fd_size = (me_fd_limit + 1 - me_fd_base) * 0x1000
 			fd_reg_exist.extend((True,me_fd_start,me_fd_size)) # Engine Region exists
 		else :
 			fd_reg_exist.extend((False,0,0)) # Engine Region missing
+			
+		if devexp_fd_limit != 0 :
+			devexp_fd_start = devexp_fd_base * 0x1000 + start_fd_match
+			devexp_fd_size = (devexp_fd_limit + 1 - devexp_fd_base) * 0x1000
+			fd_reg_exist.extend((True,devexp_fd_start,devexp_fd_size)) # Device Expansion Region exists
+		else :
+			fd_reg_exist.extend((False,0,0)) # Device Expansion Region missing
 			
 		return fd_reg_exist
 
@@ -3770,9 +3769,9 @@ def cpd_chk(cpd_data) :
 def rsa_sig_val(man_hdr_struct, input_stream, check_start) :
 	man_hdr = man_hdr_struct.HeaderLength * 4
 	man_size = man_hdr_struct.Size * 4
-	man_pexp = man_hdr_struct.RsaPubExp
-	man_pkey = int((''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(man_hdr_struct.RsaPubKey))), 16)
-	man_sign = int((''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(man_hdr_struct.RsaSig))), 16)
+	man_pexp = man_hdr_struct.RSAExponent
+	man_pkey = int((''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(man_hdr_struct.RSAPublicKey))), 16)
+	man_sign = int((''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(man_hdr_struct.RSASignature))), 16)
 	
 	try :
 		dec_sign = '%X' % pow(man_sign, man_pexp, man_pkey) # Decrypted Signature
@@ -3896,7 +3895,7 @@ def db_skl(variant) :
 	for line in fw_db :
 		if len(line) < 2 or line[:3] == "***" :
 			continue # Skip empty lines or comments
-		elif rsa_hash in line :
+		elif rsa_sig_hash in line :
 			line_parts = line.strip().split('_')
 			if variant == 'CSME' :
 				db_sku_chk = line_parts[2] # Store the SKU from DB for latter use
@@ -3905,7 +3904,7 @@ def db_skl(variant) :
 				if 'YPDM' in line_parts[4] or 'NPDM' in line_parts[4] or 'UPDM' in line_parts[4] : sku_pdm = line_parts[4] # Cel 4 is PDM
 			elif variant == 'CSTXE' :
 				if line_parts[1] != "XX" : sku_stp = line_parts[1] # Cel 1 is PCH Stepping
-			break # Break loop at 1st rsa_hash match
+			break # Break loop at 1st rsa_sig_hash match
 	fw_db.close()
 
 	return db_sku_chk, sku, sku_stp, sku_pdm
@@ -3930,16 +3929,6 @@ def intel_id() :
 	
 	return 'OK'
 
-# Analyze RSA block
-def rsa_anl() :
-	rsa_sig = reading[end_man_match + 0x164:end_man_match + 0x264] # Read RSA Signature of Recovery
-	rsa_hash = sha_1(rsa_sig).upper() # SHA-1 hash of RSA Signature
-	
-	rsa_pkey = reading[end_man_match + 0x60:end_man_match + 0x70] # Read RSA Public Key of Recovery
-	rsa_pkey = binascii.b2a_hex(rsa_pkey).decode('utf-8').upper() # First 0x10 of RSA Public Key
-	
-	return rsa_hash, rsa_pkey
-
 # Detect Variant/Family
 def get_variant() :
 	variant = 'Unknown'
@@ -3951,10 +3940,10 @@ def get_variant() :
 	for line in fw_db :
 		if len(line) < 2 or line[:3] == "***" :
 			continue # Skip empty lines or comments
-		elif rsa_pkey in line :
+		elif rsa_key_hash in line :
 			line_parts = line.strip().split('_')
 			variant = line_parts[1] # Store the Variant
-			break # Break loop at 1st rsa_pkey match
+			break # Break loop at 1st rsa_key_hash match
 	fw_db.close()
 	
 	# Variant correction for general PRE/BYP Public Keys
@@ -3968,7 +3957,7 @@ def get_variant() :
 	if variant == 'Unknown' :
 		var_rsa_db = False
 		
-		x1,cpd_mod_attr,x2,x3,x4,x5,x6,x7,x8 = ext_anl('$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build]) # Detect FTPR CSE Attributes
+		x1,cpd_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9 = ext_anl('$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build]) # Detect FTPR CSE Attributes
 		
 		if cpd_mod_attr :
 			for mod in cpd_mod_attr :
@@ -4152,7 +4141,6 @@ for file_in in source :
 	fpt_in_id = 'N/A'
 	byp_match = None
 	man_match = None
-	me1_match = None
 	me11_vcn_match = None
 	multi_rgn = False
 	upd_found = False
@@ -4175,6 +4163,8 @@ for file_in in source :
 	fpt_romb_found = False
 	fitc_ver_found = False
 	fd_me_rgn_exist = False
+	fd_bios_rgn_exist = False
+	fd_devexp_rgn_exist = False
 	rgn_over_extr_found = False
 	err_stor = []
 	note_stor = []
@@ -4208,7 +4198,6 @@ for file_in in source :
 	fpt_num_calc = 0
 	p_offset_last = 0
 	rec_rgn_start = 0
-	fd_lock_state = 0
 	sps3_chk16_file = 0
 	sps3_chk16_calc = 0
 	cpd_offset_last = 0
@@ -4245,15 +4234,14 @@ for file_in in source :
 	if len(man_match_store) :
 		for m in man_match_store : man_match_ranges.append(m) # Store all Manifest ranges
 		man_match = man_match_ranges[0] # Start from 1st Manifest by default
-	else :
-		me1_match = (re.compile(br'\x54\x65\x6B\x6F\x61\x41\x70\x70')).search(reading) # TekoaApp detection, AMT 1.x only
-		if me1_match is not None : man_match = (re.compile(br'\x50\x72\x6F\x76\x69\x73\x69\x6F\x6E\x53\x65\x72\x76\x65\x72')).search(reading) # ProvisionServer detection
 	
 	if man_match is None :
 		
 		# Determine if FD exists and if Engine Region is present
 		fd_exist,start_fd_match,end_fd_match = spi_fd_init()
-		if fd_exist : fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size = spi_fd('region',start_fd_match,end_fd_match)
+		if fd_exist :
+			fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size \
+			= spi_fd('region',start_fd_match,end_fd_match)
 		
 		# Engine Region exists but cannot be identified
 		if fd_me_rgn_exist :
@@ -4334,730 +4322,732 @@ for file_in in source :
 
 	else : # Engine firmware found, Manifest Header ($MN2 or $MAN) Analysis
 		
-		if me1_match is None : # All except AMT 1.x
+		# CSE Code Location
+		# CSME11 --> Engine Region ($FPT)
+		# CSTXE3 --> BIOS/IAFW Region (BPDT)
+		# CSME12 --> Engine Region (TBD > LBPx)
+		
+		# CSE Data Location
+		# CSME11 --> Engine Region ($FPT > MFS)
+		# CSTXE3 --> BIOS/IAFW Region (BPDT)
+		# CSME12 --> Engine Region (TBD > LBPx)
+		
+		# CSE Data Initialization Location
+		# CSME11 --> Engine Region ($FPT > MFS)
+		# CSTXE3 --> Device Expansion Region ($FPT)
+		# CSME12 --> Engine Region (TBD > $FPT)
+		
+		# CSE ROM-Bypass Location
+		# CSME11 --> Engine Region ($FPT > ROMB)
+		# CSTXE3 --> Engine Region (maybe in $FPT > ROMB)
+		# CSME12 --> Engine Region (maybe in TBD > $FPT > ROMB)
+		
+		# Detect Intel Flash Descriptor Lock
+		fd_exist,start_fd_match,end_fd_match = spi_fd_init()
+		if fd_exist :
+			fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size \
+			= spi_fd('region',start_fd_match,end_fd_match)
+		
+		# Detect all $FPT and/or BPDT Starting Offsets (both allowed unless proven otherwise)
+		fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading)) # $FPT detection
+		bpdt_matches = list((re.compile(br'\xAA\x55([\x00\xAA])\x00.\x00\x01\x00', re.DOTALL)).finditer(reading)) # BPDT Header detection
+		
+		# Parse IFWI/BPDT Starting Offsets
+		for ifwi_bpdt in range(len(bpdt_matches)):
+			ifwi_exist = True # Set IFWI/BPDT detection boolean
 			
-			# Detect all $FPT and/or BPDT Starting Offsets (both allowed unless proven otherwise)
-			fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading)) # $FPT detection
-			bpdt_matches = list((re.compile(br'\xAA\x55([\x00\xAA])\x00.\x00\x01\x00', re.DOTALL)).finditer(reading)) # BPDT Header detection
+			(start_fw_start_match, end_fw_start_match) = bpdt_matches[ifwi_bpdt].span() # Store BPDT range via bpdt_matches index
 			
-			# Parse IFWI/BPDT Starting Offsets
-			for ifwi_bpdt in range(len(bpdt_matches)):
-				ifwi_exist = True # Set IFWI/BPDT detection boolean
+			if start_fw_start_match in s_bpdt_all : continue # Skip already parsed S-BPDT (Type 5)
+			
+			bpdt_hdr = get_struct(reading, start_fw_start_match, BPDT_Header)
+			
+			if param.me11_mod_extr : print('%s' % bpdt_hdr.hdr_print())
+			
+			# Analyze BPDT header
+			bpdt_step = start_fw_start_match + 0x18 # 0x18 BPDT Header size
+			bpdt_part_num = bpdt_hdr.DescCount
+			
+			pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Partition' + col_e, col_y + 'Offset' + col_e,
+					  col_y + 'Size' + col_e, col_y + 'Empty' + col_e], True, 1)
+			pt_dfpt.title = col_y + 'Boot Partition Descriptor Table (BPDT)' + col_e
+			
+			for i in range(0, bpdt_part_num):
+				bpdt_entry = get_struct(reading, bpdt_step, BPDT_Entry)
 				
-				(start_fw_start_match, end_fw_start_match) = bpdt_matches[ifwi_bpdt].span() # Store BPDT range via bpdt_matches index
+				p_type = bpdt_entry.Type
+				p_offset = bpdt_entry.Offset
+				p_offset_spi = start_fw_start_match + p_offset
+				p_size = bpdt_entry.Size
 				
-				if start_fw_start_match in s_bpdt_all : continue # Skip already parsed S-BPDT (Type 5)
+				if reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF' : p_empty = 'Yes'
+				else : p_empty = 'No'
 				
-				bpdt_hdr = get_struct(reading, start_fw_start_match, BPDT_Header)
+				if p_type in bpdt_dict : p_name = bpdt_dict[p_type]
+				else : p_name = 'Unknown'
 				
-				if param.me11_mod_extr : print('%s' % bpdt_hdr.hdr_print())
-				
-				# Analyze BPDT header
-				bpdt_step = start_fw_start_match + 0x18 # 0x18 BPDT Header size
-				bpdt_part_num = bpdt_hdr.DescCount
-				
-				pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Partition' + col_e, col_y + 'Offset' + col_e,
-						  col_y + 'Size' + col_e, col_y + 'Empty' + col_e], True, 1)
-				pt_dfpt.title = col_y + 'Boot Partition Descriptor Table (BPDT)' + col_e
-				
-				for i in range(0, bpdt_part_num):
-					bpdt_entry = get_struct(reading, bpdt_step, BPDT_Entry)
+				if param.fpt_disp :
+					if p_offset in [4294967295, 0] : p_offset_print = ''
+					else : p_offset_print = '0x%0.8X' % p_offset_spi
 					
-					p_type = bpdt_entry.Type
-					p_offset = bpdt_entry.Offset
-					p_offset_spi = start_fw_start_match + p_offset
-					p_size = bpdt_entry.Size
+					if p_size in [4294967295, 0] : p_size_print = ''
+					else : p_size_print = '0x%0.8X' % p_size
 					
-					if reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF' : p_empty = 'Yes'
-					else : p_empty = 'No'
+					pt_dfpt.add_row([p_name,'%0.2d' % p_type,'Primary',p_offset_print,p_size_print,p_empty]) # Store Entry details
+				
+				if p_type == 5 : # Secondary BPDT (S-BPDT)
+					s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header)
 					
-					if p_type in bpdt_dict : p_name = bpdt_dict[p_type]
-					else : p_name = 'Unknown'
+					if param.me11_mod_extr : print('%s' % s_bpdt_hdr.hdr_print())
 					
-					if param.fpt_disp :
-						if p_offset in [4294967295, 0] : p_offset_print = ''
-						else : p_offset_print = '0x%0.8X' % p_offset_spi
+					s_bpdt_all.append(p_offset_spi) # Store parsed S-BPDT offset to skip at IFWI/BPDT Starting Offsets
+					
+					s_bpdt_step = p_offset_spi + 0x18 # 0x18 S-BPDT Header size
+					s_bpdt_part_num = s_bpdt_hdr.DescCount
+					
+					for j in range(0, s_bpdt_part_num):
+						s_bpdt_entry = get_struct(reading, s_bpdt_step, BPDT_Entry)
 						
-						if p_size in [4294967295, 0] : p_size_print = ''
-						else : p_size_print = '0x%0.8X' % p_size
+						s_p_type = s_bpdt_entry.Type
+						s_p_offset = s_bpdt_entry.Offset
+						s_p_offset_spi = start_fw_start_match + s_p_offset
+						s_p_size = s_bpdt_entry.Size
 						
-						pt_dfpt.add_row([p_name,'%0.2d' % p_type,'Primary',p_offset_print,p_size_print,p_empty]) # Store Entry details
-					
-					if p_type == 5 : # Secondary BPDT (S-BPDT)
-						s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header)
-						
-						if param.me11_mod_extr : print('%s' % s_bpdt_hdr.hdr_print())
-						
-						s_bpdt_all.append(p_offset_spi) # Store parsed S-BPDT offset to skip at IFWI/BPDT Starting Offsets
-						
-						s_bpdt_step = p_offset_spi + 0x18 # 0x18 S-BPDT Header size
-						s_bpdt_part_num = s_bpdt_hdr.DescCount
-						
-						for j in range(0, s_bpdt_part_num):
-							s_bpdt_entry = get_struct(reading, s_bpdt_step, BPDT_Entry)
-							
-							s_p_type = s_bpdt_entry.Type
-							s_p_offset = s_bpdt_entry.Offset
-							s_p_offset_spi = start_fw_start_match + s_p_offset
-							s_p_size = s_bpdt_entry.Size
-							
-							if s_p_offset in [4294967295, 0] or s_p_size in [4294967295, 0] or reading[s_p_offset_spi:s_p_offset_spi + s_p_size] == s_p_size * b'\xFF' :
-								s_p_empty = 'Yes'
-							else :
-								s_p_empty = 'No'
-							
-							if s_p_type in bpdt_dict : s_p_name = bpdt_dict[s_p_type]
-							else : s_p_name = 'Unknown'
-							
-							if param.fpt_disp :
-								if s_p_offset in [4294967295, 0] : s_p_offset_print = ''
-								else : s_p_offset_print = '0x%0.8X' % s_p_offset
-								
-								if s_p_size in [4294967295, 0] : s_p_size_print = ''
-								else : s_p_size_print = '0x%0.8X' % s_p_size
-								
-								pt_dfpt.add_row([s_p_name,'%0.2d' % s_p_type,'Secondary',s_p_offset_print,s_p_size_print,s_p_empty]) # Store Entry details
-							
-							# Store all BPDT Entries for extraction
-							if param.me11_mod_extr :
-								bpdt_part_all.append([s_p_name, s_p_offset_spi, s_p_offset_spi + s_p_size, s_p_type, s_p_empty, 'Secondary'])
-								
-							s_bpdt_step += 0xC # 0xC BPDT Entry size
-					
-					# Store all BPDT Entries for extraction (S-BPDT excluded)
-					if param.me11_mod_extr and p_type != 5 :
-						bpdt_part_all.append([p_name, p_offset_spi, p_offset_spi + p_size, p_type, p_empty, 'Primary'])
-					
-					# Adjust Manifest Header to Recovery section based on BPDT
-					if p_type == 2 : # CSE_BUP
-						rec_rgn_start = p_offset_spi
-						# Only if partition exists at file (counter-example: sole IFWI etc)
-						# noinspection PyTypeChecker
-						if rec_rgn_start + p_size < file_end :
-							man_match_init = man_match # Backup initial Manifest
-							man_match = man_pat.search(reading[rec_rgn_start:rec_rgn_start + p_size])
-							
-							# If partition is wrong, fall back to initial Manifest (Intel ME Capsule image)
-							if man_match is None :
-								man_match = man_match_init
-								rec_rgn_start = 0
+						if s_p_offset in [4294967295, 0] or s_p_size in [4294967295, 0] or reading[s_p_offset_spi:s_p_offset_spi + s_p_size] == s_p_size * b'\xFF' :
+							s_p_empty = 'Yes'
 						else :
+							s_p_empty = 'No'
+						
+						if s_p_type in bpdt_dict : s_p_name = bpdt_dict[s_p_type]
+						else : s_p_name = 'Unknown'
+						
+						if param.fpt_disp :
+							if s_p_offset in [4294967295, 0] : s_p_offset_print = ''
+							else : s_p_offset_print = '0x%0.8X' % s_p_offset
+							
+							if s_p_size in [4294967295, 0] : s_p_size_print = ''
+							else : s_p_size_print = '0x%0.8X' % s_p_size
+							
+							pt_dfpt.add_row([s_p_name,'%0.2d' % s_p_type,'Secondary',s_p_offset_print,s_p_size_print,s_p_empty]) # Store Entry details
+						
+						# Store all BPDT Entries for extraction
+						if param.me11_mod_extr :
+							bpdt_part_all.append([s_p_name, s_p_offset_spi, s_p_offset_spi + s_p_size, s_p_type, s_p_empty, 'Secondary'])
+							
+						s_bpdt_step += 0xC # 0xC BPDT Entry size
+				
+				# Store all BPDT Entries for extraction (S-BPDT excluded)
+				if param.me11_mod_extr and p_type != 5 :
+					bpdt_part_all.append([p_name, p_offset_spi, p_offset_spi + p_size, p_type, p_empty, 'Primary'])
+				
+				# Adjust Manifest Header to Recovery section based on BPDT
+				if p_type == 2 : # CSE_BUP
+					rec_rgn_start = p_offset_spi
+					# Only if partition exists at file (counter-example: sole IFWI etc)
+					# noinspection PyTypeChecker
+					if rec_rgn_start + p_size < file_end :
+						man_match_init = man_match # Backup initial Manifest
+						man_match = man_pat.search(reading[rec_rgn_start:rec_rgn_start + p_size])
+						
+						# If partition is wrong, fall back to initial Manifest (Intel ME Capsule image)
+						if man_match is None :
+							man_match = man_match_init
 							rec_rgn_start = 0
-					
-					# ROM-Bypass (CSTXE at Engine Region without BPDT, CSME12+ at Engine Region with BPDT)
-					
-					bpdt_step += 0xC # 0xC BPDT Entry size
-					
-				if param.fpt_disp : print('%s\n' % pt_dfpt) # Show Entry details
-			
-			# Detect $FPT Firmware Starting Offset
-			if len(fpt_matches) :
-				rgn_exist = True # Set Engine/$FPT detection boolean
-				
-				for r in fpt_matches:
-					fpt_ranges.append(r.span()) # Store all $FPT ranges
-					fpt_count += 1 # Count $FPT ranges
-				
-				# Store ranges and start from 1st $FPT by default
-				(start_fw_start_match, end_fw_start_match) = fpt_ranges[0]
-				
-				# Detect if $FPT is proceeded by CSME 12+ TBD Header
-				tbd_hdr_off = start_fw_start_match - 0x1000 # TBD size is 0x1000
-				if start_fw_start_match == tbd_hdr_off + int.from_bytes(reading[tbd_hdr_off + 0x10:tbd_hdr_off + 0x14], 'little') and \
-				reading[tbd_hdr_off:tbd_hdr_off + 0x10] == b'\xFF' * 16 :
-					tbd_exist = True
-					tbd_size = 0x1000
-					
-					# Analyze TBD Header information
-					tbd_hdr = get_struct(reading, tbd_hdr_off, TBD_Header)
-					tbd_fpt_offset = tbd_hdr.FPTOffset
-					tbd_fpt_size = tbd_hdr.FPTSize
-					tbd_lbp1_offset = tbd_hdr.LBP1Offset
-					tbd_lbp1_size = tbd_hdr.LBP1Size
-					tbd_lbp2_offset = tbd_hdr.LBP2Offset
-					tbd_lbp2_size = tbd_hdr.LBP2Size
-				
-				# Multiple MERecovery 0x100 $FPT header bypass (example: Clevo)
-				while reading[start_fw_start_match + 0x100:start_fw_start_match + 0x104] == b'$FPT' : # next $FPT = previous + 0x100
-					start_fw_start_match += 0x100 # Adjust $FPT offset to the next header
-					fpt_count -= 1 # Clevo MERecovery $FPT is ignored when reporting multiple firmware
-				
-				# Multiple MERecovery + GbERecovery 0x2100 $FPT header bypass (example: Clevo)
-				while reading[start_fw_start_match + 0x2100:start_fw_start_match + 0x2104] == b'$FPT' : # next $FPT = previous + 0x2100
-					start_fw_start_match += 0x2100 # Adjust $FPT offset to the next header
-					fpt_count -= 1  # Clevo MERecovery + GbERecovery $FPT is ignored when reporting multiple firmware
-					
-				# Multiple MERecovery 0x1000 $FPT header bypass (example: SuperMicro)
-				while reading[start_fw_start_match + 0x1000:start_fw_start_match + 0x1004] == b'$FPT' : # next $FPT = previous + 0x1000
-					start_fw_start_match += 0x1000 # Adjust $FPT offset to the next header
-					fpt_count -= 1 # SuperMicro MERecovery $FPT is ignored when reporting multiple firmware
-				
-				# Analyze $FPT header
-				pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Owner' + col_e, col_y + 'Offset' + col_e,
-						  col_y + 'Size' + col_e, col_y + 'Empty' + col_e], True, 1)
-				pt_dfpt.title = col_y + 'Flash Partition Table ($FPT)' + col_e
-				
-				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
-				fpt_step = start_fw_start_match + 0x20 # 0x20 $FPT entry size
-				fpt_part_num = fpt_hdr.NumPartitions
-				fpt_version = fpt_hdr.HeaderVersion
-				fpt_length = fpt_hdr.HeaderLength
-				
-				fpt_pre_hdr = None
-				fpt_chk_start = 0x0
-				fpt_start = start_fw_start_match - 0x10
-				fpt_chk_byte = reading[start_fw_start_match + 0xB]
-				
-				if tbd_exist and fpt_version == 0x20 and fpt_length == 0x20 :
-					fpt_start = start_fw_start_match
-				elif fpt_version == 0x20 and fpt_length == 0x30 :
-					fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
-				elif fpt_version == 0x20 and fpt_length == 0x20 :
-					fpt_chk_start = 0x10 # ROMB instructions excluded
-					fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
-				elif fpt_version == 0x10 and fpt_length == 0x20 :
-					fpt_start = start_fw_start_match
-				
-				for i in range(0, fpt_part_num):
-					fpt_entry = get_struct(reading, fpt_step, FPT_Entry)
-					
-					p_type,p_reserved0,p_bwl0,p_bwl1,p_reserved1,p_valid = fpt_entry.get_flags()
-					
-					p_name = fpt_entry.Name
-					p_owner = fpt_entry.Owner
-					p_offset = fpt_entry.Offset
-					p_offset_spi = fpt_start + fpt_entry.Offset
-					p_size = fpt_entry.Size
-					
-					if p_offset in [4294967295, 0] or p_size == 0 or (
-					p_size != 4294967295 and reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF') :
-						p_empty = 'Yes'
 					else :
-						p_empty = 'No'
+						rec_rgn_start = 0
+				
+				bpdt_step += 0xC # 0xC BPDT Entry size
+				
+			if param.fpt_disp : print('%s\n' % pt_dfpt) # Show Entry details
+		
+		# Detect $FPT Firmware Starting Offset
+		if len(fpt_matches) :
+			rgn_exist = True # Set $FPT detection boolean
+			
+			for r in fpt_matches:
+				fpt_ranges.append(r.span()) # Store all $FPT ranges
+				fpt_count += 1 # Count $FPT ranges
+			
+			# Store ranges and start from 1st $FPT by default
+			(start_fw_start_match, end_fw_start_match) = fpt_ranges[0]
+			
+			# Detect if $FPT is proceeded by CSME 12+ TBD Header
+			tbd_hdr_off = start_fw_start_match - 0x1000 # TBD size is 0x1000
+			if start_fw_start_match == tbd_hdr_off + int.from_bytes(reading[tbd_hdr_off + 0x10:tbd_hdr_off + 0x14], 'little') and \
+			reading[tbd_hdr_off:tbd_hdr_off + 0x10] == b'\xFF' * 16 :
+				tbd_exist = True
+				tbd_size = 0x1000
+				
+				# Analyze TBD Header information
+				tbd_hdr = get_struct(reading, tbd_hdr_off, TBD_Header)
+				tbd_fpt_offset = tbd_hdr.FPTOffset # Engine Expansion (Data Initialization)
+				tbd_fpt_size = tbd_hdr.FPTSize
+				tbd_lbp1_offset = tbd_hdr.LBP1Offset # Engine Code 1
+				tbd_lbp1_size = tbd_hdr.LBP1Size
+				tbd_lbp2_offset = tbd_hdr.LBP2Offset # Engine Code 2
+				tbd_lbp2_size = tbd_hdr.LBP2Size
+			
+			# Multiple MERecovery 0x100 $FPT header bypass (example: Clevo)
+			while reading[start_fw_start_match + 0x100:start_fw_start_match + 0x104] == b'$FPT' : # next $FPT = previous + 0x100
+				start_fw_start_match += 0x100 # Adjust $FPT offset to the next header
+				fpt_count -= 1 # Clevo MERecovery $FPT is ignored when reporting multiple firmware
+			
+			# Multiple MERecovery + GbERecovery 0x2100 $FPT header bypass (example: Clevo)
+			while reading[start_fw_start_match + 0x2100:start_fw_start_match + 0x2104] == b'$FPT' : # next $FPT = previous + 0x2100
+				start_fw_start_match += 0x2100 # Adjust $FPT offset to the next header
+				fpt_count -= 1  # Clevo MERecovery + GbERecovery $FPT is ignored when reporting multiple firmware
+				
+			# Multiple MERecovery 0x1000 $FPT header bypass (example: SuperMicro)
+			while reading[start_fw_start_match + 0x1000:start_fw_start_match + 0x1004] == b'$FPT' : # next $FPT = previous + 0x1000
+				start_fw_start_match += 0x1000 # Adjust $FPT offset to the next header
+				fpt_count -= 1 # SuperMicro MERecovery $FPT is ignored when reporting multiple firmware
+			
+			# Analyze $FPT header
+			pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Owner' + col_e, col_y + 'Offset' + col_e,
+					  col_y + 'Size' + col_e, col_y + 'Empty' + col_e], True, 1)
+			pt_dfpt.title = col_y + 'Flash Partition Table ($FPT)' + col_e
+			
+			fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
+			fpt_step = start_fw_start_match + 0x20 # 0x20 $FPT entry size
+			fpt_part_num = fpt_hdr.NumPartitions
+			fpt_version = fpt_hdr.HeaderVersion
+			fpt_length = fpt_hdr.HeaderLength
+			
+			fpt_pre_hdr = None
+			fpt_chk_start = 0x0
+			fpt_start = start_fw_start_match - 0x10
+			fpt_chk_byte = reading[start_fw_start_match + 0xB]
+			
+			if (tbd_exist or (fd_devexp_rgn_exist and reading[devexp_fd_start:devexp_fd_start + 0x4] == b'$FPT')) \
+			and fpt_version == 0x20 and fpt_length == 0x20 :
+				fpt_start = start_fw_start_match
+			elif fpt_version == 0x20 and fpt_length == 0x30 :
+				fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
+			elif fpt_version == 0x20 and fpt_length == 0x20 :
+				fpt_chk_start = 0x10 # ROMB instructions excluded
+				fpt_pre_hdr = get_struct(reading, fpt_start, FPT_Pre_Header)
+			elif fpt_version == 0x10 and fpt_length == 0x20 :
+				fpt_start = start_fw_start_match
+			
+			for i in range(0, fpt_part_num):
+				fpt_entry = get_struct(reading, fpt_step, FPT_Entry)
+				
+				p_type,p_reserved0,p_bwl0,p_bwl1,p_reserved1,p_valid = fpt_entry.get_flags()
+				
+				p_name = fpt_entry.Name
+				p_owner = fpt_entry.Owner
+				p_offset = fpt_entry.Offset
+				p_offset_spi = fpt_start + fpt_entry.Offset
+				p_size = fpt_entry.Size
+				
+				if p_offset in [4294967295, 0] or p_size == 0 or (
+				p_size != 4294967295 and reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF') :
+					p_empty = 'Yes'
+				else :
+					p_empty = 'No'
+				
+				# Store all $FPT Partitions for extraction, charted
+				if param.me11_mod_extr :
+					if p_name == b'WCOD' or p_name == b'LOCL' :
+						cpd_hdr = get_struct(reading, p_offset_spi, CPD_Header)
 					
-					# Store all $FPT Partitions for extraction, charted
-					if param.me11_mod_extr :
-						if p_name == b'WCOD' or p_name == b'LOCL' :
-							cpd_hdr = get_struct(reading, p_offset_spi, CPD_Header)
-						
-							mn2_start = p_offset_spi + 0x10 + cpd_hdr.NumModules * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
-							mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
-							if mn2_hdr.Tag == b'$MN2' : # Sanity check
-								cpd_ext_03 = get_struct(reading, mn2_start + mn2_hdr.HeaderLength * 4, CSE_Ext_03)
-								fpt_in_id = '%0.4X' % cpd_ext_03.InstanceID # LOCL/WCOD identifier
-						else :
-							fpt_in_id = 'N/A'
-						
-						fpt_part_all.append([p_name, p_offset_spi, p_offset_spi + p_size, fpt_in_id,
-						             ['Code','ROM/Data/Generic'][p_type], 'No' if p_valid == 0xFF else 'Yes', p_empty])
+						mn2_start = p_offset_spi + 0x10 + cpd_hdr.NumModules * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
+						mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
+						if mn2_hdr.Tag == b'$MN2' : # Sanity check
+							cpd_ext_03 = get_struct(reading, mn2_start + mn2_hdr.HeaderLength * 4, CSE_Ext_03)
+							fpt_in_id = '%0.4X' % cpd_ext_03.InstanceID # LOCL/WCOD identifier
+					else :
+						fpt_in_id = 'N/A'
 					
-					if p_name in [b'\xFF\xFF\xFF\xFF', b''] :
-						p_name = '' # If appears, wrong NumPartitions
-						fpt_num_diff -= 1 # Check for less $FPT Entries
-					elif p_name == b'\xE0\x15' : p_name = '' # ME8 (E0150020)
-					else : p_name = p_name.decode('utf-8', 'ignore')
+					fpt_part_all.append([p_name, p_offset_spi, p_offset_spi + p_size, fpt_in_id,
+								 ['Code','ROM/Data/Generic'][p_type], 'No' if p_valid == 0xFF else 'Yes', p_empty])
+				
+				if p_name in [b'\xFF\xFF\xFF\xFF', b''] :
+					p_name = '' # If appears, wrong NumPartitions
+					fpt_num_diff -= 1 # Check for less $FPT Entries
+				elif p_name == b'\xE0\x15' : p_name = '' # ME8 (E0150020)
+				else : p_name = p_name.decode('utf-8', 'ignore')
+				
+				if param.fpt_disp :
+					if p_owner in [b'\xFF\xFF\xFF\xFF', b''] : p_owner = '' # Missing
+					else : p_owner = p_owner.decode('utf-8', 'ignore')
 					
-					if param.fpt_disp :
-						if p_owner in [b'\xFF\xFF\xFF\xFF', b''] : p_owner = '' # Missing
-						else : p_owner = p_owner.decode('utf-8', 'ignore')
-						
-						if p_offset in [4294967295, 0] : p_offset_print = ''
-						else : p_offset_print = '0x%0.8X' % p_offset_spi
-						
-						if p_size in [4294967295, 0] : p_size_print = ''
-						else : p_size_print = '0x%0.8X' % p_size
-						
-						pt_dfpt.add_row([p_name,p_owner,p_offset_print,p_size_print,p_empty]) # Store Partition details
+					if p_offset in [4294967295, 0] : p_offset_print = ''
+					else : p_offset_print = '0x%0.8X' % p_offset_spi
 					
-					# Adjust Manifest Header to Recovery section based on $FPT
-					p_names_store.append(p_name) # For ME2 CODE after RCVY
-					if (p_name == 'CODE' and 'RCVY' not in p_names_store) or p_name in ['RCVY', 'FTPR', 'IGRT'] :
-						rec_rgn_start = p_offset_spi
-						# Only if partition exists at file (counter-example: sole $FPT etc)
-						# noinspection PyTypeChecker
-						if rec_rgn_start + p_size < file_end :
-							man_match_init = man_match # Backup initial Manifest
-							man_match = man_pat.search(reading[rec_rgn_start:rec_rgn_start + p_size])
-							
-							# If partition is wrong, fall back to initial Manifest (Intel ME Capsule image)
-							if man_match is None :
-								man_match = man_match_init
-								rec_rgn_start = 0
-						else :
+					if p_size in [4294967295, 0] : p_size_print = ''
+					else : p_size_print = '0x%0.8X' % p_size
+					
+					pt_dfpt.add_row([p_name,p_owner,p_offset_print,p_size_print,p_empty]) # Store Partition details
+				
+				# Adjust Manifest Header to Recovery section based on $FPT
+				p_names_store.append(p_name) # For ME2 CODE after RCVY
+				if (p_name == 'CODE' and 'RCVY' not in p_names_store) or p_name in ['RCVY', 'FTPR', 'IGRT'] :
+					rec_rgn_start = p_offset_spi
+					# Only if partition exists at file (counter-example: sole $FPT etc)
+					# noinspection PyTypeChecker
+					if rec_rgn_start + p_size < file_end :
+						man_match_init = man_match # Backup initial Manifest
+						man_match = man_pat.search(reading[rec_rgn_start:rec_rgn_start + p_size])
+						
+						# If partition is wrong, fall back to initial Manifest (Intel ME Capsule image)
+						if man_match is None :
+							man_match = man_match_init
 							rec_rgn_start = 0
-					
-					if p_name == 'ROMB' :
-						fpt_romb_found = True
-						if p_offset_spi != 0 and p_size != 0 : fpt_romb_used = True
-					
-					if 0 < p_offset_spi < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset_spi + p_size
-					else : eng_fw_end = p_max_size
-					
-					# Store last partition (max offset)
-					if p_offset_last < p_offset_spi < p_max_size:
-						p_offset_last = p_offset_spi
-						p_size_last = p_size
-						p_end_last = eng_fw_end
-					
-					fpt_step += 0x20 # Next $FPT entry
-			
-				# Check for extra $FPT Entries, wrong NumPartitions (0x2+ for SPS3 Checksum)
-				while reading[fpt_step + 0x2:fpt_step + 0xC] not in [b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF',b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'] :
-					fpt_num_diff += 1
-					fpt_step += 0x20
-			
-				# Check $FPT NumPartitions validity
-				if fpt_num_diff != 0 :
-					fpt_num_fail = True
-					fpt_num_file = '0x%0.2X' % fpt_hdr.NumPartitions
-					fpt_num_calc = '0x%0.2X' % (fpt_hdr.NumPartitions + fpt_num_diff)
-			
-				if param.fpt_disp : print('%s\n' % pt_dfpt) # Show Partition details
-			
-			(start_man_match, end_man_match) = man_match.span()
-			start_man_match += rec_rgn_start
-			end_man_match += rec_rgn_start
-			
-			pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]).decode('utf-8', 'ignore') # FTPR,OPR. (ME >= 11, TXE >= 3, SPS >= 4)
-			pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # FTPR,OPxx,WCOD,LOCL (6 <= ME <= 10, TXE <= 2, SPS <= 3)
-			pr_man_3 = (reading[end_man_match + 0x28C:end_man_match + 0x290]).decode('utf-8', 'ignore') # BRIN (ME <= 5)
-			pr_man_4 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E0]).decode('utf-8', 'ignore') # EpsR,EpsF (SPS 1)
-			pr_man_5 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # IGRT (ME 6 IGN)
-			pr_man_6 = (reading[end_man_match + 0x270:end_man_match + 0x277]).decode('utf-8', 'ignore') # $MMEBUP (ME 6 IGN BYP)
-			pr_man_7 = (reading[end_man_match + 0x26C:end_man_match + 0x270]).decode('utf-8', 'ignore') # WCOD,LOCL (ME >= 11 Partial)
-			
-			# Recovery Manifest Header not found (no $FPT or wrong initial manifest), fall back to manual scanning
-			if not any(p in pr_man_1 for p in ('FTPR','OPR')) and not any(p in pr_man_2 for p in ('FTPR','OP','WCOD','LOCL')) \
-			and ("BRIN" not in pr_man_3) and not any(p in pr_man_4 for p in ('EpsR','EpsF')) and ("IGRT" not in pr_man_5) \
-			and ("$MMEBUP" not in pr_man_6) and not any(p in pr_man_7 for p in ('WCOD','LOCL')) :
-				
-				if len(man_match_store) > 1 : # Extra searches only if multiple manifest exist
-					pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x274] + FTPR
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x4F\x50\x52\x00', re.DOTALL)).search(reading) # .$MN2 + [0x274] + OPR.
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x49\x47\x52\x54', re.DOTALL)).search(reading) # .$MN2 + [0x264] + IGRT
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x264] + FTPR
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x4F\x50.{2}', re.DOTALL)).search(reading) # .$MN2 + [0x264] + OPxx
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{652}\x42\x52\x49\x4E', re.DOTALL)).search(reading) # .$MAN + [0x28C] + BRIN
-					if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73', re.DOTALL)).search(reading) # .$MAN + [0x2DC] + Epsx
-					
-					# Found proper Manifest Header from Recovery section
-					if pr_man is not None :
-						(start_man_match, end_man_match) = pr_man.span()
-						end_man_match = start_man_match + 0x5 # .$MAN/.$MN2
-						
-						# Check if Intel DEV_ID of 8086 is valid
-						if intel_id() != 'OK' :
-							print("File does not contain Intel Engine firmware")
-							continue # Next input file
 					else :
+						rec_rgn_start = 0
+				
+				if p_name == 'ROMB' :
+					fpt_romb_found = True
+					if p_offset_spi != 0 and p_size != 0 : fpt_romb_used = True
+				
+				if 0 < p_offset_spi < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset_spi + p_size
+				else : eng_fw_end = p_max_size
+				
+				# Store last partition (max offset)
+				if p_offset_last < p_offset_spi < p_max_size:
+					p_offset_last = p_offset_spi
+					p_size_last = p_size
+					p_end_last = eng_fw_end
+				
+				fpt_step += 0x20 # Next $FPT entry
+		
+			# Check for extra $FPT Entries, wrong NumPartitions (0x2+ for SPS3 Checksum)
+			while reading[fpt_step + 0x2:fpt_step + 0xC] not in [b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF',b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'] :
+				fpt_num_diff += 1
+				fpt_step += 0x20
+		
+			# Check $FPT NumPartitions validity
+			if fpt_num_diff != 0 :
+				fpt_num_fail = True
+				fpt_num_file = '0x%0.2X' % fpt_hdr.NumPartitions
+				fpt_num_calc = '0x%0.2X' % (fpt_hdr.NumPartitions + fpt_num_diff)
+		
+			if param.fpt_disp : print('%s\n' % pt_dfpt) # Show Partition details
+		
+		(start_man_match, end_man_match) = man_match.span()
+		start_man_match += rec_rgn_start
+		end_man_match += rec_rgn_start
+		
+		pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]).decode('utf-8', 'ignore') # FTPR,OPR. (ME >= 11, TXE >= 3, SPS >= 4)
+		pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # FTPR,OPxx,WCOD,LOCL (6 <= ME <= 10, TXE <= 2, SPS <= 3)
+		pr_man_3 = (reading[end_man_match + 0x28C:end_man_match + 0x290]).decode('utf-8', 'ignore') # BRIN (ME <= 5)
+		pr_man_4 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E0]).decode('utf-8', 'ignore') # EpsR,EpsF (SPS 1)
+		pr_man_5 = (reading[end_man_match + 0x264:end_man_match + 0x268]).decode('utf-8', 'ignore') # IGRT (ME 6 IGN)
+		pr_man_6 = (reading[end_man_match + 0x270:end_man_match + 0x277]).decode('utf-8', 'ignore') # $MMEBUP (ME 6 IGN BYP)
+		pr_man_7 = (reading[end_man_match + 0x26C:end_man_match + 0x270]).decode('utf-8', 'ignore') # WCOD,LOCL (ME >= 11 Partial)
+		
+		# Recovery Manifest Header not found (no $FPT or wrong initial manifest), fall back to manual scanning
+		if not any(p in pr_man_1 for p in ('FTPR','OPR')) and not any(p in pr_man_2 for p in ('FTPR','OP','WCOD','LOCL')) \
+		and ("BRIN" not in pr_man_3) and not any(p in pr_man_4 for p in ('EpsR','EpsF')) and ("IGRT" not in pr_man_5) \
+		and ("$MMEBUP" not in pr_man_6) and not any(p in pr_man_7 for p in ('WCOD','LOCL')) :
+			
+			if len(man_match_store) > 1 : # Extra searches only if multiple manifest exist
+				pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x274] + FTPR
+				if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{628}\x4F\x50\x52\x00', re.DOTALL)).search(reading) # .$MN2 + [0x274] + OPR.
+				if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x49\x47\x52\x54', re.DOTALL)).search(reading) # .$MN2 + [0x264] + IGRT
+				if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x46\x54\x50\x52', re.DOTALL)).search(reading) # .$MN2 + [0x264] + FTPR
+				if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x4E\x32.{612}\x4F\x50.{2}', re.DOTALL)).search(reading) # .$MN2 + [0x264] + OPxx
+				if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{652}\x42\x52\x49\x4E', re.DOTALL)).search(reading) # .$MAN + [0x28C] + BRIN
+				if pr_man is None : pr_man = (re.compile(br'\x00\x24\x4D\x41\x4E.{732}\x45\x70\x73', re.DOTALL)).search(reading) # .$MAN + [0x2DC] + Epsx
+				
+				# Found proper Manifest Header from Recovery section
+				if pr_man is not None :
+					(start_man_match, end_man_match) = pr_man.span()
+					end_man_match = start_man_match + 0x5 # .$MAN/.$MN2
+					
+					# Check if Intel DEV_ID of 8086 is valid
+					if intel_id() != 'OK' :
 						print("File does not contain Intel Engine firmware")
-						continue
-				# Only one (initial, non-Recovery) Manifest Header exists
+						continue # Next input file
 				else :
 					print("File does not contain Intel Engine firmware")
 					continue
-			
-			# Recovery Manifest Header found, check if Intel DEV_ID of 8086 is valid
-			elif intel_id() != 'OK' :
+			# Only one (initial, non-Recovery) Manifest Header exists
+			else :
 				print("File does not contain Intel Engine firmware")
-				continue # Next input file
+				continue
+		
+		# Recovery Manifest Header found, check if Intel DEV_ID of 8086 is valid
+		elif intel_id() != 'OK' :
+			print("File does not contain Intel Engine firmware")
+			continue # Next input file
+		
+		# Scan $MAN/$MN2 manifest
+		mn2_ftpr_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
+		
+		major = mn2_ftpr_hdr.Major
+		minor = mn2_ftpr_hdr.Minor
+		hotfix = mn2_ftpr_hdr.Hotfix
+		build = mn2_ftpr_hdr.Build
+		svn = mn2_ftpr_hdr.SVN
+		vcn = mn2_ftpr_hdr.VCN
+		date = '%0.4X-%0.2X-%0.2X' % (mn2_ftpr_hdr.Year, mn2_ftpr_hdr.Month, mn2_ftpr_hdr.Day)
+		
+		# Read & Hash RSA Public Key and Signature
+		rsa_key = reading[end_man_match + 0x60:end_man_match + 0x160] # Read FTPR RSA Public Key
+		rsa_key_hash = sha_256(rsa_key).upper() # Generate FTPR RSA Public Key SHA-256 hash
+		rsa_sig = reading[end_man_match + 0x164:end_man_match + 0x264] # Read FTPR RSA Signature
+		rsa_sig_hash = sha_256(rsa_sig).upper() # Generate FTPR RSA Signature SHA-256 hash
+		
+		variant, variant_p, var_rsa_db = get_variant() # Detect Variant/Family
+		
+		# Detect FTPR RSA Signature Validity
+		man_valid = rsa_sig_val(mn2_ftpr_hdr, reading, start_man_match - 0x1B)
+		if not man_valid[0] :
+			err_rep += 1
+			err_stor.append(col_r + "Error" + col_e + ", invalid FTPR RSA Signature!" + col_r + " *" + col_e)
+		
+		if rgn_exist :
 			
-			# Detect RSA Signature and Public Key
-			rsa_hash,rsa_pkey = rsa_anl()
+			# Multiple Backup $FPT header bypass at SPS1/SPS4 (DFLT/FPTB)
+			if variant in ['SPS','CSSPS'] and fpt_count == 2 and (major == 4 or major == 1) : fpt_count -= 1
 			
-			# Scan $MAN/$MN2 manifest
-			mn2_ftpr_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
+			# Trigger multiple $FPT message after MERecovery/SPS corrections
+			if fpt_count > 1 : multi_rgn = True
 			
-			major = mn2_ftpr_hdr.Major
-			minor = mn2_ftpr_hdr.Minor
-			hotfix = mn2_ftpr_hdr.Hotfix
-			build = mn2_ftpr_hdr.Build
-			svn = mn2_ftpr_hdr.SVN
-			vcn = mn2_ftpr_hdr.VCN
-			date = '%0.4X-%0.2X-%0.2X' % (mn2_ftpr_hdr.Year, mn2_ftpr_hdr.Month, mn2_ftpr_hdr.Day)
+			# Check $FPT Checksum validity
+			# noinspection PyUnboundLocalVariable
+			fpt_chk_file = '0x%0.2X' % fpt_hdr.HeaderChecksum
+			# noinspection PyUnboundLocalVariable
+			chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_start + fpt_length]) - fpt_chk_byte
+			fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
+			if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
 			
-			variant, variant_p, var_rsa_db = get_variant() # Detect Variant/Family
+			# ME12+, TXE3+ EXTR checksum from FIT is a placeholder (0x00), ignore
+			if fpt_chk_fail and variant == 'CSTXE' : fpt_chk_fail = False
 			
-			# Detect FTPR RSA Signature Validity
-			man_valid = rsa_sig_val(mn2_ftpr_hdr, reading, start_man_match - 0x1B)
-			if not man_valid[0] :
-				err_rep += 1
-				err_stor.append(col_r + "Error" + col_e + ", invalid FTPR RSA Signature!" + col_r + " *" + col_e)
-			
-			# Detect Intel Flash Descriptor Lock
-			fd_exist,start_fd_match,end_fd_match = spi_fd_init()
-			if fd_exist :
-				fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size = spi_fd('region',start_fd_match,end_fd_match)
-				fd_lock_state = spi_fd('unlocked',start_fd_match,end_fd_match)
-			
-			# Perform $FPT actions variant-dependents
-			if rgn_exist :
-				
-				# Set $FPT End offset based on variant, major & static size
-				if variant == 'CSME' and major >= 12 : fpt_end = fpt_start + 0xF00
-				else : fpt_end = fpt_start + 0x1000 # 4KB size
-				
-				# Multiple Backup $FPT header bypass at SPS1/SPS4 (DFLT/FPTB)
-				if variant in ['SPS','CSSPS'] and fpt_count == 2 and (major == 4 or major == 1) : fpt_count -= 1
-				
-				# Trigger multiple $FPT message after MERecovery/SPS corrections
-				if fpt_count > 1 : multi_rgn = True
-				
-				# Check $FPT Checksum validity
+			# Check SPS3 $FPT Checksum validity (from Lordkag's UEFIStrip)
+			if variant == 'SPS' and major == 3 :
+				sps3_chk_start = fpt_start + 0x30
 				# noinspection PyUnboundLocalVariable
-				fpt_chk_file = '0x%0.2X' % fpt_hdr.HeaderChecksum
-				# noinspection PyUnboundLocalVariable
-				chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_start + fpt_length]) - fpt_chk_byte
-				fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
-				if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
+				sps3_chk_end = sps3_chk_start + fpt_part_num * 0x20
+				fpt_chk16 = sum(bytearray(reading[sps3_chk_start:sps3_chk_end])) & 0xFFFF
+				sps3_chk16 = ~fpt_chk16 & 0xFFFF
+				sps3_chk16_file = '0x%0.4X' % (int(binascii.b2a_hex( (reading[sps3_chk_end:sps3_chk_end + 0x2])[::-1] ), 16))
+				sps3_chk16_calc = '0x%0.4X' % sps3_chk16
+				if sps3_chk16_calc != sps3_chk16_file: sps3_chk_fail = True
+			
+			# Last/Uncharted partition scanning inspired by Lordkag's UEFIStrip
+			# ME2-ME6 don't have size for last partition, scan its submodules
+			if p_end_last == p_max_size :
+				mn2_hdr = get_struct(reading, p_offset_last, MN2_Manifest)
+				man_tag = mn2_hdr.Tag
+				man_num = mn2_hdr.NumModules
+				man_len = mn2_hdr.HeaderLength * 4
+				mod_start = p_offset_last + man_len + 0xC
 				
-				# ME12+, TXE3+ EXTR checksum from FIT is a placeholder (0x00), ignore
-				if fpt_chk_fail and variant == 'CSTXE' : fpt_chk_fail = False
-				
-				# Check SPS3 $FPT Checksum validity (from Lordkag's UEFIStrip)
-				if variant == 'SPS' and major == 3 :
-					sps3_chk_start = fpt_start + 0x30
-					# noinspection PyUnboundLocalVariable
-					sps3_chk_end = sps3_chk_start + fpt_part_num * 0x20
-					fpt_chk16 = sum(bytearray(reading[sps3_chk_start:sps3_chk_end])) & 0xFFFF
-					sps3_chk16 = ~fpt_chk16 & 0xFFFF
-					sps3_chk16_file = '0x%0.4X' % (int(binascii.b2a_hex( (reading[sps3_chk_end:sps3_chk_end + 0x2])[::-1] ), 16))
-					sps3_chk16_calc = '0x%0.4X' % sps3_chk16
-					if sps3_chk16_calc != sps3_chk16_file: sps3_chk_fail = True
-				
-				# Last/Uncharted partition scanning inspired by Lordkag's UEFIStrip
-				# ME2-ME6 don't have size for last partition, scan its submodules
-				if p_end_last == p_max_size :
-					mn2_hdr = get_struct(reading, p_offset_last, MN2_Manifest)
-					man_tag = mn2_hdr.Tag
-					man_num = mn2_hdr.NumModules
-					man_len = mn2_hdr.HeaderLength * 4
-					mod_start = p_offset_last + man_len + 0xC
-					
-					# ME6
-					if man_tag == b'$MN2' :
+				# ME6
+				if man_tag == b'$MN2' :
 
-						for _ in range(0, man_num) :
-							mme_mod = get_struct(reading, mod_start, MME_Header_New)
-							
-							mod_code_start = mme_mod.Offset_MN2
-							mod_size_comp = mme_mod.SizeComp
-							mod_size_uncomp = mme_mod.SizeUncomp
-							
-							if mod_size_comp > 0 : mod_size = mod_size_comp
-							elif mod_size_comp == 0 : mod_size = mod_size_uncomp
-							
-							mod_end = p_offset_last + mod_code_start + mod_size
-							
-							if mod_end > mod_end_max : mod_end_max = mod_end # In case modules are not offset sorted
-							
-							mod_start += 0x60
+					for _ in range(0, man_num) :
+						mme_mod = get_struct(reading, mod_start, MME_Header_New)
+						
+						mod_code_start = mme_mod.Offset_MN2
+						mod_size_comp = mme_mod.SizeComp
+						mod_size_uncomp = mme_mod.SizeUncomp
+						
+						if mod_size_comp > 0 : mod_size = mod_size_comp
+						elif mod_size_comp == 0 : mod_size = mod_size_uncomp
+						
+						mod_end = p_offset_last + mod_code_start + mod_size
+						
+						if mod_end > mod_end_max : mod_end_max = mod_end # In case modules are not offset sorted
+						
+						mod_start += 0x60
+				
+				# ME2-5
+				elif man_tag == b'$MAN' :
 					
-					# ME2-5
-					elif man_tag == b'$MAN' :
+					for _ in range(0, man_num) :
+						mme_mod = get_struct(reading, mod_start, MME_Header_Old)
+						mme_tag = mme_mod.Tag
+						
+						if mme_tag == b'$MME' : # Sanity check
+							mod_size_all += mme_mod.Size # Append all $MOD ($MME Code) sizes
+							mod_end_max = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU + all $MOD sizes
+							mod_end = mod_end_max
+						
+							mod_start += 0x50
+				
+				# For Engine alignment & size, remove fpt_start (included in mod_end_max < mod_end < p_offset_last)
+				mod_align = (mod_end_max - fpt_start) % 0x1000 # 1K alignment on Engine size only
+				
+				if mod_align > 0 : eng_fw_end = mod_end + 0x1000 - mod_align - fpt_start
+				else : eng_fw_end = mod_end
+			
+			# Last $FPT entry has size, scan for uncharted partitions
+			else :
+				
+				# TXE3+ uncharted DNXP starts 0x1000 after last $FPT entry for some reason
+				if variant == 'CSTXE' and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
+					if reading[p_end_last + 0x1000:p_end_last + 0x1004] == b'$CPD' : p_end_last += 0x1000
+				
+				# ME8-10 WCOD/LOCL but works for ME7, TXE1-2, SPS2-3 even though these end at last $FPT entry
+				while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MN2' :
+					
+					mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
+					man_ven = '%X' % mn2_hdr.VEN_ID
+					
+					if man_ven == '8086' : # Sanity check
+						man_num = mn2_hdr.NumModules
+						man_len = mn2_hdr.HeaderLength * 4
+						mod_start = p_end_last + man_len + 0xC
+						if variant in ['ME','SPS'] : mme_size = 0x60
+						elif variant == 'TXE' : mme_size = 0x80
+						mcp_start = mod_start + man_num * mme_size + mme_size # (each $MME = mme_size, mme_size padding after last $MME)
+					
+						mcp_mod = get_struct(reading, mcp_start, MCP_Header) # $MCP holds total partition size
+					
+						if mcp_mod.Tag == b'$MCP' : # Sanity check
+							p_end_last += mcp_mod.Offset_Code_MN2 + mcp_mod.CodeSize
+						else :
+							break # main "while" loop
+					else :
+						break # main "while" loop
+					
+				# SPS1, should not be run but works even though it ends at last $FPT entry
+				while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MAN' :
+					
+					mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
+					man_ven = '%X' % mn2_hdr.VEN_ID
+					
+					if man_ven == '8086': # Sanity check
+						man_num = mn2_hdr.NumModules
+						man_len = mn2_hdr.HeaderLength * 4
+						mod_start = p_end_last + man_len + 0xC
+						mod_size_all = 0
 						
 						for _ in range(0, man_num) :
 							mme_mod = get_struct(reading, mod_start, MME_Header_Old)
 							mme_tag = mme_mod.Tag
 							
-							if mme_tag == b'$MME' : # Sanity check
+							if mme_tag == b'$MME': # Sanity check
 								mod_size_all += mme_mod.Size # Append all $MOD ($MME Code) sizes
-								mod_end_max = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU + all $MOD sizes
-								mod_end = mod_end_max
+								p_end_last = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU + all $MOD sizes
 							
 								mod_start += 0x50
-					
-					# For Engine alignment & size, remove fpt_start (included in mod_end_max < mod_end < p_offset_last)
-					mod_align = (mod_end_max - fpt_start) % 0x1000 # 1K alignment on Engine size only
-					
-					if mod_align > 0 : eng_fw_end = mod_end + 0x1000 - mod_align - fpt_start
-					else : eng_fw_end = mod_end
-				
-				# Last $FPT entry has size, scan for uncharted partitions
-				else :
-					
-					# TXE3+ uncharted DNXP starts 0x1000 after last $FPT entry for some reason
-					if variant == 'CSTXE' and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
-						if reading[p_end_last + 0x1000:p_end_last + 0x1004] == b'$CPD' : p_end_last += 0x1000
-					
-					# ME8-10 WCOD/LOCL but works for ME7, TXE1-2, SPS2-3 even though these end at last $FPT entry
-					while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MN2' :
-						
-						mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
-						man_ven = '%X' % mn2_hdr.VEN_ID
-						
-						if man_ven == '8086' : # Sanity check
-							man_num = mn2_hdr.NumModules
-							man_len = mn2_hdr.HeaderLength * 4
-							mod_start = p_end_last + man_len + 0xC
-							if variant in ['ME','SPS'] : mme_size = 0x60
-							elif variant == 'TXE' : mme_size = 0x80
-							mcp_start = mod_start + man_num * mme_size + mme_size # (each $MME = mme_size, mme_size padding after last $MME)
-						
-							mcp_mod = get_struct(reading, mcp_start, MCP_Header) # $MCP holds total partition size
-						
-							if mcp_mod.Tag == b'$MCP' : # Sanity check
-								p_end_last += mcp_mod.Offset_Code_MN2 + mcp_mod.CodeSize
 							else :
-								break # main "while" loop
-						else :
-							break # main "while" loop
-						
-					# SPS1, should not be run but works even though it ends at last $FPT entry
-					while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MAN' :
-						
-						mn2_hdr = get_struct(reading, p_end_last, MN2_Manifest)
-						man_ven = '%X' % mn2_hdr.VEN_ID
-						
-						if man_ven == '8086': # Sanity check
-							man_num = mn2_hdr.NumModules
-							man_len = mn2_hdr.HeaderLength * 4
-							mod_start = p_end_last + man_len + 0xC
-							mod_size_all = 0
-							
-							for _ in range(0, man_num) :
-								mme_mod = get_struct(reading, mod_start, MME_Header_Old)
-								mme_tag = mme_mod.Tag
-								
-								if mme_tag == b'$MME': # Sanity check
-									mod_size_all += mme_mod.Size # Append all $MOD ($MME Code) sizes
-									p_end_last = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU + all $MOD sizes
-								
-									mod_start += 0x50
-								else :
-									p_end_last += 10 # to break main "while" loop
-									break # nested "for" loop
-						else :
-							break # main "while" loop
-					
-					# ME11+ WCOD/LOCL, TXE3+ DNXP
-					while reading[p_end_last:p_end_last + 0x4] == b'$CPD' :
-						
-						cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
-						cpd_num = cpd_hdr.NumModules
-						cpd_tag = cpd_hdr.PartitionName
-						
-						# Calculate partition size by the CSE Extension 03 (CSE_Ext_03)
-						# PartitionSize of CSE_Ext_03 is always 0x0A at TXE3+ so check $CPD entries instead
-						mn2_start = p_end_last + 0x10 + cpd_num * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
-						mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
-						if mn2_hdr.Tag == b'$MN2' : # Sanity check
-							man_len = mn2_hdr.HeaderLength * 4
-							cpd_ext_03 = get_struct(reading, mn2_start + man_len, CSE_Ext_03)
-							if cpd_tag in [b'WCOD', b'LOCL'] : # LOCL/WCOD identifier
-								fpt_in_id = '%0.4X' % cpd_ext_03.InstanceID
-							else :
-								fpt_in_id = 'N/A' # DNXP may have ID but only one instance
-							
-							# ISHC size at $FPT can be larger than CSE_Ext_03.PartitionSize because
-							# it is the last charted region and thus 1K pre-alligned by Intel at the $FPT header
-							if cpd_ext_03.PartitionName == cpd_hdr.PartitionName : # Sanity check
-								p_end_last_cont = cpd_ext_03.PartitionSize
-							else :
-								break # main "while" loop
-						else :
-							break # main "while" loop
-							
-						# Calculate partition size by the $CPD entries (TXE3+, 2nd check for ME11+)
-						for entry in range(1, cpd_num, 2) : # Skip 1st .man module, check only .met
-							cpd_entry_hdr = get_struct(reading, p_end_last + 0x10 + entry * 0x18, CPD_Entry)
-							cpd_mod_off,cpd_mod_huff,cpd_mod_res = cpd_entry_hdr.get_flags()
-							
-							cpd_entry_name = cpd_entry_hdr.Name
-							
-							if b'.met' not in cpd_entry_name and b'.man' not in cpd_entry_name : # Sanity check
-								cpd_entry_offset = cpd_mod_off
-								cpd_entry_size = cpd_entry_hdr.Size
-								
-								# Store last entry (max $CPD offset)
-								if cpd_entry_offset > cpd_offset_last :
-									cpd_offset_last = cpd_entry_offset
-									cpd_end_last = cpd_entry_offset + cpd_entry_size
-							else :
+								p_end_last += 10 # to break main "while" loop
 								break # nested "for" loop
-						
-						fpt_off_start = p_end_last # Store starting offset of current $FPT Partition for fpt_part_all
-						
-						# Take the largest partition size from the two checks
-						# Add previous $CPD start for next size calculation
-						p_end_last += max(p_end_last_cont,cpd_end_last)
-						
-						# Store all $FPT Partitions, uncharted (Type 1 = ROM/Data/Generic, Valid 0 = Yes, Empty No)
-						if param.me11_mod_extr :
-							fpt_part_all.append([cpd_tag, fpt_off_start, p_end_last, fpt_in_id, 'ROM/Data/Generic', 'Yes', 'No'])
-					
-					# CSME 12+ consists of TBD (0x1000) + $FPT (MEA or TBD size) + LBP1 (TBD size) + LBP2 (TBD size)
-					if tbd_exist : p_end_last = tbd_size + max(p_end_last,tbd_fpt_size) + tbd_lbp1_size + tbd_lbp2_size
-					
-					# For Engine alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)
-					mod_align = (p_end_last - fpt_start) % 0x1000 # 1K alignment on Engine size only
-					
-					if mod_align > 0 : eng_fw_end = p_end_last + 0x1000 - mod_align - fpt_start
-					else : eng_fw_end = p_end_last - fpt_start
+					else :
+						break # main "while" loop
 				
-				# Detect SPS 4 (usually) Uncharted empty Partition ($BIS)
-				if variant == 'CSSPS' : sps4_bis_match = (re.compile(br'\x24\x42\x49\x53\x00')).search(reading)
-				else : sps4_bis_match = None
-				
-				# SPI image with FD
-				if fd_me_rgn_exist :
-					if eng_fw_end > me_fd_size :
-						eng_size_text = col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e
-					elif eng_fw_end < me_fd_size :
-						# Extra data at Engine FD region padding
-						padd_size_fd = me_fd_size - eng_fw_end
-						padd_start_fd = fpt_start - tbd_size + eng_fw_end
-						padd_end_fd = fpt_start - tbd_size + eng_fw_end + padd_size_fd
-						if reading[padd_start_fd:padd_end_fd] != padd_size_fd * b'\xFF' :
-							if sps4_bis_match is not None : eng_size_text = ''
-							else : eng_size_text = col_m + 'Warning: Data in Engine region padding, possible data corruption!' + col_e
-				
-				# Bare Engine Region
-				elif fpt_start == 0 or (tbd_exist and tbd_hdr_off == 0) :
-					# noinspection PyTypeChecker
-					padd_size_file = file_end - eng_fw_end
+				# ME11+ WCOD/LOCL, TXE3+ DNXP
+				while reading[p_end_last:p_end_last + 0x4] == b'$CPD' :
 					
-					# noinspection PyTypeChecker
-					if eng_fw_end > file_end :
-						eng_size_text = 'Warning: Firmware size exceeds file, possible data loss!'
-					elif eng_fw_end < file_end :
-						if reading[eng_fw_end:eng_fw_end + padd_size_file] == padd_size_file * b'\xFF' :
-							# Extra padding is clear
-							eng_size_text = 'Warning: File size exceeds firmware, unneeded padding!'
+					cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
+					cpd_num = cpd_hdr.NumModules
+					cpd_tag = cpd_hdr.PartitionName
+					
+					# Calculate partition size by the CSE Extension 03 (CSE_Ext_03)
+					# PartitionSize of CSE_Ext_03 is always 0x0A at TXE3+ so check $CPD entries instead
+					mn2_start = p_end_last + 0x10 + cpd_num * 0x18 # ($CPD modules start at $CPD + 0x10, size = 0x18)
+					mn2_hdr = get_struct(reading, mn2_start, MN2_Manifest)
+					if mn2_hdr.Tag == b'$MN2' : # Sanity check
+						man_len = mn2_hdr.HeaderLength * 4
+						cpd_ext_03 = get_struct(reading, mn2_start + man_len, CSE_Ext_03)
+						if cpd_tag in [b'WCOD', b'LOCL'] : # LOCL/WCOD identifier
+							fpt_in_id = '%0.4X' % cpd_ext_03.InstanceID
 						else :
-							# Extra padding has data
-							if sps4_bis_match is not None : eng_size_text = ''
-							else : eng_size_text = 'Warning: File size exceeds firmware, data in padding!'
-			
-			# $FPT Firmware Type detection (Stock, Extracted, Update)
-			if rgn_exist : # SPS 1-3 have their own Firmware Types
-				if variant == 'SPS' : fw_type = 'Region' # SPS is built manually so EXTR
-				elif variant == 'ME' and (2 <= major <= 7) :
-					# Check 1, FOVD section
-					if (major > 2 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Region, Extracted'
+							fpt_in_id = 'N/A' # DNXP may have ID but only one instance
+						
+						# ISHC size at $FPT can be larger than CSE_Ext_03.PartitionSize because
+						# it is the last charted region and thus 1K pre-alligned by Intel at the $FPT header
+						if cpd_ext_03.PartitionName == cpd_hdr.PartitionName : # Sanity check
+							p_end_last_cont = cpd_ext_03.PartitionSize
+						else :
+							break # main "while" loop
 					else :
-						# Check 2, EFFS/NVKR strings
-						fitc_match = re.compile(br'\x4B\x52\x4E\x44\x00').search(reading) # KRND. detection = FITC, 0x00 adds old ME RGN support
-						if fitc_match is not None :
-							if major == 4 : fw_type_fix = True # ME4-Only Fix 3
-							else : fw_type = 'Region, Extracted'
-						elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
-						else : fw_type = 'Region, Stock'
-				elif (variant in ['ME','CSME'] and 8 <= major <= 12) or variant == 'TXE' or (variant == 'CSSPS' and major == 4) :
-					# Check 1, FITC Version
-					# noinspection PyUnboundLocalVariable
-					fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
+						break # main "while" loop
+						
+					# Calculate partition size by the $CPD entries (TXE3+, 2nd check for ME11+)
+					for entry in range(1, cpd_num, 2) : # Skip 1st .man module, check only .met
+						cpd_entry_hdr = get_struct(reading, p_end_last + 0x10 + entry * 0x18, CPD_Entry)
+						cpd_mod_off,cpd_mod_huff,cpd_mod_res = cpd_entry_hdr.get_flags()
+						
+						cpd_entry_name = cpd_entry_hdr.Name
+						
+						if b'.met' not in cpd_entry_name and b'.man' not in cpd_entry_name : # Sanity check
+							cpd_entry_offset = cpd_mod_off
+							cpd_entry_size = cpd_entry_hdr.Size
+							
+							# Store last entry (max $CPD offset)
+							if cpd_entry_offset > cpd_offset_last :
+								cpd_offset_last = cpd_entry_offset
+								cpd_end_last = cpd_entry_offset + cpd_entry_size
+						else :
+							break # nested "for" loop
+					
+					fpt_off_start = p_end_last # Store starting offset of current $FPT Partition for fpt_part_all
+					
+					# Take the largest partition size from the two checks
+					# Add previous $CPD start for next size calculation
+					p_end_last += max(p_end_last_cont,cpd_end_last)
+					
+					# Store all $FPT Partitions, uncharted (Type 1 = ROM/Data/Generic, Valid 0 = Yes, Empty No)
+					if param.me11_mod_extr :
+						fpt_part_all.append([cpd_tag, fpt_off_start, p_end_last, fpt_in_id, 'ROM/Data/Generic', 'Yes', 'No'])
 				
-					if fpt_hdr.FitBuild == 0 or fpt_hdr.FitBuild == 65535 : # 0000/FFFF --> clean ME/TXE
-						fw_type = 'Region, Stock'
-						# Check 2, FOVD section
-						if not fovd_clean('new') : fw_type = 'Region, Extracted'
-					else :
-						# Get FIT/FITC version used to build the image
-						fitc_ver_found = True
-						fw_type = 'Region, Extracted'
-						fitc_major = fpt_hdr.FitMajor
-						fitc_minor = fpt_hdr.FitMinor
-						fitc_hotfix = fpt_hdr.FitHotfix
-						fitc_build = fpt_hdr.FitBuild
-				elif variant == 'CSME' or variant == 'CSTXE' or variant == 'CSSPS' :
-					# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
-					if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
-					reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' : fw_type = 'Region, Extracted'
-					else : fw_type = 'Region, Stock'
-			elif ifwi_exist : # IFWI
-				fitc_ver_found = True
-				fw_type = 'Region, Extracted'
-				fitc_major = bpdt_hdr.FitMajor
-				fitc_minor = bpdt_hdr.FitMinor
-				fitc_hotfix = bpdt_hdr.FitHotfix
-				fitc_build = bpdt_hdr.FitBuild
-			else :
-				fw_type = 'Update' # No Region detected, Update
+				# CSME 12+ consists of TBD (0x1000) + $FPT (MEA or TBD size) + LBP1 (TBD size) + LBP2 (TBD size)
+				if tbd_exist :
+					# noinspection PyUnboundLocalVariable
+					p_end_last = tbd_size + max(p_end_last,tbd_fpt_size) + tbd_lbp1_size + tbd_lbp2_size
+				
+				# For Engine alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)
+				mod_align = (p_end_last - fpt_start) % 0x1000 # 1K alignment on Engine size only
+				
+				if mod_align > 0 : eng_fw_end = p_end_last + 0x1000 - mod_align - fpt_start
+				else : eng_fw_end = p_end_last - fpt_start
 			
-			# Check for Fujitsu UMEM ME Region (RGN/$FPT or UPD/$MN2)
+			# Detect SPS 4 (usually) Uncharted empty Partition ($BIS)
+			if variant == 'CSSPS' : sps4_bis_match = (re.compile(br'\x24\x42\x49\x53\x00')).search(reading)
+			else : sps4_bis_match = None
+			
+			# SPI image with FD
 			if fd_me_rgn_exist :
-				fuj_umem_spi = reading[me_fd_start:me_fd_start + 0x4]
-				fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
-				if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True # Futjitsu ME Region (RGN or UPD) with header UMEM
-			else :
-				fuj_umem_spi = reading[0x0:0x4]
-				fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
-				if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True
+				if eng_fw_end > me_fd_size :
+					eng_size_text = col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e
+				elif eng_fw_end < me_fd_size :
+					# Extra data at Engine FD region padding
+					padd_size_fd = me_fd_size - eng_fw_end
+					padd_start_fd = fpt_start - tbd_size + eng_fw_end
+					padd_end_fd = fpt_start - tbd_size + eng_fw_end + padd_size_fd
+					if reading[padd_start_fd:padd_end_fd] != padd_size_fd * b'\xFF' :
+						if sps4_bis_match is not None : eng_size_text = ''
+						else : eng_size_text = col_m + 'Warning: Data in Engine region padding, possible data corruption!' + col_e
 			
-			# Detect Firmware Release (Production, Pre-Production, ROM-Bypass, Other)
-			mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
-			rel_signed = ['Production Signed', 'Debug Signed'][mn2_flags_debug]
-			rel_flag = ['Production', 'Pre-Production'][mn2_flags_pre]
-			
-			# Check for ROM-Bypass entry at $FPT
-			if rgn_exist and fpt_romb_found :
-				# Pre CSE Engine have ROMB entry at $FPT only when required, covered by fpt_romb_found
+			# Bare Engine Region
+			elif fpt_start == 0 or (tbd_exist and tbd_hdr_off == 0) :
+				# noinspection PyTypeChecker
+				padd_size_file = file_end - eng_fw_end
 				
-				if fpt_pre_hdr is not None and (variant == 'CSME' or variant == 'CSTXE' or variant == 'CSSPS') :
-					# noinspection PyUnboundLocalVariable
-					byp_cse = fpt_pre_hdr.ROMB_Instr_0 # Check CSE Engine ROM-Bypass Instruction 0
-					if not fpt_romb_used or byp_cse == 0 : fpt_romb_found = False # CSE Engine ROMB depends on $FPT Offset/Size + Instructions
-			
-			# Production PRD, Pre-Production PRE, ROM-Bypass BYP
-			if fpt_romb_found : release = 'ROM-Bypass'
-			elif rel_signed == 'Production Signed' : release = 'Production'
-			elif rel_signed == 'Debug Signed' : release = 'Pre-Production'
-			else :
-				release = col_r + 'Error' + col_e + ', unknown firmware release!' + col_r + ' *' + col_e
-				err_rep += 1
-				err_stor.append(release)
-			
-			if release == 'Production' : rel_db = 'PRD'
-			elif release == 'Pre-Production' : rel_db = 'PRE'
-			elif release == 'ROM-Bypass' : rel_db = 'BYP'
-			
-			# Detect Firmware $SKU (Variant, Major & Minor dependant)
-			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, pattern used later as well
-			sku_match = sku_pat.search(reading[start_man_match:]) # Search $SKU after proper $MAN/$MN2 Manifest
-			if sku_match is not None :
-				(start_sku_match, end_sku_match) = sku_match.span()
-				start_sku_match += start_man_match
-				end_sku_match += start_man_match
-			
-			# Detect PV/PC bit (0 or 1)
-			if (variant == 'ME' and major >= 8) or variant == 'TXE' :
-				pvbit_match = (re.compile(br'\x24\x44\x41\x54....................\x49\x46\x52\x50', re.DOTALL)).search(reading) # $DAT + [0x14] + IFRP detection
-				if pvbit_match is not None :
-					(start_pvbit_match, end_pvbit_match) = pvbit_match.span()
-					pvbit = int(binascii.b2a_hex( (reading[start_pvbit_match + 0x10:start_pvbit_match + 0x11]) ), 16)
-			elif variant == 'CSME' or variant == 'CSTXE' or variant == 'CSSPS' :
-				pvbit = mn2_flags_pvbit
+				# noinspection PyTypeChecker
+				if eng_fw_end > file_end :
+					eng_size_text = 'Warning: Firmware size exceeds file, possible data loss!'
+				elif eng_fw_end < file_end :
+					if reading[eng_fw_end:eng_fw_end + padd_size_file] == padd_size_file * b'\xFF' :
+						# Extra padding is clear
+						eng_size_text = 'Warning: File size exceeds firmware, unneeded padding!'
+					else :
+						# Extra padding has data
+						if sps4_bis_match is not None : eng_size_text = ''
+						else : eng_size_text = 'Warning: File size exceeds firmware, data in padding!'
 		
-		else : # AMT 1.x
-			variant = 'ME'
-			(start_man_match, end_man_match) = man_match.span()
-			major = int(binascii.b2a_hex( (reading[start_man_match - 0x260:start_man_match - 0x25F]) [::-1]).decode('utf-8'))
-			minor = int(binascii.b2a_hex( (reading[start_man_match - 0x25F:start_man_match - 0x25E]) [::-1]).decode('utf-8'))
-			hotfix = int(binascii.b2a_hex( (reading[start_man_match - 0x25E:start_man_match - 0x25D]) [::-1]).decode('utf-8'))
+		# Firmware Type detection (Stock, Extracted, Update)
+		if ifwi_exist : # IFWI
+			fitc_ver_found = True
+			fw_type = 'Region, Extracted'
+			fitc_major = bpdt_hdr.FitMajor
+			fitc_minor = bpdt_hdr.FitMinor
+			fitc_hotfix = bpdt_hdr.FitHotfix
+			fitc_build = bpdt_hdr.FitBuild
+		elif rgn_exist : # SPS 1-3 have their own firmware Types
+			if variant == 'SPS' : fw_type = 'Region' # SPS is built manually so EXTR
+			elif variant == 'ME' and (2 <= major <= 7) :
+				# Check 1, FOVD section
+				if (major > 2 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Region, Extracted'
+				else :
+					# Check 2, EFFS/NVKR strings
+					fitc_match = re.compile(br'\x4B\x52\x4E\x44\x00').search(reading) # KRND. detection = FITC, 0x00 adds old ME RGN support
+					if fitc_match is not None :
+						if major == 4 : fw_type_fix = True # ME4-Only Fix 3
+						else : fw_type = 'Region, Extracted'
+					elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
+					else : fw_type = 'Region, Stock'
+			elif (variant in ['ME','CSME'] and 8 <= major <= 12) or variant == 'TXE' or (variant == 'CSSPS' and major == 4) :
+				# Check 1, FITC Version
+				# noinspection PyUnboundLocalVariable
+				fpt_hdr = get_struct(reading, start_fw_start_match, FPT_Header)
+			
+				if fpt_hdr.FitBuild == 0 or fpt_hdr.FitBuild == 65535 : # 0000/FFFF --> clean ME/TXE
+					fw_type = 'Region, Stock'
+					# Check 2, FOVD section
+					if not fovd_clean('new') : fw_type = 'Region, Extracted'
+				else :
+					# Get FIT/FITC version used to build the image
+					fitc_ver_found = True
+					fw_type = 'Region, Extracted'
+					fitc_major = fpt_hdr.FitMajor
+					fitc_minor = fpt_hdr.FitMinor
+					fitc_hotfix = fpt_hdr.FitHotfix
+					fitc_build = fpt_hdr.FitBuild
+			elif variant == 'CSME' or variant == 'CSTXE' or variant == 'CSSPS' :
+				# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
+				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
+				reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' : fw_type = 'Region, Extracted'
+				else : fw_type = 'Region, Stock'
+		else :
+			fw_type = 'Update' # No Region detected, Update
+		
+		# Check for Fujitsu UMEM ME Region (RGN/$FPT or UPD/$MN2)
+		if fd_me_rgn_exist :
+			fuj_umem_spi = reading[me_fd_start:me_fd_start + 0x4]
+			fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
+			if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True # Futjitsu ME Region (RGN or UPD) with header UMEM
+		else :
+			fuj_umem_spi = reading[0x0:0x4]
+			fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
+			if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True
+		
+		# Detect Firmware Release (Production, Pre-Production, ROM-Bypass, Other)
+		mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
+		rel_signed = ['Production', 'Debug'][mn2_flags_debug]
+		#rel_flag = ['PRD', 'PRE'][mn2_flags_pre] # Set only at ME9-10
+		
+		# Check for ROM-Bypass entry at $FPT
+		if rgn_exist and fpt_romb_found :
+			# Pre CSE have ROMB entry at $FPT only when required, covered by fpt_romb_found
+			
+			if fpt_pre_hdr is not None and variant in ['CSME', 'CSTXE', 'CSSPS'] :
+				# noinspection PyUnboundLocalVariable
+				byp_cse = fpt_pre_hdr.ROMB_Instr_0 # Check CSE ROM-Bypass Instruction 0
+				if not fpt_romb_used or byp_cse == 0 : fpt_romb_found = False # CSE ROMB depends on $FPT Offset/Size + Instructions
+		
+		# Production PRD, Pre-Production PRE, ROM-Bypass BYP
+		if fpt_romb_found : release = 'ROM-Bypass'
+		elif rel_signed == 'Production' : release = 'Production'
+		elif rel_signed == 'Debug' : release = 'Pre-Production'
+		else :
+			release = col_r + 'Error' + col_e + ', unknown firmware release!' + col_r + ' *' + col_e
+			err_rep += 1
+			err_stor.append(release)
+		
+		if release == 'Production' : rel_db = 'PRD'
+		elif release == 'Pre-Production' : rel_db = 'PRE'
+		elif release == 'ROM-Bypass' : rel_db = 'BYP'
+		
+		# Detect PV/PC bit (0 or 1)
+		if (variant == 'ME' and major >= 8) or variant == 'TXE' :
+			pvbit_match = (re.compile(br'\x24\x44\x41\x54....................\x49\x46\x52\x50', re.DOTALL)).search(reading) # $DAT + [0x14] + IFRP detection
+			if pvbit_match is not None :
+				(start_pvbit_match, end_pvbit_match) = pvbit_match.span()
+				pvbit = int(binascii.b2a_hex( (reading[start_pvbit_match + 0x10:start_pvbit_match + 0x11]) ), 16)
+		elif variant in ['CSME','CSTXE','CSSPS'] :
+			pvbit = mn2_flags_pvbit
 		
 		if variant == 'ME' : # Management Engine
 			
-			# noinspection PyUnboundLocalVariable
-			if me1_match is None and sku_match is not None : # Found $SKU entry
+			# Detect $SKU tag
+			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, pattern used later as well
+			sku_match = sku_pat.search(reading[start_man_match:]) # Search $SKU after proper $MAN/$MN2 Manifest
 			
-				if 1 < major <= 6 :
+			# noinspection PyUnboundLocalVariable
+			if sku_match is not None : # Found $SKU entry
+				
+				# Store $SKU start/end offset
+				(start_sku_match, end_sku_match) = sku_match.span()
+				start_sku_match += start_man_match
+				end_sku_match += start_man_match
+				
+				if 2 <= major <= 6 :
 					sku_me = reading[start_sku_match + 8:start_sku_match + 0xC]
 					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper()
 				elif 7 <= major <= 10 :
 					sku_me = reading[start_sku_match + 8:start_sku_match + 0x10]
 					sku_me = binascii.b2a_hex(sku_me).decode('utf-8').upper()
 			
-			if major == 1 and me1_match is not None : # Desktop ICH7: Tekoa GbE 82573E
-				print('Family:   AMT')
-				print('Version:  %s.%s.%s' % (major, minor, hotfix))
-				
-				if param.enable_uf and found_guid != '' : gen_msg(note_stor, col_y + 'Note: Detected Engine GUID %s!' % found_guid + col_e, '')
-				
-				f.close()
-				continue # Next input file
-			
-			elif major == 2 : # Desktop ICH8: 2.0 & 2.1 & 2.2 or Mobile ICH8M: 2.5 & 2.6
+			if major == 2 : # Desktop ICH8: 2.0 & 2.1 & 2.2 or Mobile ICH8M: 2.5 & 2.6
 				if sku_me == "00000000" :
 					sku = "AMT"
 					sku_db = "AMT"
@@ -5119,8 +5109,10 @@ for file_in in source :
 					else : fw_type = "Region, Stock"
 				
 				# ME2-Only Fix 2 : Identify ICH Revision B0 firmware SKUs
-				me2_sku_fix = ['1C3FA8F0B5B9738E717F74F1F01D023D58085298','AB5B010215DFBEA511C12F350522E672AD8C3345','92983C962AC0FD2636B5B958A28CFA42FB430529']
-				if rsa_hash in me2_sku_fix :
+				me2_sku_fix = ['FF4DAEACF679A7A82269C1C722669D473F7D76AD3DFDE12B082A0860E212CD93',
+				'345F39266670F432FCFF3B6DA899C7B7E0137ED3A8A6ABAD4B44FB403E9BB3BB',
+				'8310BA06D7B9687FC18847991F9B1D747B55EF30E5E0E5C7B48E1A13A5BEE5FA']
+				if rsa_sig_hash in me2_sku_fix :
 					sku = "AMT B0"
 					sku_db = "AMT_B0"
 				
@@ -5616,7 +5608,7 @@ for file_in in source :
 			
 			sku_check,me11_sku_ranges = krod_anl() # Detect FIT SKU
 			
-			cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext3_pname \
+			cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext3_pname,ext32_info \
 			= ext_anl('$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build]) # Detect CSE Attributes
 			
 			# Set SKU Type via Extension 0C Attributes
@@ -5640,7 +5632,8 @@ for file_in in source :
 			db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 			
 			# Early firmware are reported as PRD even though they are PRE
-			if release == 'Production' and rsa_pkey in ['5FB2D04BC4D8B4E90AECB5C708458F95','71A94E95C932B9C1742EA6D21E86280B'] :
+			if release == 'Production' and \
+			rsa_key_hash in ['86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894','C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7'] :
 				release = 'Pre-Production'
 				rel_db = 'PRE'
 			
@@ -5806,21 +5799,31 @@ for file_in in source :
 				
 			# Module Extraction for all CSME
 			if param.me11_mod_extr :
-				cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_match if rgn_exist else -1, fpt_chk_fail)
+				cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 				continue # Next input file
 		
 		elif variant == 'TXE' : # Trusted Execution Engine
-		
+			
+			# Detect $SKU tag
+			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, pattern used later as well
+			sku_match = sku_pat.search(reading[start_man_match:]) # Search $SKU after proper $MAN/$MN2 Manifest
+			
 			# noinspection PyUnboundLocalVariable
 			if sku_match is not None :
+				
+				# Store $SKU start/end offset
+				(start_sku_match, end_sku_match) = sku_match.span()
+				start_sku_match += start_man_match
+				end_sku_match += start_man_match
+				
 				sku_txe = reading[start_sku_match + 8:start_sku_match + 0x10]
 				sku_txe = binascii.b2a_hex(sku_txe).decode('utf-8').upper() # Hex value with Little Endianess
 			
 			if major in [0,1] :
-				if rsa_pkey in ['C7E5538622F3A6EC90F5F7CCD76FA8F1', '5FB2D04BC4D8B4E90AECB5C708458F95'] :
+				if rsa_key_hash in ['6B8B10107E20DFD45F6C521100B950B78969B4AC9245D90DE3833E0A082DF374','86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894'] :
 					txe_sub = " M/D"
 					txe_sub_db = "_MD"
-				elif rsa_pkey in ['FF9F0A456C6D120D1C021E4453E5F726', '5FB2D04BC4D8B4E90AECB5C708458F95'] :
+				elif rsa_key_hash in ['613421A156443F1C038DDE342FF6564513A1818E8CC23B0E1D7D7FB0612E04AC','86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894'] :
 					txe_sub = " I/T"
 					txe_sub_db = "_IT"
 				else :
@@ -5934,13 +5937,13 @@ for file_in in source :
 		
 		elif variant == 'CSTXE' : # Converged Security Trusted Execution Engine
 			
-			cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext3_pname \
+			cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext3_pname,ext32_info \
 			= ext_anl('$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build]) # Detect CSE Attributes
 			
 			db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retreive SKU & Rev from DB
 			
 			# Early firmware are reported as PRD even though they are PRE
-			if release == 'Production' and rsa_pkey == '71A94E95C932B9C1742EA6D21E86280B' :
+			if release == 'Production' and rsa_key_hash == 'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7' :
 				release = 'Pre-Production'
 				rel_db = 'PRE'
 			
@@ -5965,7 +5968,10 @@ for file_in in source :
 				if minor == 0 :
 					pass
 					
-					# Adjust SoC Stepping if not from DB (TBD)
+					# Adjust SoC Stepping if not from DB
+					if minor == 0 and sku_stp == 'NaN' :
+						if release == 'Production' : sku_stp = 'Bx' # PRD
+						else : sku_stp = 'Ax' # PRE, BYP
 				
 				platform = 'GLK'
 			
@@ -5980,15 +5986,14 @@ for file_in in source :
 			
 			# Module Extraction for all CSTXE
 			if param.me11_mod_extr :
-				cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_match if rgn_exist else -1, fpt_chk_fail)
+				cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 				continue # Next input file
 				
 		elif variant == 'SPS' : # Server Platform Services
 			
-			# noinspection PyUnboundLocalVariable
-			if sku_match is not None :
-				sku_sps = reading[start_sku_match + 8:start_sku_match + 0xC]
-				sku_sps = binascii.b2a_hex(sku_sps).decode('utf-8').upper() # Hex value with Little Endianess
+			# Detect $SKU tag
+			sku_pat = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00') # $SKU detection, pattern used later as well
+			sku_match = sku_pat.search(reading[start_man_match:]) # Search $SKU after proper $MAN/$MN2 Manifest
 			
 			if not rgn_exist :
 				# REC detection always first, FTPR Manifest
@@ -6010,13 +6015,18 @@ for file_in in source :
 
 		elif variant == 'CSSPS' : # Converged Security Server Platform Services
 			
-			cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext3_pname \
+			cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2,ext_print,ext3_pname,ext32_info \
 			= ext_anl('$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build]) # Detect CSE Attributes
 			
 			# Set Recovery/Operational Type via Extension 3
 			if not rgn_exist :
 				if ext3_pname == 'FTPR' : fw_type = 'Recovery'
 				elif ext3_pname == 'OPR' : fw_type = 'Operational'
+				
+			sku = '%d' % fw_0C_sku1
+			sku_db = ext32_info[1] + '_SKU' + sku
+			sku_plat = ext32_info[1]
+			if sku_plat != 'XX' : platform = cssps_platform[sku_plat]
 			
 			if major == 4 :
 				pass
@@ -6030,7 +6040,7 @@ for file_in in source :
 		
 			# Module Extraction for all CSSPS
 			if param.me11_mod_extr :
-				cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, start_fw_start_match if rgn_exist else -1, fpt_chk_fail)
+				cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 				continue # Next input file
 		
 		# Partial Firmware Update Detection (WCOD, LOCL)
@@ -6062,18 +6072,20 @@ for file_in in source :
 		fw_type, type_db = fw_types(fw_type)
 		
 		# Create firmware DB names
-		if variant in ['ME','CSME'] or variant in ['TXE','CSTXE'] :
+		if variant in ['ME','CSME','TXE','CSTXE'] :
 			name_db = "%s.%s.%s.%s_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db) # The re-created filename without extension
-			name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_hash) # The equivalent "clean" RGN filename
-			name_db_extr = "%s.%s.%s.%s_%s_%s_EXTR_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_hash) # The equivalent "dirty" EXTR filename
-		elif variant in ['SPS','CSSPS'] :
+			name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # The equivalent RGN filename
+			name_db_extr = "%s.%s.%s.%s_%s_%s_EXTR_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # The equivalent EXTR filename
+		elif variant == 'CSSPS' :
+			name_db = "%s.%s.%s.%s_%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sku_db, rel_db, type_db)
+			name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sku_db, rel_db, rsa_sig_hash)
+			name_db_extr = "%s.%s.%s.%s_%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sku_db, rel_db, rsa_sig_hash)
+		elif variant == 'SPS' :
 			name_db = "%s.%s.%s.%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, type_db)
-			name_db_rgn = "%s.%s.%s.%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent RGN filename
-			name_db_extr = "%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR filename
-			name_db_0_extr = "%s.%s.%s.%s.0_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR 0 filename
-			name_db_1_extr = "%s.%s.%s.%s.1_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_hash) # The equivalent EXTR 1 filename
-		
-		name_db_hash = name_db + '_' + rsa_hash
+			name_db_rgn = "%s.%s.%s.%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_sig_hash)
+			name_db_extr = "%s.%s.%s.%s_%s_EXTR_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), rel_db, rsa_sig_hash)
+			
+		name_db_hash = name_db + '_' + rsa_sig_hash
 		
 		if param.db_print_new :
 			with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
@@ -6097,7 +6109,7 @@ for file_in in source :
 						(major == 6 and sku == 'Ignition'))) or variant in ['TXE','CSTXE']) and (name_db_rgn in line or name_db_extr in line) :
 							rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
 						# noinspection PyUnboundLocalVariable
-						if type_db in ['REC','OPR'] and (name_db_0_extr in line or name_db_1_extr in line) :
+						if type_db in ['REC','OPR'] and name_db_extr in line :
 							rgn_over_extr_found = True # Same EXTR found at DB, OPR/REC disregarded
 				fw_db.close()
 			# If SKU and/or Release and/or Type are unknown, DB will not be searched but rare firmware will be reported (Partial Update excluded)
@@ -6132,8 +6144,8 @@ for file_in in source :
 			if fw_in_db_found == 'No' and not rgn_over_extr_found and not wcod_found :
 				# noinspection PyUnboundLocalVariable
 				if [variant,major] == ['CSME',11] and '_X' in sku_db and sku_stp == 'NaN' and sku_pdm == 'NaN' : sku_db += '_XX_UPDM'
-				if variant not in ['SPS','CSSPS'] : name_db = '%s_%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, rsa_hash)
-				else : name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_hash) # No SKU for SPS
+				if variant not in ['SPS','CSSPS'] : name_db = '%s_%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, rsa_sig_hash)
+				else : name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash) # No SKU for SPS
 				
 			if fuj_rgn_exist : name_db = '%s_UMEM' % name_db
 			
@@ -6151,11 +6163,8 @@ for file_in in source :
 			
 			print("Type:     %s" % fw_type)
 			
-			if fd_lock_state == 2 : print("FD:       Unlocked")
-			elif fd_lock_state == 1 : print("FD:       Locked")
-			
 			if (variant == 'CSTXE' and 'Error' not in sku) or wcod_found : pass
-			elif (variant in ['SPS','CSSPS'] and 'Error' not in sku) or wcod_found : pass
+			elif (variant == 'SPS' and 'Error' not in sku) or wcod_found : pass
 			else : print('SKU:      %s' % sku)
 			
 			if variant == 'CSME' or variant == 'CSTXE' :
@@ -6187,7 +6196,8 @@ for file_in in source :
 				if (variant,major) in [('CSME',11)] : print('FIT SKU:  %s' % fit_platform)
 			
 			if rgn_exist :
-				if major ==6 and release == "ROM-Bypass" : print('Size:     Unknown')
+				if (major,release) == (6,'ROM-Bypass') : print('Size:     Unknown')
+				elif (variant,fd_devexp_rgn_exist) == ('CSTXE',True) : pass
 				else : print('Size:     0x%X' % eng_fw_end)
 			
 			if platform != "NaN" : print("Platform: %s" % platform)
@@ -6215,6 +6225,7 @@ for file_in in source :
 		
 		if sku_missing : gen_msg(err_stor, col_r + "Error: SKU tag missing, incomplete Intel Engine firmware!" + col_e, '')
 		
+		# noinspection PyUnboundLocalVariable
 		if param.enable_uf and uf_error : gen_msg(err_stor, col_r + 'Error: UEFIFind Engine GUID detection failed!' + col_e, '')
 		
 		if err_rep > 0 : gen_msg(err_stor, col_r + "* Please report this issue!" + col_e, '')
