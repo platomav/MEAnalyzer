@@ -1,3 +1,15 @@
+v1.34.0 r105
+
+Added CSSPS 4 Platform & SKU initial detection
+Added CSTXE FD Device Expansion Data detection
+Improved Family, RSA Key & Signature detection
+Improved CSE unpacking $FPT offset detection
+Improved Initialized CSTXE 3 Type detection
+Improved SoC Revision display for CSTXE 4
+Database now uses SHA-256 firmware hashes
+Removed Flash Descriptor Lock detection
+Removed AMT 1 Tekoa GbE detection
+
 v1.33.0 r104
 
 Added support for CSTXE 3.1 & 3.3 firmware
