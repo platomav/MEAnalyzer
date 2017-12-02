@@ -1,3 +1,8 @@
+v1.34.1 r106
+
+Set Intel-SA-00086 vulnerable firmware as Outdated
+CSE unpack does not attempt Huffman 12 decompression
+
 v1.34.0 r105
 
 Added CSSPS 4 Platform & SKU initial detection
