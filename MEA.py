@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.34.0'
+title = 'ME Analyzer v1.34.1'
 
 import os
 import re
@@ -148,7 +148,7 @@ class MEA_Param :
 		if self.extr_mea or self.print_msg or self.mass_scan or self.db_print_new : self.skip_intro = True
 		
 		if self.me11_sku_disp and self.multi : self.me11_sku_disp = False # -dsku not allowed with -check unless actual SKU error occurs
-
+		
 # Engine Structures
 class FPT_Pre_Header(ctypes.LittleEndianStructure) : # (ROM_BYPASS)
 	_pack_ = 1
@@ -2640,7 +2640,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 										
 										pt = ext_table(['Field', 'Value'], False, 1)
 										pt.title = col_y + 'Extension 20 Chunk %d/%d' % (chunk + 1, chunk_count) + col_e
-										pt.add_row(['Data', chunk_data])
+										pt.add_row(['Data', '%s [...]' % chunk_data[:8]])
 										
 										ext_print_temp.append(pt)
 										chunk_start += chunk_size
@@ -2649,7 +2649,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 									
 								# Check Extension full size when Module Counter exists
 								if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + region_count * CSE_Ext_14_RegionMap_length + total_rgn_size) :
-									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 									       (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 							
@@ -2676,7 +2676,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 								# Check Extension full size when Module Counter exists
 								if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + part_id_count * CSE_Ext_15_PartID_length + CSE_Ext_15_Payload_length +
 								payload_knob_count * CSE_Ext_15_Payload_Knob_length) :
-									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 										   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 								
@@ -2698,7 +2698,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 								
 								# Check Extension full size when Module Counter exists
 								if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + ext_hdr_p.ModuleCount * mod_length) :
-									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+									gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 										   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 									if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 								
@@ -2722,7 +2722,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						
 						# Check Extension full size when Module Counter exists
 						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_01_length + ext_hdr.ModuleCount * CSE_Ext_01_Mod_length) :
-							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
@@ -2734,7 +2734,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						
 						# Check Extension full size when Module Counter exists
 						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_02_length + ext_hdr.ModuleCount * CSE_Ext_02_Mod_length) :
-							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
@@ -2750,7 +2750,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						
 						# Check Extension full size when Module Counter exists
 						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_03_length + ext_hdr.ModuleCount * CSE_Ext_03_Mod_length) :
-							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 						
@@ -2844,7 +2844,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 						
 						# Check Extension full size when Module Counter exists
 						if ext_tag in ext_tag_mod_count and (cpd_ext_size != CSE_Ext_12_length + ext_hdr.ModuleCount * CSE_Ext_12_Mod_length) :
-							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at %s > %s, please report it!' %
+							gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s, please report it!' %
 								   (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, 'unp')
 							if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
@@ -3215,6 +3215,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print) :
 			# Extract Huffman Modules & Decompress via Huffman11 by IllegalArgument
 			if mod_comp == 1 :
 				try :
+					if (variant == 'CSME' and major > 11) or (variant == 'CSSPS' and major > 4) :
+						raise Exception('Only CSME11/CSSPS4 Huffman supported!')
+					
 					mod_dname = mod_fname[:-5] + '.mod'
 				
 					# noinspection PyUnusedLocal
@@ -3388,7 +3391,7 @@ def key_anl(mod_fname, ext_print, mod_name) :
 					# Check Extension full size when Module Counter exists
 					if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + part_id_count * CSE_Ext_15_PartID_length + CSE_Ext_15_Payload_length +
 					payload_knob_count * CSE_Ext_15_Payload_Knob_length) :
-						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
 						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
 					# Check if Knob data is divisible by Knob size
@@ -3408,7 +3411,7 @@ def key_anl(mod_fname, ext_print, mod_name) :
 					
 					# Check Extension full size when Module Counter exists
 					if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + ext_hdr_p.ModuleCount * mod_length) :
-						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension with Module Count size difference 0x%0.2X at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
+						gen_msg(err_stor, col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at FTPR/UTOK > %s, please report it!' % (ext_tag, mod_name) + col_e, 'unp')
 						if param.me11_mod_extr or param.me11_mod_bug : input('Press enter to continue unpacking...') # Debug
 					
 					# Check if Mod data is divisible by Mod size
@@ -5708,31 +5711,14 @@ for file_in in source :
 				
 				sku_db, upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
 				
-				# 11.0 : Skylake, Sunrise Point
-				if minor == 0 :
-					platform = 'SPT'
+				if minor == 0 : platform = 'SPT' # Skylake, Sunrise Point
+				elif minor == 5 : platform = 'KBP' # Kabylake-LP, Union Point
+				elif minor == 6 : platform = 'SPT/KBP' # Skylake/Kabylake, Sunrise/Union Point
+				elif minor in [7,8] : platform = 'SPT/KBP/CNP' # Skylake/Kabylake(R)/Coffeelake, Sunrise/Union/Cannon Point
+				elif minor in [10,11] : platform = 'BSF' # Skylake-X/Kabylake-X, Basin Falls
+				elif minor in [20,21] : platform = 'LBG' # Skylake-SP, Lewisburg
 				
-				# 11.5 : Kabylake-LP, Union Point
-				elif minor == 5 :
-					upd_found = True # Dead branch
-					
-					platform = 'KBP'
-				
-				# 11.6 : Skylake/Kabylake, Sunrise Point/Union Point
-				elif minor == 6 :
-					platform = 'SPT/KBP'
-				
-				# 11.7-8 : Skylake/Kabylake(R)/Coffeelake, Sunrise Point/Union Point/Cannon Point
-				elif minor in [7,8] :
-					platform = 'SPT/KBP/CNP'
-					
-				# 11.10-11 : Skylake-X/Kabylake-X, Basin Falls
-				elif minor in [10,11] :
-					platform = 'BSF'
-				
-				# 11.20-21 : Skylake-SP, Lewisburg
-				elif minor in [20,21] :
-					platform = 'LBG'
+				if minor in [0,5,6,7,10,20] : upd_found = True # INTEL-SA-00086
 				
 				# Power Down Mitigation (PDM) is a SPT-LP C0 erratum, first fixed at ~11.0.0.1183
 				# Hardcoded in FTPR > BUP, decompression required to detect NPDM/YPDM via pattern
@@ -5949,7 +5935,7 @@ for file_in in source :
 			
 			if major == 3 :
 				
-				if minor in [0,1,2,3] : # Simultaneous branches, 2-3 are "Slim"
+				if minor in [0,1,2,3] : # 2-3 are "Slim"
 					db_maj,db_min,db_hot,db_bld = check_upd('Latest_%s_%s%s' % (variant, major, minor))
 					if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 					
@@ -5960,6 +5946,8 @@ for file_in in source :
 					elif minor in [2,3] and sku_stp == 'NaN' :
 						if release == 'Production' : sku_stp = 'Cx' # PRD (Joule_C0-X64-Release)
 						#else : sku_stp = 'Bx' # PRE, BYP (Joule_C0-X64-Release)
+						
+				if minor in [0,2] : upd_found = True # INTEL-SA-00086
 					
 				platform = 'APL'
 				
