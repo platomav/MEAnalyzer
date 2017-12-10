@@ -1,3 +1,17 @@
+v1.36.0 r107
+
+Added SPS 2-3 Platform & SKU detection
+Improved Engine firmware Manifest detection
+Improved CSTXE 4.0 GeminiLake firmware support
+Improved CS(ME) Partial Update images detection
+Fixed crash at Variant detection of new firmware
+Fixed issues at CSTXE 3-4 Platform & SoC detection
+Fixed issue when determining input file end offset
+Fixed issue when adjusting FTPR Manifest via $FPT
+MEA now scans Operational partition at EXTR CS(SPS)
+MEA now scans Recovery partition at ME 6.0 Ignition
+Removed & restructured code for better performance
+
 v1.34.1 r106
 
 Set Intel-SA-00086 vulnerable firmware as Outdated
