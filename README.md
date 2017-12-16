@@ -30,7 +30,7 @@ ME Analyzer is a tool which parses Intel Engine firmware images from the Converg
 - Detection of CSME 11+ Flash Image Tool platform configuration by OEM
 - Detection of CSME 11 PCH-LP firmware Power Down Mitigation (PDM) erratum
 - Ability to analyze multiple files by drag & drop or by input path
-- Detection of unique mobile Apple Macintosh Engine firmware SKUs
+- Detection of unique Apple Macintosh Engine firmware "Slim" SKUs
 - Detection of multiple Engine regions in input file, number only
 - Detection of special Engine firmware BIOS GUIDs via UEFIFind
 - Ability to detect & categorize firmware which require attention
