@@ -1,3 +1,7 @@
+v1.38.1 r109
+
+Fixed wrong SPS 2-3 Firmware Type detection
+
 v1.38.0 r108
 
 Added proper ME 7-10 & TXE 0-2 SKU detection
