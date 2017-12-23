@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2017 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.38.0'
+title = 'ME Analyzer v1.38.1'
 
 import os
 import re
@@ -5724,13 +5724,13 @@ for file_in in source :
 			sps_type = (reading[end_man_match + 0x264:end_man_match + 0x266]).decode('utf-8') # FT (Recovery) or OP (Operational)
 			
 			if sps_type == 'OP' :
-				fw_type = 'Operational'
+				if not rgn_exist : fw_type = 'Operational'
 				sku = (reading[end_man_match + 0x266:end_man_match + 0x268]).decode('utf-8') # OPxx (example: OPGR --> Operational Grantley)
 				sku_db = sku
 				platform = sps_platform[sku] if sku in sps_platform else 'Unknown ' + sku
 			
 			elif sps_type == 'FT' :
-				fw_type = 'Recovery'
+				if not rgn_exist : fw_type = 'Recovery'
 				rec_sku_match = re.compile(br'\x52\x32\x4F\x50......\x4F\x50').search(reading[start_man_match:start_man_match + 0x2000]) # R2OP.{6}OP detection
 				if rec_sku_match :
 					(start_rec_sku, end_rec_sku) = rec_sku_match.span()
