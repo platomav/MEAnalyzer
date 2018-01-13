@@ -1,3 +1,27 @@
+v1.42.0 r110
+
+Added full support for CSME 12.0 firmware
+Added CSE Extensions 0x11, 0x16 and 0x14 R2
+Added CSE Layout Table (LT) v1.6 & v1.7 support
+Added Flash Partition Table ($FPT) v2.1 support
+Added Boot Partition Descriptor Table (BPDT) v2-3 support
+Added $FPT, BPDT & CSE LT partition overlap detection
+Added CSE $FPT, BPDT & CSE Layout Table unpacking
+Added CSE Partition Instance ID unpacking display
+Added CSE partition OEM/FIT customization detection
+Added CSE partition Hash & Size validation in all cases
+Added CSE partition out-of-bounds Module detection
+Added CSE UTFL structure at UTOK/STKN unpacking
+Added CSE Layout Table entries info display (-dfpt)
+Added ME 8-10 $FPT Partition Instance ID display
+Improved CSE Extensions 0x3, 0xE, 0xF, 0x10 & 0x14 R1
+Improved $FPT and BPDT entries info display (-dfpt)
+Improved $CPD Entry Counter for end offset detection
+Fixed CSE unpacking metadata text filename collision
+Fixed false positive BPDT S-BPDT & CSE_BUP detection
+Fixed wrong Manifest detection at Intel SPS capsules
+Fixed wrong CSE firmware analysis messages position
+
 v1.38.1 r109
 
 Fixed wrong SPS 2-3 Firmware Type detection
