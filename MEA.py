@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.42.0'
+title = 'ME Analyzer v1.42.1'
 
 import os
 import re
@@ -848,8 +848,8 @@ class CSE_Ext_01_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (InitScrip
 		pt.add_row(['Removable', fvalue[f2]])
 		pt.add_row(['Init Immediately', fvalue[f3]])
 		pt.add_row(['Restart Policy', ['Not Allowed','Immediately','On Next Boot'][f4]])
-		pt.add_row(['CM0 UMA', fvalue[f5]])
-		pt.add_row(['CM0 No UMA', fvalue[f6]])
+		pt.add_row(['CM0 with UMA', fvalue[f5]])
+		pt.add_row(['CM0 without UMA', fvalue[f6]])
 		pt.add_row(['CM3', fvalue[f7]])
 		pt.add_row(['Init Flow Reserved', '0x%X' % f8])
 		pt.add_row(['Normal', fvalue[f9]])
@@ -898,8 +898,8 @@ class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (InitSc
 		pt.add_row(['Removable', fvalue[f2]])
 		pt.add_row(['Init Immediately', fvalue[f3]])
 		pt.add_row(['Restart Policy', ['Not Allowed','Immediately','On Next Boot'][f4]])
-		pt.add_row(['CM0 UMA', fvalue[f5]])
-		pt.add_row(['CM0 No UMA', fvalue[f6]])
+		pt.add_row(['CM0 with UMA', fvalue[f5]])
+		pt.add_row(['CM0 without UMA', fvalue[f6]])
 		pt.add_row(['CM3', fvalue[f7]])
 		pt.add_row(['Init Flow Reserved', '0x%X' % f8])
 		pt.add_row(['Normal', fvalue[f9]])
@@ -2716,7 +2716,7 @@ class BPDT_Entry_GetFlags(ctypes.Union):
 # Names from $MN2 Manifest
 bpdt_dict = {
 			0 : 'SMIP', # OEM-SMIP
-			1 : 'RBEP', # CSE-RBE
+			1 : 'RBEP', # ROM Boot Extensions Partition (CSE-RBE)
 			2 : 'FTPR', # CSE-BUP
 			3 : 'UCOD', # UCODE
 			4 : 'IBBP', # IBB
@@ -6203,12 +6203,13 @@ for file_in in source :
 			sku_bits = {3: 'Standard Manageability', 4: 'AMT', 6: 'QST', 8: 'Local Wakeup Timer', 9: 'KVM', 10: 'Anti-Theft', 15: 'Remote PC Assist'}
 			
 			if sku_me == '00000000' : # Ignition (128KB, 2MB)
-				sku = 'Ignition'
-				if hotfix != 50 : # P55, PM55, 34xx (Ibex Peak)
-					sku_db = 'IGN_IP'
-				elif hotfix == 50 : # 89xx (Cave/Coleto Creek)
-					sku_db = 'IGN_CC'
+				if hotfix == 50 : # 89xx (Cave/Coleto Creek)
+					ign_pch = 'CCK'
 					platform = 'Cave/Coleto Creek'
+				else : # P55, PM55, 34xx (Ibex Peak)
+					ign_pch = 'IBX'
+				sku_db = 'IGN_' + ign_pch
+				sku = 'Ignition ' + ign_pch
 			elif sku_me == '701C0000' : # Home IT (1.5MB, 4MB)
 				sku = '1.5MB'
 				sku_db = '1.5MB'
@@ -6228,7 +6229,7 @@ for file_in in source :
 			if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 			
 			# ME6-Only Fix 1 : ME6 Ignition does not work with KRND
-			if sku == 'Ignition' and rgn_exist :
+			if 'Ignition' in sku and rgn_exist :
 				ign_pat = (re.compile(br'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
 				if len(ign_pat) < 2 : fw_type = "Region, Extracted" # 2 before NFTP & IGRT
 				else : fw_type = "Region, Stock"
@@ -6710,7 +6711,7 @@ for file_in in source :
 						fw_in_db_found = 'Yes'
 					# Only for ME8+ or ME7 non-PRD or ME6.0 IGN
 					if type_db == 'UPD' and ((variant in ['ME','CSME'] and (major > 7 or (major == 7 and release != 'Production') or
-					(major == 6 and sku == 'Ignition'))) or variant in ['TXE','CSTXE']) and (name_db_rgn in line or name_db_extr in line) :
+					(major == 6 and 'Ignition' in sku))) or variant in ['TXE','CSTXE']) and (name_db_rgn in line or name_db_extr in line) :
 						rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
 					# noinspection PyUnboundLocalVariable
 					if type_db in ['REC','OPR'] and name_db_extr in line :

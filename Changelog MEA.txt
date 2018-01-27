@@ -1,3 +1,7 @@
+v1.42.1 r111
+
+Improved ME 6 Ignition IBX/CCK SKU distinction
+
 v1.42.0 r110
 
 Added full support for CSME 12.0 firmware
