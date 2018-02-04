@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.42.1'
+title = 'ME Analyzer v1.43.0'
 
 import os
 import re
@@ -44,7 +44,7 @@ try :
 except :
 	huff11_exist = False
 
-# Detect OS Platform
+# Detect OS platform
 mea_os = sys.platform
 if mea_os == 'win32' :
 	cl_wipe = 'cls'
@@ -56,10 +56,22 @@ elif mea_os.startswith('linux') or mea_os == 'darwin' :
 	os_dir = '//'
 else :
 	print(col_r + '\nError: ' + col_e + 'Unsupported platform "%s"\n' % mea_os)
-	input('Press enter to exit')
+	if ' -exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
 	sys.exit(-1)
 
+# Detect Python version
+mea_py = sys.version_info
+try :
+	assert mea_py >= (3,6)
+except :
+	print(col_r + '\nError: ' + col_e + 'Python >= 3.6 required, not %d.%d!\n' % (mea_py[0],mea_py[1]))
+	if ' -exit' not in sys.argv :
+		if mea_py[0] < 3 : raw_input('Press enter to exit')
+		else : input('Press enter to exit')
+	colorama.deinit()
+	sys.exit(-1)
+	
 # Set ctypes Structure types
 char = ctypes.c_char
 uint8_t = ctypes.c_ubyte
@@ -75,7 +87,8 @@ def mea_help() :
 	
 	text = "\nUsage: MEA [FilePath] {Options}\n\n{Options}\n\n"
 	text += "-?      : Displays help & usage screen\n"
-	text += "-skip   : Skips options intro screen\n"
+	text += "-skip   : Skips welcome & options screen\n"
+	text += "-exit   : Skips Press enter to exit prompt\n"
 	text += "-check  : Copies files with messages to check\n"
 	text += "-mass   : Scans all files of a given directory\n"
 	text += "-enuf   : Enables UEFIFind Engine GUID detection\n"
@@ -94,7 +107,7 @@ class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.all = ['-?','-skip','-check','-extr','-msg','-hid','-adir','-unp86','-ext86','-bug86','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt']
+		self.all = ['-?','-skip','-check','-extr','-msg','-hid','-adir','-unp86','-ext86','-bug86','-dsku','-pdb','-enuf','-dbname','-mass','-dfpt','-exit']
 
 		self.win = ['-extr','-msg','-hid'] # Windows only
 		
@@ -117,6 +130,7 @@ class MEA_Param :
 		self.enable_uf = False
 		self.give_db_name = False
 		self.mass_scan = False
+		self.skip_pause = False
 		
 		for i in source :
 			if i == '-?' : self.help_scr = True
@@ -132,6 +146,7 @@ class MEA_Param :
 			if i == '-mass' : self.mass_scan = True
 			if i == '-dfpt' : self.fpt_disp = True
 			if i == '-adir' : self.alt_dir = True # Hidden
+			if i == '-exit' : self.skip_pause = True
 			
 			# Windows only options
 			if mea_os == 'win32' :
@@ -2715,30 +2730,30 @@ class BPDT_Entry_GetFlags(ctypes.Union):
 # IFWI BPDT Entry Types
 # Names from $MN2 Manifest
 bpdt_dict = {
-			0 : 'SMIP', # OEM-SMIP
+			0 : 'SMIP', # OEM-SMIP Partition
 			1 : 'RBEP', # ROM Boot Extensions Partition (CSE-RBE)
-			2 : 'FTPR', # CSE-BUP
-			3 : 'UCOD', # UCODE
-			4 : 'IBBP', # IBB
+			2 : 'FTPR', # BringUp Partition (CSE-BUP)
+			3 : 'UCOD', # Microcode Partition
+			4 : 'IBBP', # IBB Partition
 			5 : 'S-BPDT', # Secondary BPDT
-			6 : 'OBBP', # OBB
-			7 : 'NFTP', # CSE-MAIN
-			8 : 'ISHC', # ISH
-			9 : 'DLMP', # IDLM
-			10 : 'IFP Overrides', # IFP Overrides
-			11 : 'Debug Tokens', # Debug Token
+			6 : 'OBBP', # OBB Partition
+			7 : 'NFTP', # CSE-MAIN Partition
+			8 : 'ISHC', # ISH Partition
+			9 : 'DLMP', # IDLM Partition
+			10 : 'UEPB', # IFP Override/Bypass Partition
+			11 : 'UTOK', # Debug Tokens Partition
 			12 : 'UFS PHY', # UFS PHY Partition
 			13 : 'UFS GPP LUN', # UFS GPP LUN Partition
-			14 : 'PMCP', # PMC
-			15 : 'IUNP', # IUnit
+			14 : 'PMCP', # PMC Partition
+			15 : 'IUNP', # IUnit Partition
 			16 : 'NVM Config', # NVM Configuration
 			17 : 'UEP', # Unified Emulation Partition
-			18 : 'WCOD', # CSE-WCOD
-			19 : 'LOCL', # CSE-LOCL
-			20 : 'OEMP', # OEM KM
-			23 : 'IOMP', # UIOM
-			24 : 'MGPP', # MG
-			25 : 'TBTP', # TBT
+			18 : 'WCOD', # CSE-WCOD Partition
+			19 : 'LOCL', # CSE-LOCL Partition
+			20 : 'OEMP', # OEM KM Partition
+			23 : 'IOMP', # UIOM Partition
+			24 : 'MGPP', # MG Partition
+			25 : 'TBTP', # TBT Partition
 			26 : 'PLTS', # Platform Settings
 			}
 
@@ -2839,13 +2854,13 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 		print(col_m + 'CSE Layout Table Checksum is UNKNOWN\n' + col_e) # Not used yet (?)
 		
 		with open(cse_lt_fname + '.bin', 'w+b') as cse_lt_file : cse_lt_file.write(reading[cse_lt_off:cse_lt_off + cse_lt_size])
-		with open(cse_lt_fname + '.txt', 'a') as cse_lt_file : cse_lt_file.write(ansi_escape.sub('', '\n%s' % cse_lt_info))
+		with open(cse_lt_fname + '.txt', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write(ansi_escape.sub('', '\n%s' % cse_lt_info))
 		
 		pt_dcselt.title = col_y + 'Detected %d Partition(s) at CSE LT [0x%0.6X]' % (len(cse_lt_part_all), cse_lt_off) + col_e
 		print('%s\n' % pt_dcselt) # Local copy with different title for cse_unpack function
 		
 		cse_lt_hdr = ansi_escape.sub('', str(pt_dcselt))
-		with open(cse_lt_fname + '.txt', 'a') as cse_lt_file : cse_lt_file.write('\n%s' % cse_lt_hdr)
+		with open(cse_lt_fname + '.txt', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % cse_lt_hdr)
 		
 		print(col_y + '--> Stored CSE Layout Table [0x%0.6X - 0x%0.6X]\n' % (cse_lt_off, cse_lt_off + cse_lt_size) + col_e)
 		
@@ -2914,11 +2929,11 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 		if fpt_romb_exist :
 			# noinspection PyUnboundLocalVariable
 			fpt_hdr_romb = ansi_escape.sub('', str(fpt_hdr_0_print))
-			with open(fpt_fname + '.txt', 'a') as fpt_file : fpt_file.write('\n%s' % fpt_hdr_romb)
+			with open(fpt_fname + '.txt', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s' % fpt_hdr_romb)
 		
 		fpt_hdr_main = ansi_escape.sub('', str(fpt_hdr_1_print))
 		fpt_hdr_part = ansi_escape.sub('', str(pt))
-		with open(fpt_fname + '.txt', 'a') as fpt_file : fpt_file.write('\n%s\n%s' % (fpt_hdr_main, fpt_hdr_part))
+		with open(fpt_fname + '.txt', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s\n%s' % (fpt_hdr_main, fpt_hdr_part))
 		
 		# Charted Partitions include fpt_start, Uncharted do not (RGN only, non-SPI)
 		for part in fpt_part_all :
@@ -2948,7 +2963,7 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 							if param.me11_mod_ext : print() # Print Manifest/Metadata/Key Extension Info
 							for ext in ext_print[index + 1] :
 								ext_str = ansi_escape.sub('', str(ext))
-								with open(mod_fname + '.txt', 'a') as text_file : text_file.write('\n%s' % ext_str)
+								with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
 	
@@ -2968,7 +2983,7 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 		else : bpdt_fname = mea_dir + os_dir + fw_name + os_dir + 'BPDT [%d]' % len(bpdt_hdr_all)
 		
 		# Store Boot Partition Description Table (BPDT/IFWI) Info
-		with open(bpdt_fname + '.txt', 'a') as bpdt_file :
+		with open(bpdt_fname + '.txt', 'a', encoding = 'utf-8') as bpdt_file :
 			for hdr in bpdt_hdr_all : bpdt_file.write('\n%s' % ansi_escape.sub('', str(hdr)))
 			bpdt_file.write('\n%s' % ansi_escape.sub('', str(pt)))
 		
@@ -2991,11 +3006,27 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 				part_name += ' %0.4X' % part_inid
 				
 				file_name = fw_name + os_dir + part_name + ' [0x%0.6X].bin' % part_start # Start offset covers any cases with duplicate name entries ("Unknown" etc)
-			
+				mod_fname = mea_dir + os_dir + file_name
+				
+				with open(mod_fname, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
+				
 				part_data = reading[part_start:part_end]
 				with open(mea_dir + os_dir + file_name, 'w+b') as part_file : part_file.write(part_data)
 				
 				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name, part_start, part_end) + col_e)
+				
+				if part[0] == 'UTOK' :
+					ext_print,x1 = key_anl(mod_fname, [], part_name) # Retrieve & Store UTOK Extension Info
+					
+					# Print Manifest/Metadata/Key Extension Info
+					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
+						if str(ext_print[index]).startswith(part_name) :
+							if param.me11_mod_ext : print() # Print Manifest/Metadata/Key Extension Info
+							for ext in ext_print[index + 1] :
+								ext_str = ansi_escape.sub('', str(ext))
+								with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
+								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
+							break
 	
 	# Parse all Code Partition Directory ($CPD) entries
 	# Better to separate $CPD from $FPT/BPDT to avoid duplicate FTUP/NFTP ($FPT) issue
@@ -3726,7 +3757,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 		os.mkdir(folder_name)
 		
 		# Store Partition $CPD Header & Entry details
-		with open(info_fname, 'a') as info_file :
+		with open(info_fname, 'a', encoding = 'utf-8') as info_file :
 			info_file.write('\n%s\n%s' % (ansi_escape.sub('', str(cpd_phdr.hdr_print())), ansi_escape.sub('', str(pt))))
 		
 		#in_mod_name = input('\nEnter module name or * for all: ') # Asks at all Partitions, better use * for all
@@ -4001,7 +4032,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						if param.me11_mod_ext : print() # Print Manifest/Metadata/Key Extension Info
 						for ext in ext_print[index + 1] :
 							ext_str = ansi_escape.sub('', str(ext)) # Ignore Colorama ANSI Escape Character Sequences
-							with open(mod_fname + '.txt', 'a') as text_file : text_file.write('\n%s' % ext_str)
+							with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
 							if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 						break
 			
@@ -4257,6 +4288,7 @@ def get_struct(input_stream, start_offset, class_name, param_list = None) :
 # Initialize PrettyTable
 def ext_table(row_col_names,header,padd) :
 	pt = prettytable.PrettyTable(row_col_names)
+	pt.set_style(prettytable.BOX_CHARS) # Comment out if UnicodeEncodeError
 	pt.header = header # Boolean
 	pt.padding_width = padd
 	pt.hrules = prettytable.ALL
@@ -4299,7 +4331,7 @@ def get_script_dir(follow_symlinks=True) :
 def show_exception_and_exit(exc_type, exc_value, tb) :
 	print(col_r + '\nError: MEA just crashed, please report the following:\n')
 	traceback.print_exception(exc_type, exc_value, tb)
-	input(col_e + "\nPress enter to exit")
+	if not param.skip_pause : input(col_e + "\nPress enter to exit")
 	colorama.deinit() # Stop Colorama
 	sys.exit(-1)
 
@@ -4307,7 +4339,7 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 def mea_exit(code=0) :
 	colorama.deinit() # Stop Colorama
 	if param.extr_mea or param.print_msg : sys.exit(code)
-	input("\nPress enter to exit")
+	if not param.skip_pause : input("\nPress enter to exit")
 	sys.exit(code)
 
 # Huffman11 not found
@@ -4354,7 +4386,7 @@ def multi_drop() :
 
 # Open MEA database
 def db_open() :
-	fw_db = open(db_path, "r")
+	fw_db = open(db_path, 'r', encoding = 'utf-8')
 	return fw_db
 
 # Check DB for latest version
@@ -4469,7 +4501,7 @@ def uefi_find(file_in, uf_path) :
 		
 		with tempfile.NamedTemporaryFile(mode='w+', encoding='utf-8', delete=False) as temp_ufout : temp_ufout.write(uf_subp)
 		
-		with open(temp_ufout.name, "r+") as out_file :
+		with open(temp_ufout.name, "r+", encoding = 'utf-8') as out_file :
 			lines = out_file.readlines()
 			for i in range(2, len(lines), 4) : # Start from 3rd line with a 4 line step until EOF
 				if 'nothing found' not in lines[i] :
@@ -6693,7 +6725,7 @@ for file_in in source :
 	name_db_hash = name_db + '_' + rsa_sig_hash
 	
 	if param.db_print_new :
-		with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a') as db_file : db_file.write(name_db_hash + '\n')
+		with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a', encoding = 'utf-8') as db_file : db_file.write(name_db_hash + '\n')
 		continue # Next input file
 	
 	# Search firmware database, all firmware filenames have this structure: Major.Minor.Hotfix.Build_SKU_Release_Type
