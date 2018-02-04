@@ -1,3 +1,10 @@
+v1.43.0 r112
+
+Added CSE BPDT Unlock Token (UTOK) info unpacking
+Added parameter -exit to skip Press enter to exit prompt
+MEA now checks & allows supported Python versions only
+Improved table text & line output visuals
+
 v1.42.1 r111
 
 Improved ME 6 Ignition IBX/CCK SKU distinction
