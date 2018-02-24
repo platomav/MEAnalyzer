@@ -1,3 +1,9 @@
+v1.44.0 r115
+
+Added CSE Extensions 24, 25 & 26
+Added $CPD Revision 2 support
+Improved BPDT v1 & v2 support
+
 v1.43.0 r112
 
 Added CSE BPDT Unlock Token (UTOK) info unpacking

@@ -6,12 +6,13 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.43.0'
+title = 'ME Analyzer v1.44.0'
 
 import os
 import re
 import sys
 import lzma
+import zlib
 import struct
 import ctypes
 import shutil
@@ -692,15 +693,15 @@ class MCP_Header(ctypes.LittleEndianStructure) : # Multi Chip Package
 	]
 
 # noinspection PyTypeChecker
-class CPD_Header(ctypes.LittleEndianStructure) : # Code Partition Directory (CPD_HEADER)
+class CPD_Header(ctypes.LittleEndianStructure) : # Code Partition Directory Revision 1 (CPD_HEADER)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				char*4),		# 0x00
 		("NumModules",		uint32_t),		# 0x04
-		("HeaderVersion",	uint8_t),		# 0x08
+		("HeaderVersion",	uint8_t),		# 0x08 1
 		("EntryVersion",	uint8_t),		# 0x09
 		("HeaderLength",	uint8_t),		# 0x0A
-		("Checksum",		uint8_t),		# 0x0B
+		("Checksum",		uint8_t),		# 0x0B Checksum8
 		("PartitionName",	char*4),		# 0x0C
 		# 0x10
 	]
@@ -719,6 +720,36 @@ class CPD_Header(ctypes.LittleEndianStructure) : # Code Partition Directory (CPD
 		
 		return pt
 
+# noinspection PyTypeChecker
+class CPD_Header_2(ctypes.LittleEndianStructure) : # Code Partition Directory Revision 2 (CPD_HEADER)
+	_pack_ = 1
+	_fields_ = [
+		("Tag",				char*4),		# 0x00
+		("NumModules",		uint32_t),		# 0x04
+		("HeaderVersion",	uint8_t),		# 0x08 2
+		("EntryVersion",	uint8_t),		# 0x09
+		("HeaderLength",	uint8_t),		# 0x0A
+		("Reserved",		uint8_t),		# 0x0B
+		("PartitionName",	char*4),		# 0x0C
+		("Checksum",		uint32_t),		# 0x10 CRC32
+		# 0x14
+	]
+	
+	def hdr_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Code Partition Directory Header' + col_e
+		pt.add_row(['Tag', self.Tag.decode('utf-8')])
+		pt.add_row(['Module Count', '%d' % self.NumModules])
+		pt.add_row(['Header Version', '%d' % self.HeaderVersion])
+		pt.add_row(['Entry Version', '%d' % self.EntryVersion])
+		pt.add_row(['Header Size', '0x%X' % self.HeaderLength])
+		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
+		pt.add_row(['Checksum', '0x%X' % self.Checksum])
+		
+		return pt
+		
 # noinspection PyTypeChecker
 class CPD_Entry(ctypes.LittleEndianStructure) : # (CPD_ENTRY)
 	_pack_ = 1
@@ -2431,7 +2462,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 			0x80860010 : ['Allow Visa Override', ['Disabled', 'Enabled']],
 			0x80860011 : ['Enable DCI', ['No', 'Yes']],
 			0x80860020 : ['ISH GDB Support', ['Disabled', 'Enabled']],
-			0x80860030 : ['BIOS Secure Boot', ['Enforced', 'Allow RnD Keys & Policies', 'Disabled']],
+			0x80860030 : ['Boot Guard', ['Reserved', 'Disabled', 'No Enforcement', 'No Timeouts', 'No Enforcement & Timeouts']],
 			0x80860031 : ['Audio FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860032 : ['ISH FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860033 : ['IUNIT FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
@@ -2497,6 +2528,102 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # IFWI Partition Information (I
 		return pt
 
 # noinspection PyTypeChecker
+class CSE_Ext_18(ctypes.LittleEndianStructure) : # USB Type C IO Manageability Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('Reserved',		uint32_t),		# 0x08
+		('HashType',		uint32_t),		# 0x0C
+		('HashAlgorithm',	uint32_t),		# 0x10 0 SHA-1, 1 SHA-256, 2 MD5
+		('HashSize',		uint32_t),		# 0x14
+		('Hash',			uint32_t*8),	# 0x18
+		# 0x38
+	]
+	
+	# TCCS = USB Type C Sub-System
+	
+	def ext_print(self) :
+		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 24, USB Type C IO Manageability Metadata' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		pt.add_row(['Hash Type', '0x%X' % self.HashType])
+		pt.add_row(['Hash Algorithm', ['SHA-1','SHA-256','MD5'][self.HashAlgorithm]])
+		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
+		pt.add_row(['Hash', Hash])
+		
+		return pt
+		
+# noinspection PyTypeChecker
+class CSE_Ext_19(ctypes.LittleEndianStructure) : # USB Type C MG Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('Reserved',		uint32_t),		# 0x08
+		('HashType',		uint32_t),		# 0x0C
+		('HashAlgorithm',	uint32_t),		# 0x10 0 SHA-1, 1 SHA-256, 2 MD5
+		('HashSize',		uint32_t),		# 0x14
+		('Hash',			uint32_t*8),	# 0x18
+		# 0x38
+	]
+	
+	# TCCS = USB Type C Sub-System
+	
+	def ext_print(self) :
+		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 25, USB Type C MG Metadata' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		pt.add_row(['Hash Type', '0x%X' % self.HashType])
+		pt.add_row(['Hash Algorithm', ['SHA-1','SHA-256','MD5'][self.HashAlgorithm]])
+		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
+		pt.add_row(['Hash', Hash])
+		
+		return pt
+		
+# noinspection PyTypeChecker
+class CSE_Ext_1A(ctypes.LittleEndianStructure) : # USB Type C Thunerbolt Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('Reserved',		uint32_t),		# 0x08
+		('HashType',		uint32_t),		# 0x0C
+		('HashAlgorithm',	uint32_t),		# 0x10 0 SHA-1, 1 SHA-256, 2 MD5
+		('HashSize',		uint32_t),		# 0x14
+		('Hash',			uint32_t*8),	# 0x18
+		# 0x38
+	]
+	
+	# TCCS = USB Type C Sub-System
+	
+	def ext_print(self) :
+		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 26, USB Type C Thunerbolt Metadata' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		pt.add_row(['Hash Type', '0x%X' % self.HashType])
+		pt.add_row(['Hash Algorithm', ['SHA-1','SHA-256','MD5'][self.HashAlgorithm]])
+		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
+		pt.add_row(['Hash', Hash])
+		
+		return pt
+		
+# noinspection PyTypeChecker
 class CSE_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID (MFT_EXT_MANIFEST_PLATFORM_ID)
 	_pack_ = 1
 	_fields_ = [
@@ -2544,50 +2671,15 @@ class UTFL_Header(ctypes.LittleEndianStructure) : # Unlock Token FL (DebugTokenS
 		pt.add_row(['Reserved', '0x0' if Reserved in ('00' * 27,'FF' * 27) else Reserved])
 		
 		return pt
-
-class BPDT_Header(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 2.0 (PrimaryBootPartition, SecondaryBootPartition, BootPartitionLayout)
-	_pack_ = 1
-	_fields_ = [
-		('Signature',		uint32_t),		# 0x00 AA550000 Boot, AA55AA00 Recovery
-		('DescCount',		uint16_t),		# 0x04
-		('BPDTVersion',		uint16_t),		# 0x06 1 IFWI 2.0, 2 IFWI 1.6, 3 IFWI 1.7
-		('Checksum',		uint32_t),		# 0x08 For Redundant block, from BPDT up to and including S-BPDT
-		('IFWIVersion',		uint32_t),		# 0x0C Unique mark from build server
-		('FitMajor',		uint16_t),		# 0x10
-		('FitMinor',		uint16_t),		# 0x12
-		('FitHotfix',		uint16_t),		# 0x14
-		('FitBuild',		uint16_t),		# 0x16
-		# 0x18 (0x200 <= Header + Entries <= 0x1000)
-	]
-	
-	# Used at Apollo Lake (APL) IFWI 2.0 platform
-	# https://github.com/coreboot/coreboot/blob/master/util/cbfstool/ifwitool.c
-	
-	def hdr_print(self) :
-		bpdt_ver = {1 : '2.0', 2 : '1.6', 3 : '1.7'}
 		
-		fit_ver = '%d.%d.%d.%d' % (self.FitMajor,self.FitMinor,self.FitHotfix,self.FitBuild)
-		
-		pt = ext_table(['Field', 'Value'], False, 1)
-		
-		pt.title = col_y + 'Boot Partition Descriptor Table 2.0 Header' + col_e
-		pt.add_row(['Signature', '0x%0.8X' % self.Signature])
-		pt.add_row(['Descriptor Count', '%d' % self.DescCount])
-		pt.add_row(['BPDT Version', bpdt_ver[self.BPDTVersion] if self.BPDTVersion in bpdt_ver else 'Unknown'])
-		pt.add_row(['Checksum', '0x%X' % self.Checksum])
-		pt.add_row(['IFWI Version', '%d' % self.IFWIVersion])
-		pt.add_row(['Flash Image Tool', 'N/A' if self.FitMajor in [0,0xFFFF] else fit_ver])
-		
-		return pt
-		
-class BPDT_Header_2(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.6 (PrimaryBootPartition, PrimaryBootPartitionNC)
+class BPDT_Header(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.6 & 2.0 (PrimaryBootPartition, SecondaryBootPartition, PrimaryBootPartitionNC, BootPartitionLayout)
 	_pack_ = 1
 	_fields_ = [
 		('Signature',		uint32_t),		# 0x00 AA550000 Boot, AA55AA00 Recovery
 		('DescCount',		uint16_t),		# 0x04 Minimum 6 Entries
-		('BPDTVersion',		uint16_t),		# 0x06 1 IFWI 2.0, 2 IFWI 1.6, 3 IFWI 1.7
+		('BPDTVersion',		uint16_t),		# 0x06 1 IFWI 1.6 & 2.0, 2 IFWI 1.7
 		('Reserved',		uint16_t),		# 0x08
-		('Checksum',		uint16_t),		# 0x0A BPDT + Entries (?)
+		('Checksum',		uint16_t),		# 0x0A From BPDT up to and including S-BPDT
 		('IFWIVersion',		uint32_t),		# 0x0C Unique mark from build server
 		('FitMajor',		uint16_t),		# 0x10
 		('FitMinor',		uint16_t),		# 0x12
@@ -2596,16 +2688,17 @@ class BPDT_Header_2(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 		# 0x18 (0x200 <= Header + Entries <= 0x1000)
 	]
 	
-	# Used at Cannon Point (CNP) IFWI 1.6 platform
+	# Used at APL/CNP/GLK IFWI 1.6 & 2.0 platforms
+	# https://github.com/coreboot/coreboot/blob/master/util/cbfstool/ifwitool.c
 	
 	def hdr_print(self) :
-		bpdt_ver = {1 : '2.0', 2 : '1.6', 3 : '1.7'}
+		bpdt_ver = {1 : '1.6 & 2.0', 2 : '1.7'}
 		
 		fit_ver = '%d.%d.%d.%d' % (self.FitMajor,self.FitMinor,self.FitHotfix,self.FitBuild)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Boot Partition Descriptor Table 1.6 Header' + col_e
+		pt.title = col_y + 'Boot Partition Descriptor Table 1.6 & 2.0 Header' + col_e
 		pt.add_row(['Signature', '0x%0.8X' % self.Signature])
 		pt.add_row(['Descriptor Count', '%d' % self.DescCount])
 		pt.add_row(['BPDT Version', bpdt_ver[self.BPDTVersion] if self.BPDTVersion in bpdt_ver else 'Unknown'])
@@ -2616,15 +2709,14 @@ class BPDT_Header_2(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 		
 		return pt
 		
-class BPDT_Header_3(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.7 (PrimaryBootPartition, PrimaryBootPartitionNC)
+class BPDT_Header_2(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.7 (PrimaryBootPartition, PrimaryBootPartitionNC)
 	_pack_ = 1
 	_fields_ = [
 		('Signature',		uint32_t),		# 0x00 AA550000 Boot, AA55AA00 Recovery
 		('DescCount',		uint16_t),		# 0x04 Minimum 6 Entries
-		('BPDTVersion',		uint16_t),		# 0x06 1 IFWI 2.0, 2 IFWI 1.6, 3 IFWI 1.7
-		('BPDTConfig',		uint8_t),		# 0x08 0 BPDT Redundancy Support, 1-7 Reserved
-		('Reserved',		uint8_t),		# 0x09
-		('Checksum',		uint16_t),		# 0x0A BPDT + Entries (?)
+		('BPDTVersion',		uint8_t),		# 0x06 1 IFWI 1.6 & 2.0, 2 IFWI 1.7
+		('BPDTConfig',		uint8_t),		# 0x07 0 BPDT Redundancy Support, 1-7 Reserved
+		('Checksum',		uint32_t),		# 0x08 CRC32 of entire BPDT (Header + Entries) without Signature
 		('IFWIVersion',		uint32_t),		# 0x0C Unique mark from build server
 		('FitMajor',		uint16_t),		# 0x10
 		('FitMinor',		uint16_t),		# 0x12
@@ -2636,7 +2728,7 @@ class BPDT_Header_3(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 	# Used at Lake Field (LKF) IFWI 1.7 platform
 	
 	def hdr_print(self) :
-		bpdt_ver = {1 : '2.0', 2 : '1.6', 3 : '1.7'}
+		bpdt_ver = {1 : '1.6 & 2.0', 2 : '1.7'}
 		f1,f2 = self.get_flags()
 		
 		fit_ver = '%d.%d.%d.%d' % (self.FitMajor,self.FitMinor,self.FitHotfix,self.FitBuild)
@@ -2649,7 +2741,6 @@ class BPDT_Header_3(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 		pt.add_row(['BPDT Version', bpdt_ver[self.BPDTVersion] if self.BPDTVersion in bpdt_ver else 'Unknown'])
 		pt.add_row(['BPDT Redundancy', ['No','Yes'][f1]])
 		pt.add_row(['BPDT Config Reserved', '0x%X' % f2])
-		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['Checksum', '0x%X' % self.Checksum])
 		pt.add_row(['IFWI Version', '0x%X' % self.IFWIVersion])
 		pt.add_row(['Flash Image Tool', 'N/A' if self.FitMajor in [0,0xFFFF] else fit_ver])
@@ -2657,20 +2748,20 @@ class BPDT_Header_3(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 		return pt
 		
 	def get_flags(self) :
-		flags = BPDT_Header_3_GetFlags()
+		flags = BPDT_Header_2_GetFlags()
 		flags.asbytes = self.BPDTConfig
 		
 		return flags.b.BPDT_R_S, flags.b.Reserved
 	
-class BPDT_Header_3_Flags(ctypes.LittleEndianStructure):
+class BPDT_Header_2_Flags(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('BPDT_R_S', uint8_t, 1),
 		('Reserved', uint8_t, 7),
 	]
 
-class BPDT_Header_3_GetFlags(ctypes.Union):
+class BPDT_Header_2_GetFlags(ctypes.Union):
 	_fields_ = [
-		('b', BPDT_Header_3_Flags),
+		('b', BPDT_Header_2_Flags),
 		('asbytes', uint8_t)
 	]
 
@@ -2751,14 +2842,14 @@ bpdt_dict = {
 			18 : 'WCOD', # CSE-WCOD Partition
 			19 : 'LOCL', # CSE-LOCL Partition
 			20 : 'OEMP', # OEM KM Partition
-			23 : 'IOMP', # UIOM Partition
-			24 : 'MGPP', # MG Partition
-			25 : 'TBTP', # TBT Partition
+			23 : 'IOMP', # USB Type C IO Manageability Partition (UIOM)
+			24 : 'MGPP', # USB Type C MG Partition
+			25 : 'TBTP', # USB Type C Thunerbolt Partition (TBT)
 			26 : 'PLTS', # Platform Settings
 			}
 
-# CSE Extensions 0x00-0x16 and 0x32
-ext_tag_all = list(range(23)) + [50]
+# CSE Extensions 0x00-0x16, 0x18-0x1A, 0x32
+ext_tag_all = list(range(23)) + list(range(24,27)) + [50]
 
 # CSE Extensions with Revisions
 ext_tag_rev_hdr = [0x14]
@@ -2767,7 +2858,7 @@ ext_tag_rev_hdr = [0x14]
 ext_tag_rev_mod = [0x1,0xD]
 
 # CSE Extensions without Modules
-ext_tag_mod_none = [0x4,0xA,0xC,0x10,0x11,0x13,0x16,0x32]
+ext_tag_mod_none = [0x4,0xA,0xC,0x10,0x11,0x13,0x16,0x18,0x19,0x1A,0x32]
 
 # CSE Extensions with Module Count
 ext_tag_mod_count = [0x1,0x2,0x12,0x14,0x15]
@@ -2804,6 +2895,9 @@ ext_dict = {
 			'CSE_Ext_14_R2' : CSE_Ext_14_R2,
 			'CSE_Ext_15' : CSE_Ext_15,
 			'CSE_Ext_16' : CSE_Ext_16,
+			'CSE_Ext_18' : CSE_Ext_18,
+			'CSE_Ext_19' : CSE_Ext_19,
+			'CSE_Ext_1A' : CSE_Ext_1A,
 			'CSE_Ext_32' : CSE_Ext_32,
 			'CSE_Ext_00_Mod' : CSE_Ext_00_Mod,
 			'CSE_Ext_01_Mod' : CSE_Ext_01_Mod,
@@ -2954,8 +3048,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 			
 				print(col_y + '\n--> Stored $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_type, part_name, part_start, part_end) + col_e)
 				
-				if part[0] in [b'UTOK',b'STKN'] :
-					ext_print,x1 = key_anl(mod_fname, [], part_name) # Retrieve & Store UTOK/STKN Extension Info
+				if part[0] in [b'UTOK',b'STKN',b'OEMP'] :
+					ext_print,x1 = key_anl(mod_fname, [], part_name) # Retrieve & Store UTOK/STKN/OEMP Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
 					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -3015,8 +3109,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 				
 				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name, part_start, part_end) + col_e)
 				
-				if part[0] == 'UTOK' :
-					ext_print,x1 = key_anl(mod_fname, [], part_name) # Retrieve & Store UTOK Extension Info
+				if part[0] in ['UTOK','OEMP'] :
+					ext_print,x1 = key_anl(mod_fname, [], part_name) # Retrieve & Store UTOK/OEMP Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
 					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -3109,11 +3203,13 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 	
 	# $CPD detected
 	if cpd_offset > -1 :
-		cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
+		cpd_hdr_ver = reading[cpd_offset + 8] # $CPD Version Tag
+		if cpd_hdr_ver == 2 : cpd_hdr = get_struct(reading, cpd_offset, CPD_Header_2)
+		else : cpd_hdr = get_struct(reading, cpd_offset, CPD_Header)
 		cpd_num = cpd_entry_num_fix(reading, cpd_offset, cpd_hdr.NumModules)
 		cpd_name = cpd_hdr.PartitionName.decode('utf-8')
 		
-		cpd_valid,cpd_chk_fw,cpd_chk_exp = cpd_chk(reading[cpd_offset:cpd_offset + 0x10 + cpd_num * 0x18]) # Validate $CPD Checksum
+		cpd_valid,cpd_chk_fw,cpd_chk_exp = cpd_chk(reading[cpd_offset:cpd_offset + 0x10 + cpd_num * 0x18], cpd_hdr_ver) # Validate $CPD Checksum
 		
 		if not cpd_valid :
 			ext_err_stor = cse_anl_err(col_r + 'Error: Wrong $CPD "%s" Checksum 0x%0.2X, expected 0x%0.2X' % (cpd_name, cpd_chk_fw, cpd_chk_exp) + col_e)
@@ -3742,7 +3838,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 		folder_name = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [0x%0.6X]' % (cpd_pname, ext_inid, cpd_poffset) + os_dir
 		info_fname = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [0x%0.6X].txt' % (cpd_pname, ext_inid, cpd_poffset)
 		
-		cpd_phdr = get_struct(reading, cpd_poffset, CPD_Header)
+		cpd_hdr_ver = reading[cpd_poffset + 8] # $CPD Version Tag
+		if cpd_hdr_ver == 2 : cpd_phdr = get_struct(reading, cpd_poffset, CPD_Header_2)
+		else : cpd_phdr = get_struct(reading, cpd_poffset, CPD_Header)
 		if param.me11_mod_extr : print('\n%s' % cpd_phdr.hdr_print())
 		
 		if cpd_pvalid : print(col_g + '\n$CPD Checksum of partition "%s" is VALID\n' % cpd_pname + col_e)
@@ -4217,7 +4315,9 @@ def cse_anl_err(ext_err_msg) :
 	
 # Detect CSE Partition Instance Identifier
 def cse_part_inid(buffer, cpd_offset, ext_dictionary) :
-	cpd_hdr = get_struct(buffer, cpd_offset, CPD_Header)
+	cpd_hdr_ver = reading[cpd_offset + 8] # $CPD Version Tag
+	if cpd_hdr_ver == 2 : cpd_hdr = get_struct(buffer, cpd_offset, CPD_Header_2)
+	else : cpd_hdr = get_struct(buffer, cpd_offset, CPD_Header)
 	cse_in_id = 0
 	in_id_step = 0
 	in_id_stop = 0
@@ -4290,7 +4390,8 @@ def ext_table(row_col_names,header,padd) :
 	pt = prettytable.PrettyTable(row_col_names)
 	pt.set_style(prettytable.BOX_CHARS) # Comment out if UnicodeEncodeError
 	pt.header = header # Boolean
-	pt.padding_width = padd
+	pt.left_padding_width = padd
+	pt.right_padding_width = padd
 	pt.hrules = prettytable.ALL
 	pt.vrules = prettytable.ALL
 	
@@ -4587,12 +4688,16 @@ def fw_types(fw_type) :
 	return fw_type, type_db
 
 # Validate $CPD Checksum
-def cpd_chk(cpd_data) :
-	cpd_chk_byte = cpd_data[0xB]
-	cpd_sum = sum(cpd_data) - cpd_chk_byte
-	cpd_chk_calc = (0x100 - cpd_sum & 0xFF) & 0xFF
+def cpd_chk(cpd_data, cpd_ver) :
+	if cpd_ver == 2 :
+		cpd_chk_file = int.from_bytes(cpd_data[0x10:0x14], 'little')
+		cpd_chk_calc = zlib.crc32(cpd_data) & 0xFFFFFFFF
+	else :
+		cpd_chk_file = cpd_data[0xB]
+		cpd_sum = sum(cpd_data) - cpd_chk_file
+		cpd_chk_calc = (0x100 - cpd_sum & 0xFF) & 0xFF
 	
-	return cpd_chk_byte == cpd_chk_calc, cpd_chk_byte, cpd_chk_calc
+	return cpd_chk_file == cpd_chk_calc, cpd_chk_file, cpd_chk_calc
 	
 # Validate Manifest RSA Signature
 def rsa_sig_val(man_hdr_struct, input_stream, check_start) :
@@ -5101,11 +5206,11 @@ for file_in in source :
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
-			# ME Region is Foxconn X58 Test?
+			# ME Region is X58 Test?
 			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
+				no_man_text = "Found" + col_y + " X58 Test " + col_e + "Intel Engine firmware"
 				
-				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
+				if param.extr_mea : no_man_text = "NaN NaN_NaN_X58 NaN NaN NaN"
 			
 			# ME Region is Unknown
 			else :
@@ -5124,11 +5229,11 @@ for file_in in source :
 				
 				if param.extr_mea : no_man_text = "NaN %s_NaN_UMEM %s NaN NaN" % (fuj_version, fuj_version)
 			
-			# Image is Foxconn X58 Test?
+			# Image is X58 Test?
 			elif reading[0:8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = "Found" + col_y + " Foxconn X58 Test " + col_e + "Intel Engine firmware"
+				no_man_text = "Found" + col_y + " X58 Test " + col_e + "Intel Engine firmware"
 				
-				if param.extr_mea : no_man_text = "NaN NaN_NaN_FOX NaN NaN NaN"
+				if param.extr_mea : no_man_text = "NaN NaN_NaN_X58 NaN NaN NaN"
 			
 			# Image contains some Engine Flash Partition Table ($FPT)
 			elif fw_start_match is not None :
@@ -5442,7 +5547,6 @@ for file_in in source :
 		
 		init_bpdt_ver = int.from_bytes(reading[start_fw_start_match + 0x6:start_fw_start_match + 0x8], 'little') # BPDT Version
 		if init_bpdt_ver == 2 : bpdt_hdr = get_struct(reading, start_fw_start_match, BPDT_Header_2)
-		if init_bpdt_ver == 3 : bpdt_hdr = get_struct(reading, start_fw_start_match, BPDT_Header_3)
 		else : bpdt_hdr = get_struct(reading, start_fw_start_match, BPDT_Header)
 		
 		# Store Primary BPDT info to show at CSE unpacking
@@ -5494,7 +5598,6 @@ for file_in in source :
 			if p_type == 5 and p_empty == 'No' : # Secondary BPDT (S-BPDT)
 				init_s_bpdt_ver = int.from_bytes(reading[start_fw_start_match + 0x6:start_fw_start_match + 0x8], 'little') # BPDT Version
 				if init_s_bpdt_ver == 2 : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header_2)
-				if init_s_bpdt_ver == 3 : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header_3)
 				else : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header)
 				
 				# Store Secondary BPDT info to show at CSE unpacking
@@ -5752,7 +5855,9 @@ for file_in in source :
 			while reading[p_end_last:p_end_last + 0x4] == b'$CPD' :
 				cse_in_id = 0
 				
-				cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
+				cpd_hdr_ver = reading[p_end_last + 8] # $CPD Version Tag
+				if cpd_hdr_ver == 2 : cpd_hdr = get_struct(reading, p_end_last, CPD_Header_2)
+				else : cpd_hdr = get_struct(reading, p_end_last, CPD_Header)
 				cpd_num = cpd_entry_num_fix(reading, p_end_last, cpd_hdr.NumModules)
 				cpd_tag = cpd_hdr.PartitionName
 				
@@ -6822,7 +6927,7 @@ for file_in in source :
 		
 		if pvbit in [0,1] and wcod_found is False : print("PV:       %s" % ['No','Yes'][pvbit])
 		
-		if variant == 'CSME' and major >= 12 : print('FWUpdate: %s' % ['No','Yes'][int(fwu_pmcp_found)])
+		if variant == 'CSME' and major >= 12 and not wcod_found : print('FWUpdate: %s' % ['No','Yes'][int(fwu_pmcp_found)])
 		
 		print("Date:     %s" % date)
 		
