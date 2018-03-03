@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.44.0'
+title = 'ME Analyzer v1.44.1'
 
 import os
 import re
@@ -2768,15 +2768,15 @@ class BPDT_Header_2_GetFlags(ctypes.Union):
 class BPDT_Entry(ctypes.LittleEndianStructure) : # (BpdtEntry)
 	_pack_ = 1
 	_fields_ = [
-		("Type",			uint16_t),		# 0x00 dword at non APL IFWI 2.0 (?)
-		("Flags",			uint16_t),		# 0x02 Only at APL IFWI 2.0 (?)
+		("Type",			uint16_t),		# 0x00 dword at CNP/GLK IFWI 1.6 & 2.0 (?)
+		("Flags",			uint16_t),		# 0x02 only at APL IFWI 2.0 (?)
 		("Offset",			uint32_t),		# 0x04
 		("Size",			uint32_t),		# 0x08
 		# 0xC
 	]
 	
-	# It is probable that Flags field is relevant for APL (IFWI 2.0) platform only
-	# At CNP (IFWI 1.6) and LKF (IFWI 1.7), Type is uint32_t and there are no Flags
+	# It is probable that Flags field is relevant to APL (IFWI 2.0) platform only
+	# At CNP/GLK (IFWI 1.6 & 2.0) and LKF (IFWI 1.7), Type is uint32_t without Flags
 	
 	def info_print(self) :
 		fvalue = ['No','Yes']
@@ -6626,9 +6626,13 @@ for file_in in source :
 				for i in range(len(err_stor_ker)) : err_stor.append(err_stor_ker[i]) # For -msg
 		
 		elif major == 12 :
-			sku = sku_init + ' ' + pos_sku_ext # SKU retrieved from Extension 12
 			
-			sku_db, upd_found = sku_db_upd_cse(sku_init_db, pos_sku_ext, sku_stp, upd_found, False) # Store DB SKU and check Latest version
+			# Detect SKU Platform, prefer DB over Extension
+			if sku == 'NaN' : sku_result = pos_sku_ext # SKU Platform retrieved from Extension 12
+			else : sku_result = db_sku_chk # SKU Platform retrieved from DB
+			sku = sku_init + ' ' + sku_result
+			
+			sku_db, upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
 			
 			# 12.0 : Cannonlake, Cannon Point
 			if minor == 0 : platform = 'CNP'
