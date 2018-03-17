@@ -1,3 +1,13 @@
+v1.46.0 r117
+
+Added CSE OEM/ODM Configuration & Signing status
+Added CSE and TXE OEM/ODM Unlock Token status
+Added parameter -redir for Console Redirection
+Improved CSE Extension 0x15 Payload Knob support
+Removed parameter -check, now default action
+Fixed missing MEA header when using -skip
+MEA now displays all info in more detail
+
 v1.44.1 r116
 
 Adjusted CSME 12 SKU Platform detection behavior
