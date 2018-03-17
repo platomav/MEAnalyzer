@@ -62,7 +62,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -?      : Displays help & usage screen
 * -skip   : Skips welcome & options screen
 * -exit   : Skips Press enter to exit prompt
-* -check  : Copies files with messages to check
+* -redir  : Enables console redirection support
 * -mass   : Scans all files of a given directory
 * -enuf   : Enables UEFIFind Engine GUID detection
 * -pdb    : Writes input file DB entry to text file
