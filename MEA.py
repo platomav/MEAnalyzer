@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.46.0'
+title = 'ME Analyzer v1.46.1'
 
 import os
 import re
@@ -157,6 +157,7 @@ class MEA_Param :
 				if i == '-hid' : self.hid_find = True # Hidden
 			
 		if self.extr_mea or self.print_msg or self.mass_scan or self.db_print_new or self.cli_redirect : self.skip_intro = True
+		if self.extr_mea or self.print_msg : self.cli_redirect = True
 		if self.cli_redirect : self.skip_pause = True
 		
 # Engine Structures
@@ -4412,24 +4413,24 @@ def ext_table(row_col_names,header,padd) :
 	
 # Detect DB Revision
 def mea_hdr_init() :
-	if not param.extr_mea and not param.print_msg :
-		db_rev = col_r + 'Unknown' + col_e
-		try :
-			fw_db = db_open()
-			for line in fw_db :
-				if 'Revision' in line :
-					db_line = line.split()
-					db_rev = db_line[2]
-			fw_db.close()
-		except :
-			pass
-			
-		return db_rev
+	db_rev = col_r + 'Unknown' + col_e
+	
+	try :
+		fw_db = db_open()
+		for line in fw_db :
+			if 'Revision' in line :
+				db_line = line.split()
+				db_rev = col_y + db_line[2] + col_e
+		fw_db.close()
+	except :
+		pass
+	
+	return db_rev
 
 # Print MEA Header
 def mea_hdr(db_rev) :
 	hdr_pt = ext_table([], False, 1)
-	hdr_pt.add_row([col_y + "        %s %s        " % (title, db_rev) + col_e])
+	hdr_pt.add_row([col_y + '        %s' % title + col_e + ' %s        ' % db_rev])
 	print(hdr_pt)
 
 # https://stackoverflow.com/a/22881871
@@ -5021,7 +5022,7 @@ if not param.skip_intro :
 	
 	mea_hdr(db_rev)
 	
-else :
+elif not param.extr_mea and not param.print_msg :
 	mea_hdr(db_rev)
 	
 if (arg_num < 2 and not param.help_scr and not param.mass_scan) or param.help_scr :
@@ -5278,10 +5279,12 @@ for file_in in source :
 			else :
 				no_man_text = 'File does not contain Intel Engine firmware'
 
-		print()
-		msg_pt = ext_table([], False, 1)
-		msg_pt.add_row([col_c + '%s (%d/%d)' % (textwrap.wrap(force_ascii(os.path.basename(file_in)), width=45)[0], cur_count, in_count) + col_e])
-		print(msg_pt)
+		# Print filename when not in UEFIStrip mode
+		if not param.extr_mea and not param.print_msg :
+			print()
+			msg_pt = ext_table([], False, 1)
+			msg_pt.add_row([col_c + '%s (%d/%d)' % (textwrap.wrap(force_ascii(os.path.basename(file_in)), width=45)[0], cur_count, in_count) + col_e])
+			print(msg_pt)
 		
 		if param.extr_mea :
 			if no_man_text != 'NaN' : print(no_man_text)
