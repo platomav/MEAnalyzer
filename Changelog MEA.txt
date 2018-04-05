@@ -1,3 +1,8 @@
+v1.48.0 r118
+
+Added CSME 12 FWUpdate Type support
+Fixed issues under rare circumstances
+
 v1.46.1 r117
 
 Fixed crashes under rare circumstances

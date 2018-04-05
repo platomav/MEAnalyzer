@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.46.1'
+title = 'ME Analyzer v1.48.0'
 
 import os
 import re
@@ -3059,8 +3059,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 			
 				print(col_y + '\n--> Stored $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_type, part_name, part_start, part_end) + col_e)
 				
-				if part[0] in [b'UTOK',b'STKN',b'OEMP'] :
-					ext_print,x1 = key_anl(mod_fname, [], part_name, [variant, major, minor, hotfix, build]) # Retrieve & Store UTOK/STKN/OEMP Extension Info
+				if part[0] in [b'UTOK',b'STKN'] :
+					ext_print,x1 = key_anl(mod_fname, [], part_name, [variant, major, minor, hotfix, build]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
 					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -3120,8 +3120,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 				
 				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name, part_start, part_end) + col_e)
 				
-				if part[0] in ['UTOK','OEMP'] :
-					ext_print,x1 = key_anl(mod_fname, [], part_name, [variant, major, minor, hotfix, build]) # Retrieve & Store UTOK/OEMP Extension Info
+				if part[0] in ['UTOK'] :
+					ext_print,x1 = key_anl(mod_fname, [], part_name, [variant, major, minor, hotfix, build]) # Retrieve & Store UTOK Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
 					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -3305,7 +3305,7 @@ def ext_anl(input_type, input_offset, file_end, var_ver) :
 					hdr_rev_tag = '' # CSE Extension Header Revision Tag
 					mod_rev_tag = '' # CSE Extension Module Revision Tag
 					
-					if ((variant,major) == ('CSME',12) and (minor,hotfix,build) not in [(0,0,7070),(0,0,7075)]) or dnx_version == 2 :
+					if ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000)) or dnx_version == 2 :
 						if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
 						if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
 					else :
@@ -4225,7 +4225,7 @@ def key_anl(mod_fname, ext_print, mod_name, var_ver) :
 			hdr_rev_tag = '' # CSE Extension Header Revision Tag
 			mod_rev_tag = '' # CSE Extension Module Revision Tag
 			
-			if (variant,major) == ('CSME',12) and (minor,hotfix,build) not in [(0,0,7070),(0,0,7075)] :
+			if (variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000) :
 				if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
 				if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
 			else :
@@ -4610,6 +4610,7 @@ def uefi_find(file_in, uf_path) :
 				header count 0C111D82A3D0F74CAEF3E28088491704 {0}\n\
 				header count 6E1F582C87B1AA4696E72081098D6413 {0}\n\
 				header count 8226C7591C5C22479F25B26F4275BFEF {0}\n\
+				header count 9D3EF263DA5F5E419C2A64C4E2A6ECE8 {0}\n\
 				".format(file_in).replace('	', '')
 		
 	try :
@@ -4693,15 +4694,16 @@ def fovd_clean(fovdtype) :
 def fw_types(fw_type) :
 	type_db = 'NaN'
 	
-	if variant in ['SPS','CSSPS'] and (fw_type == "Region" or fw_type == "Region, Stock" or fw_type == "Region, Extracted") : # SPS --> Region (EXTR at DB)
-		fw_type = "Region"
-		type_db = "EXTR"
-	elif fw_type == "Region, Extracted" : type_db = "EXTR"
-	elif fw_type == "Region, Stock" or fw_type == "Region" : type_db = "RGN"
-	elif fw_type == "Update" : type_db = "UPD"
-	elif fw_type == "Operational" : type_db = "OPR"
-	elif fw_type == "Recovery" : type_db = "REC"
-	elif fw_type == "Unknown" : type_db = "UNK"
+	if variant in ['SPS','CSSPS'] and fw_type in ['Region','Region, Stock','Region, Extracted'] : # SPS --> Region (EXTR at DB)
+		fw_type = 'Region'
+		type_db = 'EXTR'
+	elif fw_type == 'Region, Extracted' : type_db = 'EXTR'
+	elif fw_type == 'Region, FWUpdate' : type_db = 'FWU'
+	elif fw_type == 'Region, Stock' or fw_type == 'Region' : type_db = 'RGN'
+	elif fw_type == 'Update' : type_db = 'UPD'
+	elif fw_type == 'Operational' : type_db = 'OPR'
+	elif fw_type == 'Recovery' : type_db = 'REC'
+	elif fw_type == 'Unknown' : type_db = 'UNK'
 	
 	return fw_type, type_db
 
@@ -5103,6 +5105,7 @@ for file_in in source :
 	me11_sku_anl = False
 	me11_ker_msg = False
 	can_search_db = True
+	fpt_chk_null = False
 	fpt_chk_fail = False
 	fpt_num_fail = False
 	cse_lt_exist = False
@@ -5473,7 +5476,7 @@ for file_in in source :
 			else :
 				p_empty = 'No'
 			
-			if p_empty == 'No' :
+			if p_empty == 'No' and p_offset_spi < file_end :
 				# Get CSE Partition Instance ID
 				cse_in_id,x1,x2 = cse_part_inid(reading, p_offset_spi, ext_dict)
 				cse_in_id_str = '%0.4X' % cse_in_id
@@ -5517,11 +5520,11 @@ for file_in in source :
 				fpt_romb_found = True
 				if p_offset_spi != 0 and p_size != 0 : fpt_romb_used = True
 			
-			# CSME12+ FWUpdate tool requires PMC firmware (PMCP, EXTR not RGN)
+			# CSME12+ FWUpdate tool requires PMC firmware (PMCP)
 			if p_name == 'PMCP' and p_empty == 'No' : fwu_pmcp_found = True
 			
-			# Detect if CSE firmware has OEM/ODM Unlock Token (UTOK/STKN/OEMP)
-			if p_name in ('UTOK','STKN','OEMP') and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
+			# Detect if CSE firmware has OEM/ODM Unlock Token (UTOK/STKN)
+			if p_name in ('UTOK','STKN') and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
 			
 			if 0 < p_offset_spi < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset_spi + p_size
 			else : eng_fw_end = p_max_size
@@ -5609,7 +5612,7 @@ for file_in in source :
 			if p_type in bpdt_dict : p_name = bpdt_dict[p_type]
 			else : p_name = 'Unknown'
 			
-			if p_empty == 'No' :
+			if p_empty == 'No' and p_offset_spi < file_end :
 				# Get CSE Partition Instance ID
 				cse_in_id,x1,x2 = cse_part_inid(reading, p_offset_spi, ext_dict)
 			
@@ -5626,7 +5629,7 @@ for file_in in source :
 				
 				pt_dbpdt.add_row([p_name,'%0.2d' % p_type,'Primary',p_offset_print,p_size_print,p_end_print,'%0.4X' % cse_in_id,p_empty])
 			
-			if p_type == 5 and p_empty == 'No' : # Secondary BPDT (S-BPDT)
+			if p_type == 5 and p_empty == 'No' and p_offset_spi < file_end : # Secondary BPDT (S-BPDT)
 				init_s_bpdt_ver = int.from_bytes(reading[start_fw_start_match + 0x6:start_fw_start_match + 0x8], 'little') # BPDT Version
 				if init_s_bpdt_ver == 2 : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header_2)
 				else : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header)
@@ -5683,7 +5686,7 @@ for file_in in source :
 			bpdt_part_all.append([p_name, p_offset_spi, p_offset_spi + p_size, p_type, p_empty, 'Primary', cse_in_id])
 			
 			# Adjust Manifest Header to Recovery section based on BPDT
-			if p_type == 2 and p_empty == 'No' : # CSE_BUP
+			if p_type == 2 and p_empty == 'No' and p_offset_spi < file_end : # CSE_BUP
 				# Only if partition exists at file (counter-example: sole IFWI etc)
 				# noinspection PyTypeChecker
 				if p_offset_spi + p_size <= file_end :
@@ -5699,9 +5702,9 @@ for file_in in source :
 		# Show BPDT Partition info on demand (-dfpt)
 		if param.fpt_disp : print('%s\n' % pt_dbpdt)
 	
-	# Detect if CSE firmware has OEM/ODM Unlock Token (UTOK/STKN/OEMP)
+	# Detect if CSE firmware has OEM/ODM Unlock Token (UTOK/STKN)
 	for part in bpdt_part_all :
-		if part[0] in ('UTOK','STKN','OEMP') and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : utok_found = True
+		if part[0] in ('UTOK','STKN') and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : utok_found = True
 	
 	# Detect BPDT partition overlaps
 	for part in bpdt_part_all :
@@ -5757,8 +5760,10 @@ for file_in in source :
 		fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
 		if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
 		
-		# CSME12+, CSTXE3+, CSSPS5+ EXTR checksum from FIT is a placeholder (0x00), ignore
-		if fpt_chk_fail and fpt_chk_file == '0x00' and variant in ['CSME','CSTXE','CSSPS'] : fpt_chk_fail = False
+		# CSME12+ & CSTXE EXTR checksum from FIT is a placeholder (0x00), ignore
+		if ((variant == 'CSME' and major >= 12) or variant == 'CSTXE') and fpt_chk_file == '0x00' :
+			fpt_chk_null = True
+			fpt_chk_fail = False
 		
 		# Check SPS3 $FPT Checksum validity (from Lordkag's UEFIStrip)
 		if variant == 'SPS' and major == 3 :
@@ -6013,7 +6018,7 @@ for file_in in source :
 	elif rgn_exist : # SPS 1-3 have their own firmware Types
 		if variant == 'SPS' : fw_type = 'Region' # SPS is built manually so EXTR
 		elif variant == 'ME' and (2 <= major <= 7) :
-			# Check 1, FOVD section
+			# Check 1, FOVD partition
 			if (major > 2 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Region, Extracted'
 			else :
 				# Check 2, EFFS/NVKR strings
@@ -6023,12 +6028,16 @@ for file_in in source :
 					else : fw_type = 'Region, Extracted'
 				elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
 				else : fw_type = 'Region, Stock'
-		elif (variant in ['ME','CSME'] and 8 <= major <= 12) or variant == 'TXE' or (variant == 'CSSPS' and major == 4) :
+		elif (variant == 'ME' and major >= 8) or variant in ['CSME','CSTXE','CSSPS','TXE'] :
 			# Check 1, FITC Version
-			if fpt_hdr.FitBuild == 0 or fpt_hdr.FitBuild == 65535 : # 0000/FFFF --> clean ME/TXE
+			if fpt_hdr.FitBuild in [0,65535] : # 0000/FFFF --> clean CS(ME)/CS(TXE)
 				fw_type = 'Region, Stock'
-				# Check 2, FOVD section
+				
+				# Check 2, FOVD partition
 				if not fovd_clean('new') : fw_type = 'Region, Extracted'
+				
+				# Check 3, CSTXE FIT temporarily/placeholder $FPT Header and Checksum
+				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] == b'\xFF' * 0x24 : fw_type = 'Region, Extracted'
 			else :
 				# Get FIT/FITC version used to build the image
 				fitc_ver_found = True
@@ -6037,11 +6046,9 @@ for file_in in source :
 				fitc_minor = fpt_hdr.FitMinor
 				fitc_hotfix = fpt_hdr.FitHotfix
 				fitc_build = fpt_hdr.FitBuild
-		elif variant == 'CSME' or variant == 'CSTXE' or variant == 'CSSPS' :
-			# Extracted are created by FIT temporarily, placeholder $FPT header and checksum
-			if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] + \
-			reading[fpt_start + 0x1B:fpt_start + 0x1C] == b'\xFF' * 0x24 + b'\x00' : fw_type = 'Region, Extracted'
-			else : fw_type = 'Region, Stock'
+				
+				# Check 4, CSME12+ FIT FWUpdate image
+				if reading[fpt_start:fpt_start + 0x10] == b'\xFF' * 0x10 and fwu_pmcp_found and not fpt_chk_null : fw_type = 'Region, FWUpdate'
 	else :
 		fw_type = 'Update' # No Region detected, Update
 	
@@ -6058,7 +6065,6 @@ for file_in in source :
 	# Detect Firmware Release (Production, Pre-Production, ROM-Bypass, Other)
 	mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
 	rel_signed = ['Production', 'Debug'][mn2_flags_debug]
-	#rel_flag = ['PRD', 'PRE'][mn2_flags_pre] # Set only at ME9-10
 	
 	# Check for ROM-Bypass entry at $FPT
 	if rgn_exist and fpt_romb_found :
@@ -6857,6 +6863,7 @@ for file_in in source :
 		name_db = "%s.%s.%s.%s_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db) # The re-created filename without extension
 		name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # The equivalent RGN filename
 		name_db_extr = "%s.%s.%s.%s_%s_%s_EXTR_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # The equivalent EXTR filename
+		name_db_fwu = "%s.%s.%s.%s_%s_%s_FWU_%s" % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # The equivalent FWU filename
 	elif variant in ['CSSPS','SPS'] and sku != 'NaN' :
 		name_db = "%s.%s.%s.%s_%s_%s_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sku_db, rel_db, type_db)
 		name_db_rgn = "%s.%s.%s.%s_%s_%s_RGN_%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build), sku_db, rel_db, rsa_sig_hash)
@@ -6881,9 +6888,10 @@ for file_in in source :
 				if len(line) < 2 or line[:3] == '***' :
 					continue # Skip empty lines or comments
 				else : # Search the re-created file name without extension at the database
-					if name_db_hash in line : fw_in_db_found = "Yes" # Known firmware, nothing new
-					if type_db == 'EXTR' and name_db_rgn in line :
-						rgn_over_extr_found = True # Same firmware found at database but RGN instead of imported EXTR, so nothing new
+					if name_db_hash in line : fw_in_db_found = 'Yes' # Known firmware, nothing new
+					if (type_db == 'EXTR' and (name_db_rgn in line or (variant == 'CSME' and major >= 12 and name_db_fwu in line))) or \
+					(type_db == 'FWU' and name_db_rgn in line) :
+						rgn_over_extr_found = True # Same firmware found but of preferred type (RGN > FWU > EXTR), nothing new
 						fw_in_db_found = 'Yes'
 					# Only for ME8+ or ME7 non-PRD or ME6.0 IGN
 					if type_db == 'UPD' and ((variant in ['ME','CSME'] and (major > 7 or (major == 7 and release != 'Production') or
