@@ -9,11 +9,11 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/w0fWmPx.png)
+![](https://i.imgur.com/VOp78Or.png)
 
 ## **A. About ME Analyzer**
 
-ME Analyzer is a tool which parses Intel Engine firmware images from the Converged Security Management Engine, Converged Security Trusted Execution Engine, Converged Security Server Platform Services, Management Engine, Trusted Execution Engine & Server Platform Services families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) firmware, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
+ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the Converged Security Management Engine, Converged Security Trusted Execution Engine, Converged Security Server Platform Services, Management Engine, Trusted Execution Engine, Server Platform Services & Power Management Controller families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) firmware, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
 
 #### **A1. ME Analyzer Features**
 
@@ -23,6 +23,7 @@ ME Analyzer is a tool which parses Intel Engine firmware images from the Converg
 - Detection of Production, Pre-Production, ROM-Bypass etc Releases
 - Detection of Region (Stock/clean or Extracted/dirty), Update etc Types
 - Detection of Security Version Number (SVN), Version Control Number (VCN) & PV
+- Detection of Power Management Controller (PMC) firmware Version, SKU etc
 - Detection of whether the imported Engine firmware is updated or not
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)
 - Ability to fully unpack CSE firmware CSME 11+, CSTXE 3+ and CSSPS 4+
@@ -117,7 +118,9 @@ At dist folder you should find the final MEA executable
 
 ## **D. Pictures**
 
-![](https://i.imgur.com/w0fWmPx.png)
+**Note:** Some pictures are outdated and depict older ME Analyzer versions.
+
+![](https://i.imgur.com/VOp78Or.png)
 
 ![](https://i.imgur.com/6UNqSe8.png)
 
