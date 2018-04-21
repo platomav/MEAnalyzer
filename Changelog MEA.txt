@@ -1,3 +1,9 @@
+v1.51.0 r120
+
+Added CSE PMC unpacking & size validation
+Improved firmware with messages handling
+Fixed issues under rare circumstances
+
 v1.50.0 r119
 
 Added CSE PMC 300 CNP firmware support
