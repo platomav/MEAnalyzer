@@ -1,3 +1,8 @@
+v1.51.2 r121
+
+Improved CSME 12 Stepping detection
+Fixed crashes under rare circumstances
+
 v1.51.0 r120
 
 Added CSE PMC unpacking & size validation

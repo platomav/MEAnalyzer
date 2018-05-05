@@ -85,7 +85,7 @@ ME Analyzer is developed using Python 3.6 and can work under Windows, Linux and 
 
 #### **C1. Compatibility**
 
-ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python 3.6 support. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. Windows users who plan to use the already built/frozen/compiled binaries must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries. Windows users who plan to use console redirection must first "set PYTHONIOENCODING=UTF-8".
+ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python 3.6 support. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. Windows users who plan to use the already built/frozen/compiled binaries must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
 
 #### **C2. Code Prerequisites**
 

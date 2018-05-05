@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.51.0'
+title = 'ME Analyzer v1.51.2'
 
 import os
 import re
@@ -1140,7 +1140,7 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # Module Information (MANIF
 		
 		pt.title = col_y + 'Extension 3, Module Information' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','OEM'][self.Type]])
+		pt.add_row(['Type', ['Process','Shared Library','Data','OEM/IUP'][self.Type]])
 		pt.add_row(['Compression', ['Uncompressed','Huffman','LZMA'][self.Compression]])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
@@ -1863,7 +1863,7 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # (SIGNED_PACKAGE_INFO_EXT_
 		
 		pt.title = col_y + 'Extension 15, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','OEM'][self.Type]])
+		pt.add_row(['Type', ['Process','Shared Library','Data','OEM/IUP'][self.Type]])
 		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
@@ -5705,6 +5705,7 @@ for file_in in source :
 	
 	# Parse IFWI/BPDT Starting Offsets
 	for ifwi_bpdt in range(len(bpdt_matches)):
+		
 		ifwi_exist = True # Set IFWI/BPDT detection boolean
 		
 		(start_fw_start_match, end_fw_start_match) = bpdt_matches[ifwi_bpdt].span() # Store BPDT range via bpdt_matches index
@@ -5768,7 +5769,7 @@ for file_in in source :
 				
 				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,pmc_mn2_ver = ext_anl('$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1])
 			
-			if p_type == 5 and p_empty == 'No' and p_offset_spi < file_end : # Secondary BPDT (S-BPDT)
+			if p_type == 5 and p_empty == 'No' and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x2] == b'\xAA\x55' : # Secondary BPDT (S-BPDT)
 				init_s_bpdt_ver = int.from_bytes(reading[start_fw_start_match + 0x6:start_fw_start_match + 0x8], 'little') # BPDT Version
 				if init_s_bpdt_ver == 2 : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header_2)
 				else : s_bpdt_hdr = get_struct(reading, p_offset_spi, BPDT_Header)
@@ -5801,7 +5802,8 @@ for file_in in source :
 					if s_p_type in bpdt_dict : s_p_name = bpdt_dict[s_p_type]
 					else : s_p_name = 'Unknown'
 					
-					cse_in_id,x1,x2 = cse_part_inid(reading, s_p_offset_spi, ext_dict)
+					if s_p_empty == 'No' and s_p_offset_spi < file_end :
+						cse_in_id,x1,x2 = cse_part_inid(reading, s_p_offset_spi, ext_dict)
 					
 					# Store BPDT Partition info for -dfpt
 					if param.fpt_disp :
@@ -6745,8 +6747,7 @@ for file_in in source :
 			sku_db, upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
 			
 			if minor == 0 : platform = 'SPT' # Skylake, Sunrise Point
-			elif minor in [5,6] : platform = 'SPT/KBP' # Skylake/Kabylake, Sunrise/Union Point
-			elif minor in [7,8] : platform = 'SPT/KBP/CNP' # Skylake/Kabylake(R)/Coffeelake, Sunrise/Union/Cannon Point
+			elif minor in [5,6,7,8] : platform = 'SPT/KBP' # Skylake/Kabylake(R)/Coffeelake, Sunrise/Union Point
 			elif minor in [10,11] : platform = 'BSF' # Skylake-X/Kabylake-X, Basin Falls
 			elif minor in [20,21] : platform = 'LBG' # Skylake-SP, Lewisburg
 			
@@ -6814,7 +6815,8 @@ for file_in in source :
 			if sku_stp == 'NaN' :
 				
 				# Adjust Production PCH/SoC Stepping from known values
-				if release == 'Production' : sku_stp = 'B'
+				if release == 'Production' and (minor > 0 or (minor == 0 and hotfix > 0 or (hotfix == 0 and build >= 1062))) :
+					sku_stp = 'B'
 				#else : sku_stp = 'A' # <= 12.x.x.xxxx
 			
 			# Detected stitched PMC firmware
@@ -7167,10 +7169,10 @@ for file_in in source :
 			if pmc_mn2_signed == 'Production' : msg_pt.add_row(['PMC Firmware Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
 		
 		if ((variant == 'CSME' and major >= 12) or (variant == 'CSTXE' and major >= 3)) and not wcod_found :
-			msg_pt.add_row(['OEM/ODM Configuration', ['No','Yes'][int(oem_config)]])
-			msg_pt.add_row(['OEM/ODM RSA Signature', ['No','Yes'][int(oem_signed)]])
+			msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_config)]])
+			msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed)]])
 			
-		if (rgn_exist or ifwi_exist) and variant in ('CSME','CSTXE','CSSPS','TXE') : msg_pt.add_row(['OEM/ODM Unlock Token', ['No','Yes'][int(utok_found)]])
+		if (rgn_exist or ifwi_exist) and variant in ('CSME','CSTXE','CSSPS','TXE') : msg_pt.add_row(['OEM Unlock Token', ['No','Yes'][int(utok_found)]])
 		
 		if variant == 'CSME' and major >= 12 and not wcod_found : msg_pt.add_row(['FWUpdate Support', ['No','Yes'][int(pmcp_fwu_found)]])
 		
