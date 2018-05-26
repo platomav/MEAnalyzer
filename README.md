@@ -30,12 +30,10 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the C
 - Ability to validate Engine RSA Signature and Region table checksums
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to detect & analyze Integrated Firmware Images (IFWI/BPDT)
-- Detection of CSME 11+ Flash Image Tool platform configuration by OEM
 - Detection of CSME 11 PCH-LP firmware Power Down Mitigation (PDM) erratum
 - Ability to analyze multiple files by drag & drop or by input path
 - Detection of unique Apple Macintosh Engine firmware "Slim" SKUs
 - Detection of multiple Engine regions in input file, number only
-- Detection of special Engine firmware BIOS GUIDs via UEFIFind
 - Ability to detect & categorize firmware which require attention
 - Reports all firmware which are not found at the Engine Firmware Repositories
 - Reports any new, unknown, problematic, incomplete etc Engine firmware images
@@ -65,13 +63,12 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -exit   : Skips Press enter to exit prompt
 * -redir  : Enables console redirection support
 * -mass   : Scans all files of a given directory
-* -enuf   : Enables UEFIFind Engine GUID detection
 * -pdb    : Writes input file DB entry to text file
 * -dbname : Renames input file based on unique DB name
-* -dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers (Research)
-* -unp86  : Unpacks all CSE Converged Security Engine firmware (Research)
-* -bug86  : Enables debug/verbose mode during CSE unpacking (Research)
-* -ext86  : Prints all Extension info during CSE unpacking (Research)
+* -dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers
+* -unp86  : Unpacks all CSE Converged Security Engine firmware
+* -bug86  : Enables debug/verbose mode during CSE unpacking
+* -ext86  : Prints all Extension info during CSE unpacking
 
 #### **B3. ME Analyzer Error Control**
 
@@ -93,24 +90,34 @@ To run ME Analyzer's python script, you need to have the following 3rd party Pyt
 
 * [Colorama](https://pypi.python.org/pypi/colorama/)
 * [PTable](https://github.com/platomav/PTable/tree/boxchar)
-* [Huffman11](https://github.com/IllegalArgument/Huffman11/)
 
 To build/freeze/compile ME Analyzer's python script, you can use whatever you like. The following are verified to work:
 
 * [Py2exe](https://pypi.python.org/pypi/py2exe/) (Windows)
 * [Py2app](https://pypi.python.org/pypi/py2app/) (macOS)
-* [PyInstaller](https://github.com/pyinstaller/pyinstaller/tree/master/) (Windows/Linux/macOS)
+* [PyInstaller](https://pypi.org/project/PyInstaller/) (Windows/Linux/macOS)
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
 PyInstaller can build/freeze/compile ME Analyzer at all three supported platforms, it is simple to run and gets updated often.
 
-1. Make sure you have Python 3.6 installed
-2. Use pip to install colorama (PyPi)
-3. Use pip to install PTable (Github, boxchar branch)
-4. Use pip to install PyInstaller (Github, master branch)
-5. Place huffman11.py at Huffman11 sub-directory (Github)
-6. Open a command prompt and execute:
+1. Make sure Python 3.6.0 or newer is installed:
+
+> python --version
+
+2. Use pip to install colorama (PyPi):
+
+> pip3 install colorama
+
+3. Use pip to install PTable (Github, boxchar branch):
+
+> pip3 install PTable-boxchar.zip
+
+4. Use pip to install PyInstaller (PyPi):
+
+> pip3 install pyinstaller
+
+5. Build/Freeze/Compile ME Analyzer:
 
 > pyinstaller --noupx --onefile MEA.py
 
@@ -125,10 +132,6 @@ At dist folder you should find the final MEA executable
 ![](https://i.imgur.com/6UNqSe8.png)
 
 ![](https://i.imgur.com/9tnZ7lA.png)
-
-![](https://i.imgur.com/4FQlzXU.png)
-
-![](https://i.imgur.com/0fQ9YZF.png)
 
 ![](https://i.imgur.com/v46gBmR.png)
 

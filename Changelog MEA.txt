@@ -1,3 +1,22 @@
+v1.55.0 r122
+
+Added built-in CSE Huffman Decompressor ***
+Added ignoring of known bad CSE hashes
+Added CSE PMC APL/BXT/GLK/CNP support
+Improved (CS)ME analysis performance
+Improved CSE & PMC variant detection
+Improved partition overlap detection
+Improved Flash Descriptor detection
+Improved ME 7 RGN/EXTR over UPD policy
+Removed CSME 11 OEM FIT SKU detection
+Removed UEFIFind Engine GUID detection
+Fixed "not in DB" message not showing
+Fixed empty RSA block validation error
+Fixed wrong empty $FPT entries offset
+
+*** CSE Huffman Loader & Decompressor by IllegalArgument
+*** CSE Huffman Dictionaries by PT Research & IllegalArgument
+
 v1.51.2 r121
 
 Improved CSME 12 Stepping detection
