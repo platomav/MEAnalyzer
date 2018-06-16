@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.55.0'
+title = 'ME Analyzer v1.55.2'
 
 import os
 import re
@@ -782,7 +782,7 @@ class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Information (SYSTEM_IN
 		("Size",			uint32_t),		# 0x04
 		("MinUMASize",		uint32_t),		# 0x08
 		("ChipsetVersion",	uint32_t),		# 0x0C
-		("IMGDefaultHash",	uint32_t*8),	# 0x10
+		("IMGDefaultHash",	uint32_t*8),	# 0x10 FTPR > intl.cfg
 		("PageableUMASize",	uint32_t),		# 0x30
 		("Reserved0",		uint64_t),		# 0x34
 		("Reserved1",		uint32_t),		# 0x3C
@@ -799,7 +799,7 @@ class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Information (SYSTEM_IN
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Minimum UMA Size', '0x%X' % self.MinUMASize])
 		pt.add_row(['Chipset Version', '0x%X' % self.ChipsetVersion])
-		pt.add_row(['Image Default Hash', '%s' % IMGDefaultHash])
+		pt.add_row(['Default Config Hash', '%s' % IMGDefaultHash])
 		pt.add_row(['Pageable UMA Size', '0x%X' % self.PageableUMASize])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
@@ -912,7 +912,7 @@ class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (InitSc
 	
 	def ext_print(self) :
 		fvalue = ['No','Yes']
-		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f14,f15,f16,f17,f18,f19,f20,f21,f22,f23,f24 = self.get_flags()
+		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12,f13,f14,f15,f16,f17,f18,f19,f20,f21,f22,f23,f24,f25 = self.get_flags()
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -942,7 +942,8 @@ class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (InitSc
 		pt.add_row(['Unknown Flag 4', fvalue[f21]])
 		pt.add_row(['Unknown Flag 5', fvalue[f22]])
 		pt.add_row(['Unknown Flag 6', fvalue[f23]])
-		pt.add_row(['Unknown Flag Reserved', '0x%X' % f24])
+		pt.add_row(['Unknown Flag 7', fvalue[f24]])
+		pt.add_row(['Unknown Flag Reserved', '0x%X' % f25])
 		
 		return pt
 	
@@ -958,7 +959,7 @@ class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (InitSc
 		       i_flags.b.CM0_NO_UMA, i_flags.b.CM3, i_flags.b.Reserved, b_flags.b.Normal, b_flags.b.HAP, b_flags.b.HMRFPO,\
 			   b_flags.b.TempDisable, b_flags.b.Recovery, b_flags.b.SafeMode, b_flags.b.FWUpdate, b_flags.b.Reserved,\
 			   u_flags.b.Unknown0, u_flags.b.Unknown1, u_flags.b.Unknown2, u_flags.b.Unknown3, u_flags.b.Unknown4,\
-			   u_flags.b.Unknown5, u_flags.b.Unknown6, u_flags.b.Unknown7
+			   u_flags.b.Unknown5, u_flags.b.Unknown6, u_flags.b.Unknown7, u_flags.b.Unknown8
 			   
 class CSE_Ext_01_InitFlowFlags(ctypes.LittleEndianStructure):
 	_fields_ = [
@@ -1005,7 +1006,8 @@ class CSE_Ext_01_UnknownFlags(ctypes.LittleEndianStructure):
 		('Unknown4', uint32_t, 1),
 		('Unknown5', uint32_t, 1),
 		('Unknown6', uint32_t, 1),
-		('Unknown7', uint32_t, 25)
+		('Unknown7', uint32_t, 1),
+		('Unknown8', uint32_t, 24)
 	]
 
 class CSE_Ext_01_GetUnknownFlags(ctypes.Union):
@@ -1103,7 +1105,7 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # Module Information (MANIF
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Type",			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 OEM)
+		("Type",			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 OEM/IUP)
 		("Compression",		uint8_t),		# 0x0D (0 Uncompressed --> always, 1 Huffman, 2 LZMA)
 		("Reserved",		uint16_t),		# 0x0E FFFF
 		("MetadataSize",	uint32_t),		# 0x10
@@ -1585,7 +1587,7 @@ class CSE_Ext_0C_FWSKUAttrib(ctypes.LittleEndianStructure):
 		('M3', uint64_t, 1), # 0 CON & SLM, 1 COR
 		('M0', uint64_t, 1), # 1 CON & SLM & COR
 		('SKUPlatform', uint64_t, 2), # 0 for H/LP <= 11.0.0.1202, 0 for H >= 11.0.0.1205, 1 for LP >= 11.0.0.1205
-		('SiClass', uint64_t, 4), # 2 CON & SLM, 4 COR
+		('SiClass', uint64_t, 4), # 2 CON & SLM, 4 COR (maybe Sx Power States, not sure if bitmap or decimal)
 		('Reserved', uint64_t, 50) # 0
 	]
 
@@ -1670,7 +1672,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # Key Manifest (KEY_MANIFEST_EX
 		("KeyType",			uint32_t),		# 0x08 1 RoT, 2 OEM (KeyManifestTypeValues)
 		("KeySVN",			uint32_t),		# 0x0C
 		("OEMID",			uint16_t),		# 0x10
-		("KeyID",			uint8_t),		# 0x12
+		("KeyID",			uint8_t),		# 0x12 Matched against Field Programmable Fuse (FPF)
 		("Reserved0",		uint8_t),		# 0x13
 		("Reserved1",		uint32_t*4),	# 0x14
 		# 0x24
@@ -1731,7 +1733,8 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 	def get_flags(self) :
 		hash_usages = []
 		Reserved0 = [-1] * 3
-		Reserved1 = [-1] * 20
+		Reserved_12 = -1
+		Reserved1 = [-1] * 18
 		Reserved2 = [-1] * 3
 		Reserved3 = [-1] * 10
 		flags = CSE_Ext_0E_GetFlags()
@@ -1740,8 +1743,8 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 		usage.asbytes = self.UsageBitmap
 		
 		bitmap = [usage.b.CSEBUP, usage.b.CSEMain, usage.b.PMC, *Reserved0, usage.b.USBTypeCIOM, usage.b.USBTypeCMG, usage.b.USBTypeCTBT,
-		          usage.b.WCOD, usage.b.LOCL, usage.b.IntelUnlockToken, *Reserved1, usage.b.BootPolicy, usage.b.iUnitBootLoader,
-		          usage.b.iUnitMainFirmware, usage.b.cAvsImage0, usage.b.cAvsImage1, usage.b.IFWI, usage.b.OSBootLoader,
+		          usage.b.WCOD, usage.b.LOCL, usage.b.IntelUnlockToken, Reserved_12, usage.b.USBTypeCDPHY, *Reserved1, usage.b.BootPolicy,
+		          usage.b.iUnitBootLoader, usage.b.iUnitMainFirmware, usage.b.cAvsImage0, usage.b.cAvsImage1, usage.b.IFWI, usage.b.OSBootLoader,
 		          usage.b.OSKernel, usage.b.OEMSMIP, usage.b.ISHMain, usage.b.ISHBUP, usage.b.OEMDebugToken, usage.b.OEMLifeCycle,
 		          usage.b.OEMKey, usage.b.SilentLakeVmm, usage.b.OEMKeyAttestation, usage.b.OEMDAL, usage.b.OEMDNXIFWI49,
 				  *Reserved2, usage.b.OEMDNXIFWI53, *Reserved3]
@@ -1802,15 +1805,16 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # Signed Package Info (SIGNED_P
 	def get_flags(self) :
 		hash_usages = []
 		Reserved0 = [-1] * 3
-		Reserved1 = [-1] * 20
+		Reserved_12 = -1
+		Reserved1 = [-1] * 18
 		Reserved2 = [-1] * 3
 		Reserved3 = [-1] * 10
 		usage = CSE_Ext_0E_0F_GetUsageBitmap()
 		usage.asbytes = self.UsageBitmap
 		
 		bitmap = [usage.b.CSEBUP, usage.b.CSEMain, usage.b.PMC, *Reserved0, usage.b.USBTypeCIOM, usage.b.USBTypeCMG, usage.b.USBTypeCTBT,
-		          usage.b.WCOD, usage.b.LOCL, usage.b.IntelUnlockToken, *Reserved1, usage.b.BootPolicy, usage.b.iUnitBootLoader,
-		          usage.b.iUnitMainFirmware, usage.b.cAvsImage0, usage.b.cAvsImage1, usage.b.IFWI, usage.b.OSBootLoader,
+		          usage.b.WCOD, usage.b.LOCL, usage.b.IntelUnlockToken, Reserved_12, usage.b.USBTypeCDPHY, *Reserved1, usage.b.BootPolicy,
+		          usage.b.iUnitBootLoader, usage.b.iUnitMainFirmware, usage.b.cAvsImage0, usage.b.cAvsImage1, usage.b.IFWI, usage.b.OSBootLoader,
 		          usage.b.OSKernel, usage.b.OEMSMIP, usage.b.ISHMain, usage.b.ISHBUP, usage.b.OEMDebugToken, usage.b.OEMLifeCycle,
 		          usage.b.OEMKey, usage.b.SilentLakeVmm, usage.b.OEMKeyAttestation, usage.b.OEMDAL, usage.b.OEMDNXIFWI49,
 				  *Reserved2, usage.b.OEMDNXIFWI53, *Reserved3]
@@ -1826,7 +1830,7 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # (SIGNED_PACKAGE_INFO_EXT_
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Type",			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 OEM)
+		("Type",			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 OEM/IUP)
 		("HashAlgorithm",	uint8_t),		# 0x0D (0 Reserved, 1 SHA1, 2 SHA256)
 		("HashSize",		uint16_t),		# 0x0E
 		("MetadataSize",	uint32_t),		# 0x10
@@ -1864,7 +1868,9 @@ class CSE_Ext_0E_0F_UsageBitmap(ctypes.LittleEndianStructure):
 		('WCOD', uint64_t, 1),
 		('LOCL', uint64_t, 1),
 		('IntelUnlockToken', uint64_t, 1),
-		('Reserved1', uint64_t, 20),
+		('Reserved_12', uint64_t, 1),
+		('USBTypeCDPHY', uint64_t, 1),
+		('Reserved1', uint64_t, 18),
 		('BootPolicy', uint64_t, 1), # 2nd dword --> OEM
 		('iUnitBootLoader', uint64_t, 1),
 		('iUnitMainFirmware', uint64_t, 1),
@@ -1899,15 +1905,16 @@ class CSE_Ext_0E_0F_GetUsageBitmap(ctypes.Union):
 # Update CSE_Ext_0E_0F_UsageBitmap, CSE_Ext_0E_Mod & CSE_Ext_0F as well
 key_dict = {
 			# Intel
-			0 : 'CSE BUP',
-			1 : 'CSE Main',
-			2 : 'PMC',
-			6 : 'USB Type C IOM',
-			7 : 'USB Type C MG',
-			8 : 'USB Type C TBT',
+			0 : 'CSE BUP', # Fault Tolerant Partition (FTPR)
+			1 : 'CSE Main', # Non-Fault Tolerant Partition (NFTP)
+			2 : 'PMC', # Power Management Controller
+			6 : 'USB Type C IOM', # USB Type C I/O Manageability
+			7 : 'USB Type C MG', # # USB Type C Manageability (?)
+			8 : 'USB Type C TBT', # USB Type C Thunderbolt
 			9 : 'WCOD',
 			10 : 'LOCL',
 			11 : 'Unlock Token',
+			13 : 'USB Type C D-PHY',
 			# OEM
 			32 : 'Boot Policy',
 			33 : 'iUnit Boot Loader', # Imaging Unit (Camera)
@@ -1918,7 +1925,7 @@ key_dict = {
 			38 : 'OS Boot Loader',
 			39 : 'OS Kernel',
 			40 : 'OEM SMIP',
-			41 : 'ISH Main',
+			41 : 'ISH Main', # Integrated Sensor Hub (ISHC)
 			42 : 'ISH BUP',
 			43 : 'OEM Debug Token',
 			44 : 'OEM Life Cycle',
@@ -2580,7 +2587,7 @@ class CSE_Ext_19(ctypes.LittleEndianStructure) : # USB Type C MG Metadata (TCSS_
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_1A(ctypes.LittleEndianStructure) : # USB Type C Thunerbolt Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+class CSE_Ext_1A(ctypes.LittleEndianStructure) : # USB Type C Thunderbolt Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2811,12 +2818,12 @@ class BPDT_Entry_GetFlags(ctypes.Union):
 bpdt_dict = {
 			0 : 'SMIP', # OEM-SMIP Partition
 			1 : 'RBEP', # ROM Boot Extensions Partition (CSE-RBE)
-			2 : 'FTPR', # BringUp Partition (CSE-BUP)
+			2 : 'FTPR', # Fault Tolerant Partition (CSE-BUP)
 			3 : 'UCOD', # Microcode Partition
 			4 : 'IBBP', # IBB Partition
 			5 : 'S-BPDT', # Secondary BPDT
 			6 : 'OBBP', # OBB Partition
-			7 : 'NFTP', # CSE-MAIN Partition
+			7 : 'NFTP', # Non-Fault Tolerant Partition (CSE-MAIN)
 			8 : 'ISHC', # ISH Partition
 			9 : 'DLMP', # IDLM Partition
 			10 : 'UEPB', # IFP Override/Bypass Partition
@@ -3318,7 +3325,7 @@ def ext_anl(input_type, input_offset, file_end, ftpr_var_ver) :
 					hdr_rev_tag = '' # CSE Extension Header Revision Tag
 					mod_rev_tag = '' # CSE Extension Module Revision Tag
 					
-					if ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000)) or dnx_version == 2 :
+					if ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018)) or dnx_version == 2 :
 						if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
 						if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
 					else :
@@ -5872,7 +5879,10 @@ for file_in in source :
 	build = mn2_ftpr_hdr.Build
 	svn = mn2_ftpr_hdr.SVN
 	vcn = mn2_ftpr_hdr.VCN
-	date = '%0.4X-%0.2X-%0.2X' % (mn2_ftpr_hdr.Year, mn2_ftpr_hdr.Month, mn2_ftpr_hdr.Day)
+	day = mn2_ftpr_hdr.Day
+	month = mn2_ftpr_hdr.Month
+	year = mn2_ftpr_hdr.Year
+	date = '%0.4X-%0.2X-%0.2X' % (year, month, day)
 	
 	# Read & Hash RSA Public Key and Signature
 	rsa_key = reading[end_man_match + 0x60:end_man_match + 0x160] # Read FTPR RSA Public Key
@@ -5916,6 +5926,7 @@ for file_in in source :
 		# Last/Uncharted partition scanning inspired by Lordkag's UEFIStrip
 		# ME2-ME6 don't have size for last partition, scan its submodules
 		if p_end_last == p_max_size :
+			
 			mn2_hdr = get_struct(reading, p_offset_last, MN2_Manifest)
 			man_tag = mn2_hdr.Tag
 			man_num = mn2_hdr.NumModules
@@ -6133,15 +6144,15 @@ for file_in in source :
 				if eng_fw_end == file_end + 0x1000 - mod_align :
 					pass # Firmware ends at last $FPT entry but is not 4K aligned, can be ignored (CSME12+)
 				else :
-					eng_size_text = ['Warning: Firmware size exceeds file, possible data loss!', False]
+					eng_size_text = [col_m + 'Warning: Firmware size exceeds file, possible data loss!' + col_e, False]
 			elif eng_fw_end < file_end :
 				if reading[eng_fw_end:eng_fw_end + padd_size_file] == padd_size_file * b'\xFF' :
 					# Extra padding is clear
-					eng_size_text = ['Warning: File size exceeds firmware, unneeded padding!', False]
+					eng_size_text = [col_y + 'Note: File size exceeds firmware, unneeded padding!' + col_e, False] # warn_stor
 				else :
 					# Extra padding has data
 					if sps4_bis_match is not None : eng_size_text = ['', False]
-					else : eng_size_text = ['Warning: File size exceeds firmware, data in padding!', True]
+					else : eng_size_text = [col_m + 'Warning: File size exceeds firmware, data in padding!' + col_e, True]
 	
 	# Firmware Type detection (Stock, Extracted, Update)
 	if ifwi_exist : # IFWI
@@ -6986,7 +6997,7 @@ for file_in in source :
 		elif eng_fw_end < file_end :
 			padd_size_pmc = file_end - eng_fw_end
 			if reading[eng_fw_end:file_end] == padd_size_pmc * b'\xFF' :
-				eng_size_text = [col_m + 'Warning: File size exceeds PMC %s firmware, unneeded padding!' % pmc_platform + col_e, False]
+				eng_size_text = [col_y + 'Note: File size exceeds PMC %s firmware, unneeded padding!' % pmc_platform + col_e, False] # warn_stor
 			else :
 				eng_size_text = [col_m + 'Warning: File size exceeds PMC %s firmware, data in padding!' % pmc_platform + col_e, True]
 		
@@ -7167,7 +7178,7 @@ for file_in in source :
 	
 	for ext_error in ext_err_stor : print('\n%s' % ext_error)
 	
-	if eng_size_text != ['', False] : gen_msg(warn_stor, col_m + '%s' % eng_size_text[0] + col_e, '', eng_size_text[1])
+	if eng_size_text != ['', False] : gen_msg(warn_stor, '%s' % eng_size_text[0], '', eng_size_text[1])
 	
 	if fpt_chk_fail : gen_msg(warn_stor, col_m + 'Warning: Wrong $FPT Checksum %s, expected %s!' % (fpt_chk_file,fpt_chk_calc) + col_e, '', True)
 	

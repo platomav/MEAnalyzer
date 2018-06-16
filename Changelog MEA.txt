@@ -1,3 +1,8 @@
+v1.55.2 r125
+
+Improved CSME 12 firmware detection
+Improved CSE Key Manifest Hash Usages
+
 v1.55.0 r122
 
 Added built-in CSE Huffman Decompressor ***
