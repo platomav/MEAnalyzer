@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.55.2'
+title = 'ME Analyzer v1.55.3'
 
 import os
 import re
@@ -5212,6 +5212,7 @@ for file_in in source :
 	pmcp_found = False
 	ifwi_exist = False
 	utok_found = False
+	oemp_found = False
 	ftup_found = False
 	wcod_found = False
 	rec_missing = False
@@ -5658,8 +5659,11 @@ for file_in in source :
 				
 				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,pmc_mn2_ver = ext_anl('$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1])
 			
-			# Detect if CSE firmware has OEM/ODM Unlock Token (UTOK/STKN)
+			# Detect if CSE firmware has OEM Unlock Token (UTOK/STKN)
 			if p_name in ('UTOK','STKN') and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
+			
+			# Detect if CSE firmware has OEM Key Manager Partition (OEMP)
+			if p_name == 'OEMP' and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : oemp_found = True
 			
 			if 0 < p_offset_spi < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset_spi + p_size
 			else : eng_fw_end = p_max_size
@@ -5853,9 +5857,10 @@ for file_in in source :
 		# Show BPDT Partition info on demand (-dfpt)
 		if param.fpt_disp : print('%s\n' % pt_dbpdt)
 	
-	# Detect if CSE firmware has OEM/ODM Unlock Token (UTOK/STKN)
+	# Detect if CSE firmware has OEM Unlock Token (UTOK/STKN)
 	for part in bpdt_part_all :
 		if part[0] in ('UTOK','STKN') and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : utok_found = True
+		if part[0] == 'OEMP' and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : oemp_found = True
 	
 	# Detect BPDT partition overlaps
 	for part in bpdt_part_all :
@@ -7141,7 +7146,7 @@ for file_in in source :
 		
 		if ((variant == 'CSME' and major >= 12) or (variant == 'CSTXE' and major >= 3)) and not wcod_found :
 			msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_config)]])
-			msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed)]])
+			msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed or oemp_found)]])
 			
 		if (rgn_exist or ifwi_exist) and variant in ('CSME','CSTXE','CSSPS','TXE') : msg_pt.add_row(['OEM Unlock Token', ['No','Yes'][int(utok_found)]])
 		
@@ -7155,7 +7160,7 @@ for file_in in source :
 			else : msg_pt.add_row(['Firmware Size', '0x%X' % eng_fw_end])
 		
 		if fitc_ver_found :
-			msg_pt.add_row(['Flash Image Tool Version', fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build)])
+			msg_pt.add_row(['Flash Image Tool', fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build)])
 		
 		if (variant,major) == ('ME',7) :
 			msg_pt.add_row(['Downgrade Blacklist 7.0', me7_blist_1])
