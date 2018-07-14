@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.55.3'
+title = 'ME Analyzer v1.55.4'
 
 import os
 import re
@@ -5874,6 +5874,11 @@ for file_in in source :
 				              (part[0],part[1],part[2],all_part[0],all_part[1],all_part[2]) + col_e
 				err_fpt_stor.append(err_fpt_msg)
 				err_stor.append([err_fpt_msg, True])
+	
+	# Ignore Flash Descriptor OEM backup at BPDT > OBBP > NvCommon (HP)
+	for part in bpdt_part_all :
+		if part[0] == 'OBBP' and not part[4] and re.compile(br'\x5A\xA5\xF0\x0F.{172}\xFF{16}', re.DOTALL).search(reading[part[1]:part[2]]) :
+			fd_count -= 1
 	
 	# Scan $MAN/$MN2 manifest
 	mn2_ftpr_hdr = get_struct(reading, start_man_match - 0x1B, MN2_Manifest)
