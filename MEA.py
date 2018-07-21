@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.55.4'
+title = 'ME Analyzer v1.56.0'
 
 import os
 import re
@@ -4361,7 +4361,7 @@ def pmc_anl(mn2_info) :
 			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[0] // 10], mn2_info[0] % 10) # 00 = A0, 10 = B0, 21 = C1 etc
 		
 		# Check if PMCCNP firmware is the latest
-		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCNP_%s' % pmc_pch_sku))
+		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCNP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
 		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
 			
 	elif variant.startswith('PMCAPL') or (variant == 'CSTXE' and major == 3 and minor in [0,1]) :
@@ -4888,7 +4888,6 @@ def fw_types(fw_type) :
 		fw_type = 'Region'
 		type_db = 'EXTR'
 	elif fw_type == 'Region, Extracted' : type_db = 'EXTR'
-	elif fw_type == 'Region, FWUpdate' : type_db = 'FWU'
 	elif fw_type == 'Region, Stock' or fw_type == 'Region' : type_db = 'RGN'
 	elif fw_type == 'Update' : type_db = 'UPD'
 	elif fw_type == 'Operational' : type_db = 'OPR'
@@ -5213,7 +5212,6 @@ for file_in in source :
 	ifwi_exist = False
 	utok_found = False
 	oemp_found = False
-	ftup_found = False
 	wcod_found = False
 	rec_missing = False
 	fw_type_fix = False
@@ -5648,9 +5646,6 @@ for file_in in source :
 			if p_name == 'ROMB' :
 				fpt_romb_found = True
 				if p_offset_spi != 0 and p_size != 0 : fpt_romb_used = True
-			
-			# Detect if CSE firmware has FTUP (RGN only, not EXTR or FWU)
-			if p_name == 'FTUP' and not p_empty : ftup_found = True
 			
 			# Detect if CSE firmware is stitched with PMC firmware (PMCP)
 			if p_name == 'PMCP' and not p_empty :
@@ -6204,8 +6199,6 @@ for file_in in source :
 				fitc_hotfix = fpt_hdr.FitHotfix
 				fitc_build = fpt_hdr.FitBuild
 				
-				# Check 4, CSME12+ FIT FWUpdate image
-				if reading[fpt_start:fpt_start + 0x10] == b'\xFF' * 0x10 and pmcp_fwu_found and not fpt_chk_null and not ftup_found : fw_type = 'Region, FWUpdate'
 	else :
 		fw_type = 'Update' # No Region detected, Update
 	
@@ -6799,8 +6792,8 @@ for file_in in source :
 				sku_result = pos_sku_ext # SKU Platform retrieved from Extension 12
 				
 				# Early firmware are reported as H even though they are LP
-				if sku_result == 'H' and fw_0C_sku0 in ('3111BED0','7DF7FFDF') : sku_result = 'LP' # CON 0x3111BED0, COR 0x7DF7FFDF
-				elif sku_result == 'LP' and fw_0C_sku0 in ('3111BDD0','7DF7FDDF') : sku_result = 'H' # CON 0x3111BDD0, COR 0x7DF7FDDF
+				if sku_result == 'H' and fw_0C_sku0 in ('3111BED0','7DF7FFDF','11009A40') : sku_result = 'LP' # CON 0x3111BED0, COR 0x7DF7FFDF, SLM 0x11009A40
+				elif sku_result == 'LP' and fw_0C_sku0 in ('3111BDD0','7DF7FDDF','11009940') : sku_result = 'H' # CON 0x3111BDD0, COR 0x7DF7FDDF, SLM 0x11009940
 			
 			sku = sku_init + ' ' + sku_result
 			
@@ -6808,9 +6801,9 @@ for file_in in source :
 			if sku_stp == 'NaN' :
 				
 				# Adjust Production PCH/SoC Stepping from known values
-				if release == 'Production' and (minor > 0 or (minor == 0 and hotfix > 0 or (hotfix == 0 and build >= 1058))) :
+				if sku_result == 'H' and release == 'Production' and (minor > 0 or (minor == 0 and hotfix > 0 or (hotfix == 0 and build >= 1058))) :
 					sku_stp = 'B'
-				#else : sku_stp = 'A' # <= 12.0.0.xxxx
+				#elif sku_result == 'H' : sku_stp = 'A' # <= 12.0.0.xxxx
 			
 			# Detected stitched PMC firmware
 			if pmcp_found :				
@@ -7029,22 +7022,21 @@ for file_in in source :
 	if variant in ['CSSPS','SPS'] and sku != 'NaN' :
 		name_db = '%s.%s.%s.%s_%s_%s_%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build), sku_db, rel_db, type_db)
 		name_db_extr = '%s.%s.%s.%s_%s_%s_EXTR_%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build), sku_db, rel_db, rsa_sig_hash)
-		name_db_rgn,name_db_fwu = 'N/A','N/A'
+		name_db_rgn = 'N/A'
 	elif variant == 'SPS' :
 		name_db = '%s.%s.%s.%s_%s_%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build), rel_db, type_db)
 		name_db_extr = '%s.%s.%s.%s_%s_EXTR_%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build), rel_db, rsa_sig_hash)
-		name_db_rgn,name_db_fwu = 'N/A','N/A'
+		name_db_rgn = 'N/A'
 	elif (variant,major) == ('PMCCNP',300) : # PMC CNP A/B
 		name_db = '%s_%s.%s.%s.%s_%s_%s' % (pmc_platform, major, minor, hotfix, build, sku_db, rel_db)
-		name_db_rgn,name_db_extr,name_db_fwu = 'N/A','N/A','N/A'
+		name_db_rgn,name_db_extr = 'N/A','N/A'
 	elif variant.startswith('PMC') : # PMC APL A/B, BXT C, GLK A/B, CNP A
 		name_db = '%s_%s.%s.%s.%s_%s_%s_%s' % (pmc_platform, major, minor, hotfix, build, pmc_pch_rev, date, rel_db)
-		name_db_rgn,name_db_extr,name_db_fwu = 'N/A','N/A','N/A'
+		name_db_rgn,name_db_extr = 'N/A','N/A'
 	else : # CS(ME) & (CS)TXE
 		name_db = '%s.%s.%s.%s_%s_%s_%s' % (major, minor, hotfix, build, sku_db, rel_db, type_db) # Filename
 		name_db_rgn = '%s.%s.%s.%s_%s_%s_RGN_%s' % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # Equivalent RGN filename
 		name_db_extr = '%s.%s.%s.%s_%s_%s_EXTR_%s' % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # Equivalent EXTR filename
-		name_db_fwu = '%s.%s.%s.%s_%s_%s_FWU_%s' % (major, minor, hotfix, build, sku_db, rel_db, rsa_sig_hash) # Equivalent FWU filename
 		
 	name_db_hash = '%s_%s' % (name_db, rsa_sig_hash)
 	
@@ -7058,9 +7050,8 @@ for file_in in source :
 		for line in fw_db :
 			# Search the re-created file name without extension at the database
 			if name_db_hash in line : fw_in_db_found = True # Known firmware, nothing new
-			if (type_db == 'EXTR' and (name_db_rgn in line or (variant == 'CSME' and major >= 12 and name_db_fwu in line))) or \
-			(type_db == 'FWU' and name_db_rgn in line) :
-				rgn_over_extr_found = True # Same firmware found but of preferred type (RGN > FWU > EXTR), nothing new
+			if type_db == 'EXTR' and name_db_rgn in line :
+				rgn_over_extr_found = True # Same firmware found but of preferred type (RGN > EXTR), nothing new
 				fw_in_db_found = True
 			# For ME 6.0 IGN, (CS)ME 7+, (CS)TXE
 			if type_db == 'UPD' and ((variant in ['ME','CSME'] and (major >= 7 or
