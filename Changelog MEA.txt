@@ -1,3 +1,9 @@
+v1.56.2 r131
+
+Improved CSME IFWI BPDT detection
+Improved CSME 12 Stepping detection
+Improved PMC CNP Stepping detection
+
 v1.56.0 r130
 
 Improved CSME 12.0 Slim SKU detection

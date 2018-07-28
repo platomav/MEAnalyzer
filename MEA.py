@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.56.0'
+title = 'ME Analyzer v1.56.2'
 
 import os
 import re
@@ -4334,7 +4334,7 @@ def pmc_anl(mn2_info) :
 	pch_sku_old = {0: 'H', 2: 'LP'}
 	pch_rev_val = {0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 7: 'H', 8: 'I', 9: 'J'}
 	
-	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Stepping, Build, Release, RSA Sig Hash]
+	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Compatibility-Maintenance, Build, Release, RSA Sig Hash]
 	
 	pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 	pmc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
@@ -4352,13 +4352,15 @@ def pmc_anl(mn2_info) :
 		pmc_platform = 'CNP'
 		
 		if mn2_info[0] == 300 :
-			# 300.2.1.1012 = CNP H A1 v1012, 300.1.11.1013 = CNP LP B1 v1013 (>= 12.0.0.1033, POR)
+			# CSME 12.0.0.1033 - 12.0.5.1117 --> 300.2.01.1012 = CNP + H + PCH Stepping A1 + PMC Revision 1012 (POR)
+			# CSME >= 12.0.6.1120 --> 300.2.11.1014 = CNP + H + PCH Compatibility B + PMC Maintenance 1 + PMC Revision 1014 (POR)
 			if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 1 LP, 2 H
-			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[2] // 10], mn2_info[2] % 10) # 00 = A0, 10 = B0, 21 = C1 etc
+			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[2] // 10], mn2_info[2] % 10) # 21 = PCH C PMC 1 (>= 12.0.6.1120) or PCH C1 (<= 12.0.0.1033)
 		else :
-			# 1.7.0.1022 = A1 v7 H v1022, 10.0.2.1021 = B0 v0 LP v1021 (< 12.0.0.1033, guess)
+			# CSME < 12.0.0.1033 --> 01.7.0.1022 = PCH Stepping A1 + PMC Hotfix 7 + PCH-H + PMC Build 1022 (Guess)
+			# CSME < 12.0.0.1033 --> 10.0.2.1021 = PCH Stepping B0 + PMC Hotfix 0 + PCH-LP + PMC Build 1021 (Guess)
 			if mn2_info[2] in pch_sku_old : pmc_pch_sku = pch_sku_old[mn2_info[2]] # 0 H, 2 LP
-			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[0] // 10], mn2_info[0] % 10) # 00 = A0, 10 = B0, 21 = C1 etc
+			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[0] // 10], mn2_info[0] % 10) # 00 = PCH A0, 10 = PCH B0, 21 = PCH C1 etc
 		
 		# Check if PMCCNP firmware is the latest
 		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCNP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
@@ -5244,6 +5246,7 @@ for file_in in source :
 	fpt_matches = []
 	p_store_all = []
 	fpt_part_all = []
+	bpdt_matches = []
 	bpdt_hdr_all = []
 	ext_err_stor = []
 	err_fpt_stor = []
@@ -5703,14 +5706,24 @@ for file_in in source :
 			fpt_num_file = '0x%0.2X' % fpt_hdr.NumPartitions
 			fpt_num_calc = '0x%0.2X' % (fpt_hdr.NumPartitions + fpt_num_diff)
 	
-	bpdt_matches = list((re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01-\x03]\x00', re.DOTALL)).finditer(reading)) # BPDT detection
+	# Scan for IFWI/BPDT Ranges
+	if cse_lt_exist :
+		# Search Boot Partitions only when CSE LT exists (fast & robust)
+		for part in cse_lt_part_all :
+			if part[0].startswith('Boot') and not part[4] : # Non-Empty CSE LT Boot Partition (skip Data)
+				bpdt_match = (re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01-\x03]\x00', re.DOTALL)).search(reading[part[1]:part[3]]) # BPDT detection
+				bpdt_matches.append((bpdt_match.start() + part[1], bpdt_match.end() + part[1])) # Store BPDT range, relative to 0x0
+	else :
+		# Search entire image when no CSE LT exists (slower & false positive prone)
+		bpdt_match = list((re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01-\x03]\x00', re.DOTALL)).finditer(reading)) # BPDT detection
+		for match in bpdt_match : bpdt_matches.append(match.span()) # Store all BPDT ranges, already relative to 0x0
 	
-	# Parse IFWI/BPDT Starting Offsets
+	# Parse IFWI/BPDT Ranges
 	for ifwi_bpdt in range(len(bpdt_matches)):
 		
 		ifwi_exist = True # Set IFWI/BPDT detection boolean
 		
-		(start_fw_start_match, end_fw_start_match) = bpdt_matches[ifwi_bpdt].span() # Store BPDT range via bpdt_matches index
+		(start_fw_start_match, end_fw_start_match) = bpdt_matches[ifwi_bpdt] # Get BPDT range via bpdt_matches index
 		
 		if start_fw_start_match in s_bpdt_all : continue # Skip already parsed S-BPDT (Type 5)
 		
@@ -6655,6 +6668,21 @@ for file_in in source :
 	
 	elif variant == 'CSME' : # Converged Security Management Engine
 		
+		# Chipset Initialization: Platform.Hotfix(?).Build
+		# 211.10 = D3.A = D.3.A --> CNP-H Hotfix 3 Build 10
+		# 0x0 = LBG (???)
+		# 0x3 = ICP-LP (POR)
+		# 0x4 = ICP-N (POR)
+		# 0x5 = ICP-H (POR)
+		# 0x6 = TGP-LP (POR)
+		# 0x7 = TGP-H (POR)
+		# 0x8 = SPT/KBP-LP (???)
+		# 0x9 = SPT-H (???)
+		# 0xB = KBP-H/BSF (???)
+		# 0xC = CNP-LP (POR)
+		# 0xD = CNP-H (POR)
+		# 0xE = LKF (POR)
+		
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_err_stor,ext_dnx_val,\
 		oem_config,oem_signed,cpd_mn2_info = ext_anl('$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build]) # Detect CSE Attributes
 		
@@ -6675,8 +6703,9 @@ for file_in in source :
 			sku_init_db = 'UNK'
 		
 		# Set SKU Platform via Extension 0C Attributes
-		if fw_0C_sku2 == 0 : pos_sku_ext = 'H'
-		elif fw_0C_sku2 == 1 : pos_sku_ext = 'LP'
+		if fw_0C_sku2 == 0 : pos_sku_ext = 'H' # Halo
+		elif fw_0C_sku2 == 1 : pos_sku_ext = 'LP' # Low Power
+		elif fw_0C_sku2 == 2 : pos_sku_ext = 'N' # ???
 		
 		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
 		
@@ -6687,13 +6716,6 @@ for file_in in source :
 			rel_db = 'PRE'
 		
 		if major == 11 :
-			
-			# Skylake_SPT_H_ChipsetInit_Dx_V49 --> D 147.49
-			# PCH H B --> 128/129 (128.07, 129.24)
-			# PCH H C --> 145 (145.24, 145.56, 145.62)
-			# PCH H D --> 147/176 (147.41, 147.49, 147.52, 176.11)
-			# PCH LP B --> 128/129 (128.26, 129.03, 129.24, 129.62)
-			# PCH LP C --> 130 (130.17, 130.49, 130.52)
 			
 			# Set SKU Platform via Extension 0C Attributes
 			if minor > 0 or (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1205 and build != 7101))) :
@@ -6783,8 +6805,6 @@ for file_in in source :
 		
 		elif major == 12 :
 			
-			# ChipsetInitRvpMipiA38P4RefV17 --> A 192.17
-			
 			# Detect SKU Platform, prefer DB over Extension
 			if sku != 'NaN' :
 				sku_result = db_sku_chk # SKU Platform retrieved from DB
@@ -6801,8 +6821,7 @@ for file_in in source :
 			if sku_stp == 'NaN' :
 				
 				# Adjust Production PCH/SoC Stepping from known values
-				if sku_result == 'H' and release == 'Production' and (minor > 0 or (minor == 0 and hotfix > 0 or (hotfix == 0 and build >= 1058))) :
-					sku_stp = 'B'
+				if sku_result == 'H' and (minor > 0 or (minor == 0 and hotfix > 0 or (hotfix == 0 and build >= 1062))) : sku_stp = 'B'
 				#elif sku_result == 'H' : sku_stp = 'A' # <= 12.0.0.xxxx
 			
 			# Detected stitched PMC firmware
@@ -6987,7 +7006,7 @@ for file_in in source :
 		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,upd_found,pmcp_not_in_db,pmc_platform,pmc_date = pmc_anl(cpd_mn2_info)
 		
 		sku = pmc_pch_sku
-		sku_stp = pmc_pch_rev
+		sku_stp = pmc_pch_rev[0]
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
@@ -7132,13 +7151,13 @@ for file_in in source :
 		if pvbit in [0,1] and wcod_found is False : msg_pt.add_row(['Production Version', ['No','Yes'][pvbit]])
 		
 		if pmcp_found :
-			msg_pt.add_row(['PMC Firmware Version', pmc_fw_ver])
-			msg_pt.add_row(['PMC Firmware Release', pmc_mn2_signed])
-			if variant == 'PMCCNP' or (variant == 'CSME' and major >= 12) : msg_pt.add_row(['PMC Firmware SKU', pmc_pch_sku])
-			msg_pt.add_row(['PMC Firmware Stepping', pmc_pch_rev])
-			msg_pt.add_row(['PMC Firmware Date', pmc_date])
+			msg_pt.add_row(['PMC Version', pmc_fw_ver])
+			msg_pt.add_row(['PMC Release', pmc_mn2_signed])
+			if variant == 'PMCCNP' or (variant == 'CSME' and major >= 12) : msg_pt.add_row(['PMC SKU', pmc_pch_sku])
+			msg_pt.add_row(['PMC Stepping', pmc_pch_rev[0]])
+			msg_pt.add_row(['PMC Date', pmc_date])
 			if pmc_mn2_signed == 'Production' and (variant == 'CSME' and major >= 12) :
-				msg_pt.add_row(['PMC Firmware Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
+				msg_pt.add_row(['PMC Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
 		
 		if ((variant == 'CSME' and major >= 12) or (variant == 'CSTXE' and major >= 3)) and not wcod_found :
 			msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_config)]])
