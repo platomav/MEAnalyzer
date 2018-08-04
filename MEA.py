@@ -6668,8 +6668,8 @@ for file_in in source :
 	
 	elif variant == 'CSME' : # Converged Security Management Engine
 		
-		# Chipset Initialization: Platform.Hotfix(?).Build
-		# 211.10 = D3.A = D.3.A --> CNP-H Hotfix 3 Build 10
+		# Chipset Initialization: Platform.Stepping.Version
+		# 211.10 = D3.A = D.3.A --> CNP-H Stepping D Version 10
 		# 0x0 = LBG (???)
 		# 0x3 = ICP-LP (POR)
 		# 0x4 = ICP-N (POR)
