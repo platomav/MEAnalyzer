@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.56.2'
+title = 'ME Analyzer v1.56.3'
 
 import os
 import re
@@ -5320,7 +5320,7 @@ for file_in in source :
 	reading = f.read()
 	
 	# Detect if file has Engine firmware
-	man_pat = re.compile(br'\x86\x80.........\x00\x24\x4D((\x4E\x32)|(\x41\x4E))') # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
+	man_pat = re.compile(br'\x86\x80.........\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL) # .$MN2 or .$MAN detection, 0x00 adds old ME RGN support
 	
 	for man_range in list(man_pat.finditer(reading)) :
 		(start_man_match, end_man_match) = man_range.span()
@@ -6348,7 +6348,7 @@ for file_in in source :
 			
 			# ME2-Only Fix 3 : Detect ROMB RGN/EXTR image correctly (at $FPT v1 ROMB was before $FPT)
 			if rgn_exist and release == 'Pre-Production' :
-				byp_pat = re.compile(br'\x24\x56\x45\x52\x02\x00\x00\x00', re.DOTALL) # $VER2... detection (ROM-Bypass)
+				byp_pat = re.compile(br'\x24\x56\x45\x52\x02\x00\x00\x00') # $VER2... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
 				if byp_match is not None :
@@ -6422,7 +6422,7 @@ for file_in in source :
 			
 			# ME3-Only Fix 3 : Detect Pre-Alpha ($FPT v1) ROMB RGN/EXTR image correctly
 			if rgn_exist and fpt_version == 16 and release == 'Pre-Production' :
-				byp_pat = re.compile(br'\x24\x56\x45\x52\x03\x00\x00\x00', re.DOTALL) # $VER3... detection (ROM-Bypass)
+				byp_pat = re.compile(br'\x24\x56\x45\x52\x03\x00\x00\x00') # $VER3... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
 				if byp_match is not None :
@@ -6764,7 +6764,7 @@ for file_in in source :
 				if (release == 'Production' and (minor == 0 and (hotfix > 0 or (hotfix == 0 and build >= 1158)))) or 20 > minor > 0 :
 					if sku_result == 'LP' : sku_stp = 'C0'
 					elif sku_result == 'H' : sku_stp = 'D0'
-				elif release == 'Production' and minor in [20,21] and ' H' in sku : sku_stp = 'B0-S0' # PRD Bx/Sx (C620 Datasheet, 1.6 PCH Markings)
+				elif release == 'Production' and minor in [20,21] and ' H' in sku : sku_stp = 'B0' # PRD Bx (C620 Datasheet, 1.6 PCH Markings)
 			
 			sku_db, upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
 			
@@ -6966,7 +6966,7 @@ for file_in in source :
 			
 			elif sps_type == 'FT' :
 				if not rgn_exist : fw_type = 'Recovery'
-				rec_sku_match = re.compile(br'\x52\x32\x4F\x50......\x4F\x50').search(reading[start_man_match:start_man_match + 0x2000]) # R2OP.{6}OP detection
+				rec_sku_match = re.compile(br'\x52\x32\x4F\x50......\x4F\x50', re.DOTALL).search(reading[start_man_match:start_man_match + 0x2000]) # R2OP.{6}OP detection
 				if rec_sku_match :
 					(start_rec_sku, end_rec_sku) = rec_sku_match.span()
 					sku = (reading[start_man_match + start_rec_sku + 0x8:start_man_match + start_rec_sku + 0xA]).decode('utf-8')

@@ -1,3 +1,7 @@
+v1.56.3 r133
+
+Fixed pattern detection issues
+
 v1.56.2 r131
 
 Improved CSME IFWI BPDT detection
