@@ -105,17 +105,17 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 
 > python --version
 
-2. Use pip to install colorama (PyPi):
+2. Use pip to install PyInstaller (PyPi):
+
+> pip3 install pyinstaller
+
+3. Use pip to install colorama (PyPi):
 
 > pip3 install colorama
 
-3. Use pip to install PTable (Github, boxchar branch):
+4. Use pip to install PTable (Github, boxchar branch):
 
 > pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
-
-4. Use pip to install PyInstaller (PyPi):
-
-> pip3 install pyinstaller
 
 5. Build/Freeze/Compile ME Analyzer:
 
