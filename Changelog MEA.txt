@@ -1,3 +1,7 @@
+v1.57.0 r134
+
+Added new CSE Key Hash Usages detection
+
 v1.56.3 r133
 
 Fixed pattern detection issues

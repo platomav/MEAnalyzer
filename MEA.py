@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.56.3'
+title = 'ME Analyzer v1.57.0'
 
 import os
 import re
@@ -1699,8 +1699,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # Key Manifest (KEY_MANIFEST_EX
 class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 	_pack_ = 1
 	_fields_ = [
-		("UsageBitmap",		uint64_t),		# 0x00 (KeyManifestHashUsages, OemKeyManifestHashUsages)
-		("UsageBitmapRes",	uint64_t),		# 0x08
+		("UsageBitmap",		uint8_t*16),	# 0x00 (KeyManifestHashUsages, OemKeyManifestHashUsages)
 		("Reserved0",		uint32_t*4),	# 0x10
 		("Flags",			uint8_t),		# 0x20
 		("HashAlgorithm",	uint8_t),		# 0x21
@@ -1710,7 +1709,8 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 	]
 	
 	def ext_print(self) :
-		f1,f2,f3 = self.get_flags()
+		f1,f2 = self.get_flags()
+		hash_usages = self.get_usages()
 		
 		Reserved0 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved0))
 		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
@@ -1718,8 +1718,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 14, Entry' + col_e
-		pt.add_row(['Hash Usages', ', '.join(map(str, f3))])
-		pt.add_row(['Usage Bitmap Reserved', '%s' % format(self.UsageBitmapRes, '064b')])
+		pt.add_row(['Hash Usages', ', '.join(map(str, hash_usages))])
 		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 4 else Reserved0])
 		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
@@ -1729,31 +1728,24 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
 		
 		return pt
 	
-	# Almost identical code at CSE_Ext_0F
 	def get_flags(self) :
-		hash_usages = []
-		Reserved0 = [-1] * 3
-		Reserved_12 = -1
-		Reserved1 = [-1] * 18
-		Reserved2 = [-1] * 3
-		Reserved3 = [-1] * 10
 		flags = CSE_Ext_0E_GetFlags()
-		usage = CSE_Ext_0E_0F_GetUsageBitmap()
 		flags.asbytes = self.Flags
-		usage.asbytes = self.UsageBitmap
 		
-		bitmap = [usage.b.CSEBUP, usage.b.CSEMain, usage.b.PMC, *Reserved0, usage.b.USBTypeCIOM, usage.b.USBTypeCMG, usage.b.USBTypeCTBT,
-		          usage.b.WCOD, usage.b.LOCL, usage.b.IntelUnlockToken, Reserved_12, usage.b.USBTypeCDPHY, *Reserved1, usage.b.BootPolicy,
-		          usage.b.iUnitBootLoader, usage.b.iUnitMainFirmware, usage.b.cAvsImage0, usage.b.cAvsImage1, usage.b.IFWI, usage.b.OSBootLoader,
-		          usage.b.OSKernel, usage.b.OEMSMIP, usage.b.ISHMain, usage.b.ISHBUP, usage.b.OEMDebugToken, usage.b.OEMLifeCycle,
-		          usage.b.OEMKey, usage.b.SilentLakeVmm, usage.b.OEMKeyAttestation, usage.b.OEMDAL, usage.b.OEMDNXIFWI49,
-				  *Reserved2, usage.b.OEMDNXIFWI53, *Reserved3]
-			  
-		for usage_bit in range(len(bitmap)) :
-			if bitmap[usage_bit] == 1 :
+		return flags.b.IPIPolicy, flags.b.Reserved
+	
+	# Identical code at CSE_Ext_0F
+	def get_usages(self) :
+		hash_usages = []
+		
+		usage_bits = list(format(int.from_bytes(self.UsageBitmap, 'little'), '0128b'))
+		usage_bits.reverse()
+		
+		for usage_bit in range(len(usage_bits)) :
+			if usage_bits[usage_bit] == '1' :
 				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown')
-		
-		return flags.b.IPIPolicy, flags.b.Reserved, hash_usages
+				
+		return hash_usages
 	
 class CSE_Ext_0E_Flags(ctypes.LittleEndianStructure):
 	_fields_ = [
@@ -1775,15 +1767,14 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # Signed Package Info (SIGNED_P
 		("Size",			uint32_t),		# 0x04
 		("PartitionName",	char*4),		# 0x08
 		("VCN",				uint32_t),		# 0x0C
-		("UsageBitmap",		uint64_t),		# 0x10 (KeyManifestHashUsages, OemKeyManifestHashUsages)
-		("UsageBitmapRes",	uint64_t),		# 0x18
+		("UsageBitmap",		uint8_t*16),	# 0x10 (KeyManifestHashUsages, OemKeyManifestHashUsages)
 		("SVN",				uint32_t),		# 0x20
 		("Reserved",		uint32_t*4),  	# 0x24
 		# 0x34
 	]
 	
 	def ext_print(self) :
-		f1 = self.get_flags()
+		hash_usages = self.get_usages()
 		
 		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
 		
@@ -1794,35 +1785,23 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # Signed Package Info (SIGNED_P
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
-		pt.add_row(['Hash Usages', ', '.join(map(str, f1))])
-		pt.add_row(['Usage Bitmap Reserved', '%s' % format(self.UsageBitmapRes, '064b')])
+		pt.add_row(['Hash Usages', ', '.join(map(str, hash_usages))])
 		pt.add_row(['Security Version Number', '%d' % self.SVN])
 		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
 		
 		return pt
 	
-	# Almost identical code at CSE_Ext_0E_Mod
-	def get_flags(self) :
+	# Identical code at CSE_Ext_0E_Mod
+	def get_usages(self) :
 		hash_usages = []
-		Reserved0 = [-1] * 3
-		Reserved_12 = -1
-		Reserved1 = [-1] * 18
-		Reserved2 = [-1] * 3
-		Reserved3 = [-1] * 10
-		usage = CSE_Ext_0E_0F_GetUsageBitmap()
-		usage.asbytes = self.UsageBitmap
 		
-		bitmap = [usage.b.CSEBUP, usage.b.CSEMain, usage.b.PMC, *Reserved0, usage.b.USBTypeCIOM, usage.b.USBTypeCMG, usage.b.USBTypeCTBT,
-		          usage.b.WCOD, usage.b.LOCL, usage.b.IntelUnlockToken, Reserved_12, usage.b.USBTypeCDPHY, *Reserved1, usage.b.BootPolicy,
-		          usage.b.iUnitBootLoader, usage.b.iUnitMainFirmware, usage.b.cAvsImage0, usage.b.cAvsImage1, usage.b.IFWI, usage.b.OSBootLoader,
-		          usage.b.OSKernel, usage.b.OEMSMIP, usage.b.ISHMain, usage.b.ISHBUP, usage.b.OEMDebugToken, usage.b.OEMLifeCycle,
-		          usage.b.OEMKey, usage.b.SilentLakeVmm, usage.b.OEMKeyAttestation, usage.b.OEMDAL, usage.b.OEMDNXIFWI49,
-				  *Reserved2, usage.b.OEMDNXIFWI53, *Reserved3]
-			  
-		for usage_bit in range(len(bitmap)) :
-			if bitmap[usage_bit] == 1 :
+		usage_bits = list(format(int.from_bytes(self.UsageBitmap, 'little'), '0128b'))
+		usage_bits.reverse()
+		
+		for usage_bit in range(len(usage_bits)) :
+			if usage_bits[usage_bit] == '1' :
 				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown')
-		
+				
 		return hash_usages
 
 # noinspection PyTypeChecker
@@ -1852,90 +1831,6 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # (SIGNED_PACKAGE_INFO_EXT_
 		pt.add_row(['Metadata Hash', MetadataHash])
 		
 		return pt
-
-# Update key_dict, CSE_Ext_0E_Mod & CSE_Ext_0F as well	
-class CSE_Ext_0E_0F_UsageBitmap(ctypes.LittleEndianStructure):
-	_fields_ = [
-		# 1st qword Bitmap (1st & 2nd dwords), always counting from 1st dword's bit (Intel & OEM)
-		# Example: Bitmap 0000020000000000h = 0000000000000000000000100000000000000000000000000000000000000000b --> 41st bit set --> ISH
-		('CSEBUP', uint64_t, 1), # 1st dword --> Intel
-		('CSEMain', uint64_t, 1),
-		('PMC', uint64_t, 1),
-		('Reserved0', uint64_t, 3),
-		('USBTypeCIOM', uint64_t, 1),
-		('USBTypeCMG', uint64_t, 1),
-		('USBTypeCTBT', uint64_t, 1),
-		('WCOD', uint64_t, 1),
-		('LOCL', uint64_t, 1),
-		('IntelUnlockToken', uint64_t, 1),
-		('Reserved_12', uint64_t, 1),
-		('USBTypeCDPHY', uint64_t, 1),
-		('Reserved1', uint64_t, 18),
-		('BootPolicy', uint64_t, 1), # 2nd dword --> OEM
-		('iUnitBootLoader', uint64_t, 1),
-		('iUnitMainFirmware', uint64_t, 1),
-		('cAvsImage0', uint64_t, 1),
-		('cAvsImage1', uint64_t, 1),
-		('IFWI', uint64_t, 1),
-		('OSBootLoader', uint64_t, 1),
-		('OSKernel', uint64_t, 1),
-		('OEMSMIP', uint64_t, 1),
-		('ISHMain', uint64_t, 1),
-		('ISHBUP', uint64_t, 1),
-		('OEMDebugToken', uint64_t, 1),
-		('OEMLifeCycle', uint64_t, 1),
-		('OEMKey', uint64_t, 1),
-		('SilentLakeVmm', uint64_t, 1),
-		('OEMKeyAttestation', uint64_t, 1),
-		('OEMDAL', uint64_t, 1),
-		('OEMDNXIFWI49', uint64_t, 1),
-		('Reserved2', uint64_t, 3),
-		('OEMDNXIFWI53', uint64_t, 1),
-		('Reserved3', uint64_t, 10),
-		# 2nd qword Bitmap (3rd & 4th dwords --> OEM) Reserved
-	]
-
-class CSE_Ext_0E_0F_GetUsageBitmap(ctypes.Union):
-	_fields_ = [
-		('b', CSE_Ext_0E_0F_UsageBitmap),
-		('asbytes', uint64_t)
-	]
-	
-# Key Manifest Hash Usages
-# Update CSE_Ext_0E_0F_UsageBitmap, CSE_Ext_0E_Mod & CSE_Ext_0F as well
-key_dict = {
-			# Intel
-			0 : 'CSE BUP', # Fault Tolerant Partition (FTPR)
-			1 : 'CSE Main', # Non-Fault Tolerant Partition (NFTP)
-			2 : 'PMC', # Power Management Controller
-			6 : 'USB Type C IOM', # USB Type C I/O Manageability
-			7 : 'USB Type C MG', # # USB Type C Manageability (?)
-			8 : 'USB Type C TBT', # USB Type C Thunderbolt
-			9 : 'WCOD',
-			10 : 'LOCL',
-			11 : 'Unlock Token',
-			13 : 'USB Type C D-PHY',
-			# OEM
-			32 : 'Boot Policy',
-			33 : 'iUnit Boot Loader', # Imaging Unit (Camera)
-			34 : 'iUnit Main Firmware',
-			35 : 'cAVS Image 0', # Clear Audio Voice Speech
-			36 : 'cAVS Image 1',
-			37 : 'IFWI',
-			38 : 'OS Boot Loader',
-			39 : 'OS Kernel',
-			40 : 'OEM SMIP',
-			41 : 'ISH Main', # Integrated Sensor Hub (ISHC)
-			42 : 'ISH BUP',
-			43 : 'OEM Debug Token',
-			44 : 'OEM Life Cycle',
-			45 : 'OEM Key',
-			46 : 'SilentLake VMM',
-			47 : 'OEM Key Attestation',
-			48 : 'OEM DAL',
-			49 : 'OEM DNX IFWI R1', # XML v1.0 (DNX v1)
-			53 : 'OEM DNX IFWI R2', # XML v2.4 (DNX v2)
-			}
 
 # noinspection PyTypeChecker
 class CSE_Ext_10(ctypes.LittleEndianStructure) : # iUnit (IUNP) (not in XML, Reverse Engineered)
@@ -2625,7 +2520,7 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID (MFT_EXT_MANI
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
 		("Type",			char*2),		# 0x08 RC Recovery, OP Operational
-		("Platform",		char*2),		# 0x08 GE Greenlow, PU Purley, HA Harrisonville, PE Purley EPO
+		("Platform",		char*2),		# 0x08 GE Greenlow, PU Purley, HA Harrisonville, PE Purley EPO, BA Bakerville
 		("Reserved",		uint32_t),		# 0x0C
 		# 0x10
 	]
@@ -2646,7 +2541,7 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID (MFT_EXT_MANI
 		return pt
 
 # noinspection PyTypeChecker
-class UTFL_Header(ctypes.LittleEndianStructure) : # Unlock Token FL (DebugTokenSubPartition)
+class UTFL_Header(ctypes.LittleEndianStructure) : # Unlock Token Flags (DebugTokenSubPartition)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				char*4),		# 0x00
@@ -2660,7 +2555,7 @@ class UTFL_Header(ctypes.LittleEndianStructure) : # Unlock Token FL (DebugTokenS
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'UTFL Header' + col_e
+		pt.title = col_y + 'Unlock Token Flags' + col_e
 		pt.add_row(['Tag', self.Tag.decode('utf-8')])
 		pt.add_row(['Delayed Authentication Mode', ['No','Yes'][self.DelayedAuthMode]])
 		pt.add_row(['Reserved', '0x0' if Reserved in ('00' * 27,'FF' * 27) else Reserved])
@@ -2928,6 +2823,41 @@ ext_dict = {
 			'CSE_Ext_15_Payload' : CSE_Ext_15_Payload,
 			'CSE_Ext_15_Payload_Knob' : CSE_Ext_15_Payload_Knob,
 			}
+			
+# Key Manifest Hash Usages
+key_dict = {
+			# Intel (0-31)
+			0 : 'CSE BUP', # Fault Tolerant Partition (FTPR)
+			1 : 'CSE Main', # Non-Fault Tolerant Partition (NFTP)
+			2 : 'PMC', # Power Management Controller
+			6 : 'USB Type C IOM', # USB Type C I/O Manageability
+			7 : 'USB Type C MG', # # USB Type C Manageability (?)
+			8 : 'USB Type C TBT', # USB Type C Thunderbolt
+			9 : 'WCOD', # Wireless Microcode
+			10 : 'LOCL', # AMT Localization
+			11 : 'Unlock Token',
+			13 : 'USB Type C D-PHY',
+			# OEM (32-127)
+			32 : 'Boot Policy',
+			33 : 'iUnit Boot Loader', # Imaging Unit (Camera)
+			34 : 'iUnit Main Firmware',
+			35 : 'cAVS Image 0', # Clear Audio Voice Speech
+			36 : 'cAVS Image 1',
+			37 : 'IFWI', # Integrated Firmware Image
+			38 : 'OS Boot Loader',
+			39 : 'OS Kernel',
+			40 : 'OEM SMIP', # Signed Master Image Profile
+			41 : 'ISH Main', # Integrated Sensor Hub
+			42 : 'ISH BUP',
+			43 : 'OEM Debug Token',
+			44 : 'OEM Life Cycle',
+			45 : 'OEM Key',
+			46 : 'SilentLake VMM',
+			47 : 'OEM Key Attestation',
+			48 : 'OEM DAL', # Dynamic Application Loader
+			49 : 'OEM DNX IFWI R1', # XML v1.0 (Download and Execute v1)
+			53 : 'OEM DNX IFWI R2', # XML v2.4 (Download and Execute v2)
+			}
 
 # Unpack Engine CSE firmware
 def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_chk_fail) :
@@ -3068,6 +2998,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 								with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
+							
+				if part[0] == b'MFS' : parse_MFS(mod_fname, part_type, part_name, part_start, part_end)
 	
 	# Parse all Boot Partition Description Table (BPDT/IFWI) entries
 	if len_bpdt_part_all :
@@ -3129,6 +3061,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 								with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
+							
+				if part[0] == 'MFS' : parse_MFS(mod_fname, part_order, part_name, part_start, part_end)
 	
 	# Parse all Code Partition Directory ($CPD) entries
 	# Better to separate $CPD from $FPT/BPDT to avoid duplicate FTUP/NFTP ($FPT) issue
@@ -4099,7 +4033,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 				except :
 					if param.me11_mod_bug :
-						input(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
+						input(col_r + '\n    Failed to decompress %s %s "%s"' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
 					else :
 						print(col_r + '\n    Failed to decompress %s %s "%s"' % (comp[mod_comp], mod_type, mod_name) + col_e)
 			
@@ -4379,7 +4313,7 @@ def pmc_anl(mn2_info) :
 	return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmcp_upd_found, pmcp_not_in_db, pmc_platform, mn2_info[6]
 
 # CSE Huffman Dictionary Loader by IllegalArgument
-# Dictionaries by PT Research & IllegalArgument
+# Dictionaries by Dmitry Sklyarov & IllegalArgument
 # Message Verbosity: All | Error | None
 def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
 	HUFFMAN_SHAPE = []
@@ -4413,17 +4347,18 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
 		for mapping_type_string, mapping in dict_mappings.items() :
 			mapping_type = mapping_types[mapping_type_string]
 			grouped_codeword_strings = itertools.groupby(sorted(list(mapping.keys()), key=len), key=len)
+			# noinspection PyTypeChecker
 			grouped_codewords = { codeword_len : [int(codeword, 2) for codeword in codewords] for codeword_len, codewords in grouped_codeword_strings}
 			mapping_codeword_ranges[mapping_type] = {codeword_len : (min(codewords), max(codewords)) for codeword_len, codewords in grouped_codewords.items()}
 		
 		if len(set([frozenset(x.items()) for x in mapping_codeword_ranges.values()])) > 1 and verbosity in ['all','error'] :
-			print(col_r + 'Mismatched mappings in the same dictionary' + col_e)
+			print(col_r + '\n    Mismatched mappings in the same dictionary' + col_e)
 		
 		codeword_ranges = list(mapping_codeword_ranges.values())[0]
 		
 		for i, j in zip(list(codeword_ranges.keys())[:-1], list(codeword_ranges.keys())[1:]) :
 			if 2 * codeword_ranges[i][0] - 1 != codeword_ranges[j][1] and verbosity in ['all','error'] :
-				print(col_r + 'Discontinuity between codeword lengths {0} and {1}'.format(i, j) + col_e)
+				print(col_r + '\n    Discontinuity between codeword lengths {0} and {1}'.format(i, j) + col_e)
 				
 		HUFFMAN_SHAPE = [(codeword_len, codeword_min << (32 - codeword_len), codeword_max) for codeword_len, (codeword_min, codeword_max) in codeword_ranges.items()]
 			
@@ -4473,7 +4408,7 @@ def cse_huffman_decompress(module_contents, compressed_size, decompressed_size, 
 	
 	for index, dictionary_type, compressed_position, compressed_limit in zip(range(chunk_count), flags, start_offsets, end_offsets) :
 		if verbosity == 'all' :
-			print(col_r + '==Processing chunk 0x{:X} at compressed offset 0x{:X} with dictionary 0x{:X}=='.format(index, compressed_position, dictionary_type) + col_e)
+			print(col_r + '\n    ==Processing chunk 0x{:X} at compressed offset 0x{:X} with dictionary 0x{:X}=='.format(index, compressed_position, dictionary_type) + col_e)
 			
 		dictionary = HUFFMAN_SYMBOLS[dictionary_type]
 		unknowns = HUFFMAN_UNKNOWNS[dictionary_type]
@@ -4505,25 +4440,40 @@ def cse_huffman_decompress(module_contents, compressed_size, decompressed_size, 
 				
 				if decompressed_limit - decompressed_position >= symbol_length :
 					if codeword in unknowns[codeword_length] and verbosity in ['all','error'] :
-						print(col_r + 'Unknown codeword {: <15s} (dictionary 0x{:X}, codeword length {: >2d}, codeword {: >5s}, symbol length {:d}) at decompressed offset 0x{:X}'.format(
+						print(col_r + '\n    Unknown codeword {: <15s} (dictionary 0x{:X}, codeword length {: >2d}, codeword {: >5s}, symbol length {:d}) at decompressed offset 0x{:X}'.format(
 							('{:0>' + str(codeword_length) + 'b}').format(codeword), dictionary_type, codeword_length, "0x{:X}".format(codeword), symbol_length, decompressed_position) + col_e)
 					decompressed_array.extend(symbol)
 					decompressed_position = decompressed_position + symbol_length
 				else :
 					if verbosity in ['all','error'] :
-						print(col_r + 'Skipping overflowing codeword {: <15s} (dictionary 0x{:X}, codeword length {: >2d}, codeword {: >5s}, symbol length {:d}) at decompressed offset 0x{:X}'.format(
+						print(col_r + '\n    Skipping overflowing codeword {: <15s} (dictionary 0x{:X}, codeword length {: >2d}, codeword {: >5s}, symbol length {:d}) at decompressed offset 0x{:X}'.format(
 							('{:0>' + str(codeword_length) + 'b}').format(codeword), dictionary_type, codeword_length, '0x{:X}'.format(codeword), symbol_length, decompressed_position) + col_e)
 					filler = itertools.repeat(0x7F, decompressed_limit - decompressed_position)
 					decompressed_array.extend(filler)
 					decompressed_position = decompressed_limit
 			else :
 				if verbosity in ['all','error'] :
-					print(col_r + 'Reached end of compressed stream early at decompressed offset 0x{:X}'.format(decompressed_position) + col_e)
+					print(col_r + '\n    Reached end of compressed stream early at decompressed offset 0x{:X}'.format(decompressed_position) + col_e)
 				filler = itertools.repeat(0x7F, decompressed_limit - decompressed_position)
 				decompressed_array.extend(filler)
 				decompressed_position = decompressed_limit
 				
 	return bytearray(decompressed_array)
+
+# Intel ME File System Explorer by Dmitry Sklyarov
+# Python 2.7 executable path must be adjusted manually
+# Temporary until native MEA MFS unpacker is implemented
+def parse_MFS(mod_fname, part_type, part_name, part_start, part_end) :
+	try :
+		import subprocess, zipfile
+		subprocess.Popen('C:\Python\Python27\python.exe parseMFS.py "%s"' % mod_fname, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).communicate()
+		if os.path.isfile(mod_fname + '.zip') :
+			os.mkdir(mod_fname[:-4])
+			with zipfile.ZipFile(mod_fname + '.zip') as mfs_zip : mfs_zip.extractall(mod_fname[:-4])
+			os.remove(mod_fname + '.zip')
+			print(col_c + '\n    Unpacked $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X] via parseMFS' % (part_type, part_name, part_start, part_end) + col_e)
+	except:
+		pass
 	
 # Store and show CSE analysis errors
 def cse_anl_err(ext_err_msg, checked_hashes = None) :
