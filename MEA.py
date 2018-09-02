@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.57.0'
+title = 'ME Analyzer v1.60.0'
 
 import os
 import re
@@ -775,7 +775,7 @@ class CPD_Entry_GetOffsetAttrib(ctypes.Union):
 	]
 
 # noinspection PyTypeChecker
-class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Information (SYSTEM_INFO_EXTENSION)
+class CSE_Ext_00(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - System Information (SYSTEM_INFO_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -807,7 +807,7 @@ class CSE_Ext_00(ctypes.LittleEndianStructure) : # System Information (SYSTEM_IN
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_00_Mod(ctypes.LittleEndianStructure) : # (INDEPENDENT_PARTITION_ENTRY)
+class CSE_Ext_00_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4 - (INDEPENDENT_PARTITION_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*4),		# 0x00
@@ -827,8 +827,34 @@ class CSE_Ext_00_Mod(ctypes.LittleEndianStructure) : # (INDEPENDENT_PARTITION_EN
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		
 		return pt
+		
+# noinspection PyTypeChecker
+class CSE_Ext_00_Mod_R2(ctypes.LittleEndianStructure) : # R2 - CSSPS5 - (INDEPENDENT_PARTITION_ENTRY)
+	_pack_ = 1
+	_fields_ = [
+		("Name",			char*4),		# 0x00
+		("Version",			uint32_t),		# 0x04
+		("UserID",			uint16_t),		# 0x08
+		("Reserved0",		uint16_t),		# 0x0A
+		("Reserved1",		uint16_t),		# 0x0C
+		("Reserved2",		uint16_t),		# 0x0E
+		# 0x10
+	]
+	
+	def ext_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 0, Independent Partition' + col_e
+		pt.add_row(['Name', self.Name.decode('utf-8')])
+		pt.add_row(['Version', '0x%X' % self.Version])
+		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
+		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
+		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
+		pt.add_row(['Reserved 2', '0x%X' % self.Reserved2])
+		
+		return pt
 
-class CSE_Ext_01(ctypes.LittleEndianStructure) : # Initialization Script (InitScript)
+class CSE_Ext_01(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Initialization Script (InitScript)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -850,7 +876,7 @@ class CSE_Ext_01(ctypes.LittleEndianStructure) : # Initialization Script (InitSc
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_01_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (InitScriptEntry)
+class CSE_Ext_01_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (InitScriptEntry)
 	_pack_ = 1
 	_fields_ = [
 		("PartitionName",	char*4),		# 0x00
@@ -899,7 +925,7 @@ class CSE_Ext_01_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (InitScrip
 			   b_flags.b.TempDisable, b_flags.b.Recovery, b_flags.b.SafeMode, b_flags.b.FWUpdate, b_flags.b.Reserved
 
 # noinspection PyTypeChecker
-class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (InitScriptEntry)
+class CSE_Ext_01_Mod_R2(ctypes.LittleEndianStructure) : # R2 - CSME12 - (InitScriptEntry)
 	_pack_ = 1
 	_fields_ = [
 		("PartitionName",	char*4),		# 0x00
@@ -1016,7 +1042,7 @@ class CSE_Ext_01_GetUnknownFlags(ctypes.Union):
 		('asbytes', uint32_t)
 	]
 
-class CSE_Ext_02(ctypes.LittleEndianStructure) : # Feature Permissions (FEATURE_PERMISSIONS_EXTENSION)
+class CSE_Ext_02(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Feature Permissions (FEATURE_PERMISSIONS_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1035,7 +1061,7 @@ class CSE_Ext_02(ctypes.LittleEndianStructure) : # Feature Permissions (FEATURE_
 		
 		return pt
 
-class CSE_Ext_02_Mod(ctypes.LittleEndianStructure) : # (FEATURE_PERMISION_ENTRY)
+class CSE_Ext_02_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (FEATURE_PERMISION_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("UserID",			uint16_t),		# 0x00
@@ -1053,7 +1079,7 @@ class CSE_Ext_02_Mod(ctypes.LittleEndianStructure) : # (FEATURE_PERMISION_ENTRY)
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Information (MANIFEST_PARTITION_INFO_EXT)
+class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Partition Information (MANIFEST_PARTITION_INFO_EXT)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -1101,7 +1127,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # Partition Information (MANIFE
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # Module Information (MANIFEST_MODULE_INFO_EXT)
+class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Module Information (MANIFEST_MODULE_INFO_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
@@ -1128,7 +1154,7 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # Module Information (MANIF
 		
 		return pt
 
-class CSE_Ext_04(ctypes.LittleEndianStructure) : # Shared Library (SHARED_LIB_EXTENSION)
+class CSE_Ext_04(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Shared Library (SHARED_LIB_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1156,7 +1182,7 @@ class CSE_Ext_04(ctypes.LittleEndianStructure) : # Shared Library (SHARED_LIB_EX
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_05(ctypes.LittleEndianStructure) : # Process Manifest (MAN_PROCESS_EXTENSION)
+class CSE_Ext_05(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Process Manifest (MAN_PROCESS_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1220,7 +1246,7 @@ class CSE_Ext_05(ctypes.LittleEndianStructure) : # Process Manifest (MAN_PROCESS
 		return flags.b.FaultTolerant, flags.b.PermanentProcess, flags.b.SingleInstance, flags.b.TrustedSendReceiveSender,\
 		       flags.b.TrustedNotifySender, flags.b.PublicSendReceiveReceiver, flags.b.PublicNotifyReceiver, flags.b.Reserved
 
-class CSE_Ext_05_Mod(ctypes.LittleEndianStructure) : # Group ID (PROCESS_GROUP_ID)
+class CSE_Ext_05_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Group ID (PROCESS_GROUP_ID)
 	_pack_ = 1
 	_fields_ = [
 		('GroupID',			uint16_t),		# 0x00
@@ -1253,7 +1279,7 @@ class CSE_Ext_05_GetFlags(ctypes.Union):
 		('asbytes', uint32_t)
 	]
 
-class CSE_Ext_06(ctypes.LittleEndianStructure) : # Threads (Threads)
+class CSE_Ext_06(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Threads (Threads)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1270,7 +1296,7 @@ class CSE_Ext_06(ctypes.LittleEndianStructure) : # Threads (Threads)
 		
 		return pt
 
-class CSE_Ext_06_Mod(ctypes.LittleEndianStructure) : # (Thread)
+class CSE_Ext_06_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (Thread)
 	_pack_ = 1
 	_fields_ = [
 		("StackSize",		uint32_t),		# 0x00
@@ -1332,7 +1358,7 @@ class CSE_Ext_06_GetSchedulPolicy(ctypes.Union):
 		('asbytes', uint32_t)
 	]
 
-class CSE_Ext_07(ctypes.LittleEndianStructure) : # Device IDs (DeviceIds)
+class CSE_Ext_07(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Device IDs (DeviceIds)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1349,7 +1375,7 @@ class CSE_Ext_07(ctypes.LittleEndianStructure) : # Device IDs (DeviceIds)
 		
 		return pt
 
-class CSE_Ext_07_Mod(ctypes.LittleEndianStructure) : # (Device)
+class CSE_Ext_07_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (Device)
 	_pack_ = 1
 	_fields_ = [
 		("DeviceID",		uint32_t),		# 0x00
@@ -1366,7 +1392,7 @@ class CSE_Ext_07_Mod(ctypes.LittleEndianStructure) : # (Device)
 		
 		return pt
 
-class CSE_Ext_08(ctypes.LittleEndianStructure) : # MMIO Ranges (MmioRanges)
+class CSE_Ext_08(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - MMIO Ranges (MmioRanges)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1383,7 +1409,7 @@ class CSE_Ext_08(ctypes.LittleEndianStructure) : # MMIO Ranges (MmioRanges)
 		
 		return pt
 
-class CSE_Ext_08_Mod(ctypes.LittleEndianStructure) : # (MmioRange)
+class CSE_Ext_08_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (MmioRange)
 	_pack_ = 1
 	_fields_ = [
 		("BaseAddress",		uint32_t),		# 0x00
@@ -1402,7 +1428,7 @@ class CSE_Ext_08_Mod(ctypes.LittleEndianStructure) : # (MmioRange)
 		
 		return pt
 
-class CSE_Ext_09(ctypes.LittleEndianStructure) : # Special File Producer (SPECIAL_FILE_PRODUCER_EXTENSION)
+class CSE_Ext_09(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Special File Producer (SPECIAL_FILE_PRODUCER_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1424,7 +1450,7 @@ class CSE_Ext_09(ctypes.LittleEndianStructure) : # Special File Producer (SPECIA
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_09_Mod(ctypes.LittleEndianStructure) : # (SPECIAL_FILE_DEF)
+class CSE_Ext_09_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (SPECIAL_FILE_DEF)
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
@@ -1452,7 +1478,7 @@ class CSE_Ext_09_Mod(ctypes.LittleEndianStructure) : # (SPECIAL_FILE_DEF)
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes (MOD_ATTR_EXTENSION)
+class CSE_Ext_0A(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Module Attributes (MOD_ATTR_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1489,7 +1515,7 @@ class CSE_Ext_0A(ctypes.LittleEndianStructure) : # Module Attributes (MOD_ATTR_E
 		
 		return pt
 
-class CSE_Ext_0B(ctypes.LittleEndianStructure) : # Locked Ranges (LockedRanges)
+class CSE_Ext_0B(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Locked Ranges (LockedRanges)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1506,7 +1532,7 @@ class CSE_Ext_0B(ctypes.LittleEndianStructure) : # Locked Ranges (LockedRanges)
 		
 		return pt
 
-class CSE_Ext_0B_Mod(ctypes.LittleEndianStructure) : # (LockedRange)
+class CSE_Ext_0B_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (LockedRange)
 	_pack_ = 1
 	_fields_ = [
 		("RangeBase",		uint32_t),		# 0x00
@@ -1524,7 +1550,7 @@ class CSE_Ext_0B_Mod(ctypes.LittleEndianStructure) : # (LockedRange)
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Information (CLIENT_SYSTEM_INFO_EXTENSION)
+class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Client System Information (CLIENT_SYSTEM_INFO_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1562,7 +1588,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # Client System Information (CL
 		pt.add_row(['SKU Capabilities', '0x%0.8X' % self.FWSKUCaps])
 		pt.add_row(['SKU Capabilities Reserved', 'FF * 28' if FWSKUCapsReserv == 'FF' * 28 else FWSKUCapsReserv])
 		pt.add_row(['CSE Size', '0x%X' % f1])
-		pt.add_row(['SKU Type', ['Corporate','Consumer','Slim','SPS-LBG'][f2]])
+		pt.add_row(['SKU Type', ['Corporate','Consumer','Slim','SPS'][f2]])
 		pt.add_row(['Lewisburg', fvalue[f3]])
 		pt.add_row(['M3', fvalue[f4]])
 		pt.add_row(['M0', fvalue[f5]])
@@ -1597,7 +1623,7 @@ class CSE_Ext_0C_GetFWSKUAttrib(ctypes.Union):
 		('asbytes', uint64_t)
 	]
 
-class CSE_Ext_0D(ctypes.LittleEndianStructure) : # User Information (USER_INFO_EXTENSION)
+class CSE_Ext_0D(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - User Information (USER_INFO_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1615,7 +1641,7 @@ class CSE_Ext_0D(ctypes.LittleEndianStructure) : # User Information (USER_INFO_E
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_0D_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (USER_INFO_ENTRY)
+class CSE_Ext_0D_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (USER_INFO_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("UserID",			uint16_t),		# 0x00
@@ -1640,7 +1666,7 @@ class CSE_Ext_0D_Mod(ctypes.LittleEndianStructure) : # CSE Revision 1 (USER_INFO
 		
 		return pt
 
-class CSE_Ext_0D_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (not in XML, Reverse Engineered)
+class CSE_Ext_0D_Mod_R2(ctypes.LittleEndianStructure) : # R2 - CSME12 - (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("UserID",			uint16_t),		# 0x00
@@ -1664,7 +1690,7 @@ class CSE_Ext_0D_Mod_R2(ctypes.LittleEndianStructure) : # CSE Revision 2 (not in
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_0E(ctypes.LittleEndianStructure) : # Key Manifest (KEY_MANIFEST_EXT)
+class CSE_Ext_0E(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Key Manifest (KEY_MANIFEST_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1696,7 +1722,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # Key Manifest (KEY_MANIFEST_EX
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # (KEY_MANIFEST_EXT_ENTRY)
+class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (KEY_MANIFEST_EXT_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("UsageBitmap",		uint8_t*16),	# 0x00 (KeyManifestHashUsages, OemKeyManifestHashUsages)
@@ -1760,7 +1786,7 @@ class CSE_Ext_0E_GetFlags(ctypes.Union):
 	]
 
 # noinspection PyTypeChecker
-class CSE_Ext_0F(ctypes.LittleEndianStructure) : # Signed Package Info (SIGNED_PACKAGE_INFO_EXT)
+class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Signed Package Info (SIGNED_PACKAGE_INFO_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1805,7 +1831,7 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # Signed Package Info (SIGNED_P
 		return hash_usages
 
 # noinspection PyTypeChecker
-class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # (SIGNED_PACKAGE_INFO_EXT_ENTRY)
+class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (SIGNED_PACKAGE_INFO_EXT_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
@@ -1833,7 +1859,7 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # (SIGNED_PACKAGE_INFO_EXT_
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_10(ctypes.LittleEndianStructure) : # iUnit (IUNP) (not in XML, Reverse Engineered)
+class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - iUnit (IUNP) (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1872,7 +1898,7 @@ class CSE_Ext_10(ctypes.LittleEndianStructure) : # iUnit (IUNP) (not in XML, Rev
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_11(ctypes.LittleEndianStructure) : # cAVS (ADSP) (not in XML, Reverse Engineered)
+class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - cAVS (ADSP) (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1906,7 +1932,7 @@ class CSE_Ext_11(ctypes.LittleEndianStructure) : # cAVS (ADSP) (not in XML, Reve
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_12(ctypes.LittleEndianStructure) : # Unknown FTPR (not in XML, Reverse Engineered)
+class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Unknown FTPR (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -1930,7 +1956,7 @@ class CSE_Ext_12(ctypes.LittleEndianStructure) : # Unknown FTPR (not in XML, Rev
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # (not in XML, Reverse Engineered)
+class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Unknown00_04",	uint32_t),		# 0x00
@@ -1970,7 +1996,7 @@ class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # (not in XML, Reverse Engi
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_13(ctypes.LittleEndianStructure) : # Boot Policy (BOOT_POLICY_METADATA_EXT)
+class CSE_Ext_13(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Boot Policy (BOOT_POLICY_METADATA_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2034,7 +2060,7 @@ class CSE_Ext_13(ctypes.LittleEndianStructure) : # Boot Policy (BOOT_POLICY_META
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_14(ctypes.LittleEndianStructure) : # DnX Manifest CSE Revision 1 (DnxManifestExtension)
+class CSE_Ext_14(ctypes.LittleEndianStructure) : # R1 - CSME11/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - DnX Manifest (DnxManifestExtension)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2091,7 +2117,7 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # DnX Manifest CSE Revision 1 (
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_14_R2(ctypes.LittleEndianStructure) : # DnX Manifest CSE Revision 2 (DnxManifestExtension_ver2)
+class CSE_Ext_14_R2(ctypes.LittleEndianStructure) : # R2 - CSME12 - DnX Manifest (DnxManifestExtension_ver2)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2213,7 +2239,7 @@ class CSE_Ext_14_RegionMap(ctypes.LittleEndianStructure) : # DnX R1/R2 Region Ma
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_15(ctypes.LittleEndianStructure) : # Unlock/Secure Token UTOK/STKN (SECURE_TOKEN_EXT)
+class CSE_Ext_15(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - Unlock/Secure Token UTOK/STKN (SECURE_TOKEN_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2371,7 +2397,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_16(ctypes.LittleEndianStructure) : # IFWI Partition Information (IFWI_PARTITION_MANIFEST_EXTENSION)
+class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - IFWI Partition Information (IFWI_PARTITION_MANIFEST_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2418,7 +2444,7 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # IFWI Partition Information (I
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_18(ctypes.LittleEndianStructure) : # USB Type C IO Manageability Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+class CSE_Ext_18(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - USB Type C IO Manageability Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2450,7 +2476,7 @@ class CSE_Ext_18(ctypes.LittleEndianStructure) : # USB Type C IO Manageability M
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_19(ctypes.LittleEndianStructure) : # USB Type C MG Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+class CSE_Ext_19(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - USB Type C MG Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2482,7 +2508,7 @@ class CSE_Ext_19(ctypes.LittleEndianStructure) : # USB Type C MG Metadata (TCSS_
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_1A(ctypes.LittleEndianStructure) : # USB Type C Thunderbolt Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
+class CSE_Ext_1A(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - USB Type C Thunderbolt Metadata (TCSS_METADATA_EXT, TCSS_HASH_METADATA)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2514,7 +2540,7 @@ class CSE_Ext_1A(ctypes.LittleEndianStructure) : # USB Type C Thunderbolt Metada
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_32(ctypes.LittleEndianStructure) : # SPS Platform ID (MFT_EXT_MANIFEST_PLATFORM_ID)
+class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - CSSPS4/CSSPS5 - SPS Platform ID (MFT_EXT_MANIFEST_PLATFORM_ID)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2741,11 +2767,17 @@ bpdt_dict = {
 # CSE Extensions 0x00-0x16, 0x18-0x1A, 0x32
 ext_tag_all = list(range(23)) + list(range(24,27)) + [50]
 
-# CSE Extensions with Revisions
-ext_tag_rev_hdr = [0x14]
+# CSME 12 Revised Extensions
+ext_tag_rev_hdr_csme12 = [0x14]
 
-# CSE Extension Modules with Revisions
-ext_tag_rev_mod = [0x1,0xD]
+# CSME 12 Revised Extension Modules
+ext_tag_rev_mod_csme12 = [0x1,0xD]
+
+# CSSPS 5 Revised Extensions
+ext_tag_rev_hdr_cssps5 = []
+
+# CSSPS 5 Revised Extension Modules
+ext_tag_rev_mod_cssps5 = [0x0]
 
 # CSE Extensions without Modules
 ext_tag_mod_none = [0x4,0xA,0xC,0x10,0x11,0x13,0x16,0x18,0x19,0x1A,0x32]
@@ -2769,6 +2801,8 @@ cse_known_bad_hashes = [
 ('470A0E018AF18F6477029AFE0207307BCD77991272CF23DA741712DAB109C8F8','B570786DAAA91A9A0119BD6F4143160044B054663FB06317650AE77DD6842401'), # CSME 11.8.50.3399_COR_H_D0_PRD > WCOD 24F3 > mu_init
 ('35C7D3383E6B380C3B07CB41444448EC63E3F219C77E7D99DA19C5BFB856713B','785F395BC28544253332ACB1C5C65CDA7C24662D55DC8AB8F0E56543B865A4C3'), # CSME 11.8.50.3399_COR_H_D0_PRD > WCOD 24F3 > mu_d0d3
 ('4DCF921DC0A48D2967063969ED1314CB17AA03E86635A366E2750BE43A219D95','058C09ABE1D1AB2B28D1D06153908EDAE8B420967D54EC4F1F99AC0D0101454C'), # CSME 11.8.50.3399_COR_H_D0_PRD > WCOD 24F3 > umac_d0
+('592ECB560234A46E6818118A561F2D01F72149203610F4C9D06D2A6F79A7AEF9','97709C6B21B551C35125EF740B183A10ADFD7865E4D5C0BC38220694438E9DE2'), # CSSPS 05.00.03.101_XX_SKU3_PRD_REC > FTPR > FTPR.man
+('9869DB38F915FB9FD1D5ACD80A06F166EAF7494D79D8FC42D63DC87CB230AD8C','01AE49D94E580E42BF16065D4773AB73695403DD7C1B560ED76C41770EB9BB4C'), # CSSPS 05.00.03.101_XX_SKU3_PRD_OPR > OPR > FTPR.man
 ]
 
 # CSE Extension Structures
@@ -2802,6 +2836,7 @@ ext_dict = {
 			'CSE_Ext_1A' : CSE_Ext_1A,
 			'CSE_Ext_32' : CSE_Ext_32,
 			'CSE_Ext_00_Mod' : CSE_Ext_00_Mod,
+			'CSE_Ext_00_Mod_R2' : CSE_Ext_00_Mod_R2,
 			'CSE_Ext_01_Mod' : CSE_Ext_01_Mod,
 			'CSE_Ext_01_Mod_R2' : CSE_Ext_01_Mod_R2,
 			'CSE_Ext_02_Mod' : CSE_Ext_02_Mod,
@@ -3260,8 +3295,11 @@ def ext_anl(input_type, input_offset, file_end, ftpr_var_ver) :
 					mod_rev_tag = '' # CSE Extension Module Revision Tag
 					
 					if ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018)) or dnx_version == 2 :
-						if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
-						if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
+						if ext_tag in ext_tag_rev_hdr_csme12 : hdr_rev_tag = '_R2'
+						if ext_tag in ext_tag_rev_mod_csme12 : mod_rev_tag = '_R2'
+					elif (variant,major) == ('CSSPS',5) :
+						if ext_tag in ext_tag_rev_hdr_cssps5 : hdr_rev_tag = '_R2'
+						if ext_tag in ext_tag_rev_mod_cssps5 : mod_rev_tag = '_R2'
 					else :
 						pass # These CSE use the original Header/Module Structures
 					
@@ -4165,8 +4203,11 @@ def key_anl(mod_fname, ext_print, mod_name, ftpr_var_ver) :
 			mod_rev_tag = '' # CSE Extension Module Revision Tag
 			
 			if (variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000) :
-				if ext_tag in ext_tag_rev_hdr : hdr_rev_tag = '_R2'
-				if ext_tag in ext_tag_rev_mod : mod_rev_tag = '_R2'
+				if ext_tag in ext_tag_rev_hdr_csme12 : hdr_rev_tag = '_R2'
+				if ext_tag in ext_tag_rev_mod_csme12 : mod_rev_tag = '_R2'
+			elif (variant,major) == ('CSSPS',5) :
+				if ext_tag in ext_tag_rev_hdr_cssps5 : hdr_rev_tag = '_R2'
+				if ext_tag in ext_tag_rev_mod_cssps5 : mod_rev_tag = '_R2'
 			else :
 				pass # These CSE use the original Header/Module Structures
 			
@@ -4282,7 +4323,7 @@ def pmc_anl(mn2_info) :
 		pmcp_not_in_db = True
 	fw_db.close()
 	
-	if variant == 'PMCCNP' or (variant == 'CSME' and major == 12) :
+	if variant == 'PMCCNP' or (variant,major) in [('CSME',12),('CSSPS',5)] :
 		pmc_platform = 'CNP'
 		
 		if mn2_info[0] == 300 :
@@ -4324,7 +4365,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
 	
 	# Check if Huffman dictionary version is supported
 	if (cse_variant, cse_major) in [('CSME', 11), ('CSSPS', 4)] : dict_version = 11
-	elif (cse_variant, cse_major) == ('CSME', 12) : dict_version = 12
+	elif (cse_variant, cse_major) in [('CSME', 12), ('CSSPS', 5)] : dict_version = 12
 	else :
 		# CSTXE 3-4 do not use Huffman compression, skip error message
 		if (cse_variant,cse_major) not in [('CSTXE', 3), ('CSTXE', 4)] and verbosity in ['all','error'] :
@@ -4583,7 +4624,7 @@ def get_struct(input_stream, start_offset, class_name, param_list = None) :
 		
 		for error in err_stor : print(error[0])
 		
-		copy_on_msg() # Close input and copy it in case of messages
+		if not param.extr_mea : copy_on_msg() # Close input and copy it in case of messages
 		
 		mea_exit(1)
 	
@@ -5028,7 +5069,7 @@ def force_ascii(string) :
 # Scan all files of a given directory
 def mass_scan(f_path) :
 	mass_files = []
-	for root, dirs, files in os.walk(f_path, topdown=False):
+	for root, dirs, files in os.walk(f_path):
 		for name in files :
 			mass_files.append(os.path.join(root, name))
 			
@@ -5176,7 +5217,6 @@ for file_in in source :
 	pmc_not_comp = False
 	sps3_chk_fail = False
 	fuj_rgn_exist = False
-	fpt_romb_used = False
 	fpt_romb_found = False
 	fitc_ver_found = False
 	pmcp_fwu_found = False
@@ -5381,7 +5421,7 @@ for file_in in source :
 		else :
 			print('\n%s' % no_man_text)
 			
-		copy_on_msg() # Close input and copy it in case of messages
+		if not param.extr_mea : copy_on_msg() # Close input and copy it in case of messages
 		
 		continue # Next input file
 
@@ -5392,24 +5432,28 @@ for file_in in source :
 	# CSME12 --> Engine Region (CSE LT > BPx)
 	# CSTXE --> BIOS/IAFW Region (BPDT)
 	# CSSPS4 --> Engine Region ($FPT)
+	# CSSPS5 --> Engine Region (CSE LT > BPx)
 	
 	# CSE Data Location
 	# CSME11 --> Engine Region ($FPT > MFS)
 	# CSME12 --> Engine Region (CSE LT > BPx)
 	# CSTXE --> BIOS/IAFW Region (BPDT)
 	# CSSPS4 --> Engine Region ($FPT > MFS)
+	# CSSPS5 --> Engine Region (CSE LT > BPx)
 	
 	# CSE Data Initialization Location
 	# CSME11 --> Engine Region ($FPT > MFS)
 	# CSME12 --> Engine Region (CSE LT > Data)
 	# CSTXE --> Device Expansion 1 Region ($FPT)
 	# CSSPS4 --> Engine Region ($FPT > MFS)
+	# CSSPS5 --> Engine Region (CSE LT > Data)
 	
 	# CSE ROM-Bypass Location
 	# CSME11 --> Engine Region ($FPT > ROMB)
 	# CSME12 --> Engine Region (CSE LT > Data > ROMB)
 	# CSTXE --> Engine Region (maybe in $FPT > ROMB)
 	# CSSPS4 --> Engine Region ($FPT > ROMB)
+	# CSSPS5 --> Engine Region (CSE LT > Data > ROMB)
 	
 	# Detect Intel Flash Descriptor
 	fd_exist,start_fd_match,end_fd_match,fd_count = spi_fd_init()
@@ -5495,11 +5539,6 @@ for file_in in source :
 		while reading[start_fw_start_match + 0x2100:start_fw_start_match + 0x2104] == b'$FPT' : # next $FPT = previous + 0x2100
 			start_fw_start_match += 0x2100 # Adjust $FPT offset to the next header
 			fpt_count -= 1  # Clevo MERecovery + GbERecovery $FPT is ignored when reporting multiple firmware
-			
-		# Multiple MERecovery 0x1000 $FPT header bypass (example: SuperMicro)
-		while reading[start_fw_start_match + 0x1000:start_fw_start_match + 0x1004] == b'$FPT' : # next $FPT = previous + 0x1000
-			start_fw_start_match += 0x1000 # Adjust $FPT offset to the next header
-			fpt_count -= 1 # SuperMicro MERecovery $FPT is ignored when reporting multiple firmware
 		
 		# Analyze $FPT header
 		pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Owner' + col_e, col_y + 'Start' + col_e, col_y + 'Size' + col_e, col_y + 'End' + col_e,
@@ -5595,10 +5634,8 @@ for file_in in source :
 			
 			p_store_all.append([p_name, p_offset_spi, p_size]) # For $FPT Recovery/Operational adjustment
 			
-			# Detect if CSE firmware has ROM-Bypass firmware ROMB
-			if p_name == 'ROMB' :
-				fpt_romb_found = True
-				if p_offset_spi != 0 and p_size != 0 : fpt_romb_used = True
+			# Detect if firmware has ROM-Bypass firmware ROMB
+			if p_name == 'ROMB' and not p_empty : fpt_romb_found = True
 			
 			# Detect if CSE firmware is stitched with PMC firmware (PMCP)
 			if p_name == 'PMCP' and not p_empty :
@@ -5607,7 +5644,7 @@ for file_in in source :
 				
 				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,pmc_mn2_ver = ext_anl('$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1])
 			
-			# Detect if CSE firmware has OEM Unlock Token (UTOK/STKN)
+			# Detect if firmware has OEM Unlock Token (UTOK/STKN)
 			if p_name in ('UTOK','STKN') and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
 			
 			# Detect if CSE firmware has OEM Key Manager Partition (OEMP)
@@ -5868,7 +5905,7 @@ for file_in in source :
 	if rgn_exist :
 		
 		# Multiple Backup $FPT header bypass at SPS1/SPS4 (DFLT/FPTB)
-		if variant in ['SPS','CSSPS'] and major in [1,4] and fpt_count % 2 == 0 : fpt_count /= 2
+		if variant == 'CSSPS' or (variant,major) == ('SPS',1) and fpt_count % 2 == 0 : fpt_count /= 2
 		
 		# Check $FPT Checksum validity
 		fpt_chk_file = '0x%0.2X' % fpt_hdr.HeaderChecksum
@@ -6179,14 +6216,6 @@ for file_in in source :
 	mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
 	rel_signed = ['Production', 'Debug'][mn2_flags_debug]
 	
-	# Check for ROM-Bypass entry at $FPT
-	if rgn_exist and fpt_romb_found :
-		# Pre-CSE have ROMB entry at $FPT only when required, covered by fpt_romb_found
-		
-		if fpt_pre_hdr is not None and variant in ['CSME', 'CSTXE', 'CSSPS'] :
-			byp_cse = fpt_pre_hdr.ROMB_Instr_0 # Check CSE ROM-Bypass Instruction 0
-			if not fpt_romb_used or byp_cse == 0 : fpt_romb_found = False # CSE ROMB depends on $FPT Offset/Size + Instructions
-	
 	# Production PRD, Pre-Production PRE, ROM-Bypass BYP
 	if fpt_romb_found :
 		release = 'ROM-Bypass'
@@ -6480,14 +6509,14 @@ for file_in in source :
 			platform = 'ICH10'
 	
 		elif major == 6 :
-			platform = 'Ibex Peak'
+			platform = 'IBX'
 			
 			sku_bits = {3: 'Standard Manageability', 4: 'AMT', 6: 'QST', 8: 'Local Wakeup Timer', 9: 'KVM', 10: 'Anti-Theft', 15: 'Remote PC Assist'}
 			
 			if sku_me == '00000000' : # Ignition (128KB, 2MB)
 				if hotfix == 50 : # 89xx (Cave/Coleto Creek)
 					ign_pch = 'CCK'
-					platform = 'Cave/Coleto Creek'
+					platform = 'CCK'
 				else : # P55, PM55, 34xx (Ibex Peak)
 					ign_pch = 'IBX'
 				sku_db = 'IGN_' + ign_pch
@@ -6775,7 +6804,7 @@ for file_in in source :
 				#elif sku_result == 'H' : sku_stp = 'A' # <= 12.0.0.xxxx
 			
 			# Detected stitched PMC firmware
-			if pmcp_found :				
+			if pmcp_found :
 				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmcp_not_in_db,pmc_platform,pmc_date = pmc_anl(pmc_mn2_ver)
 				
 				# Verify FTPR & PMC compatibility (PCH & SKU)
@@ -6942,6 +6971,18 @@ for file_in in source :
 		
 		if major == 4 :
 			pass
+		
+		elif major == 5 :
+			
+			# Detected stitched PMC firmware
+			if pmcp_found :
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmcp_not_in_db,pmc_platform,pmc_date = pmc_anl(pmc_mn2_ver)
+				
+				# Verify FTPR & PMC compatibility (PCH & SKU)
+				if pmc_pch_gen < 300 or pmc_fw_rel == 0 :
+					pass # Old CNP 300-series PMC versioning
+				elif pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != 'H' or (sku_stp != 'NaN' and pmc_pch_rev[0] != sku_stp) :
+					pmc_not_comp = True
 	
 		# Module Extraction for all CSSPS
 		if param.me11_mod_extr :
@@ -7103,7 +7144,8 @@ for file_in in source :
 		if pmcp_found :
 			msg_pt.add_row(['PMC Version', pmc_fw_ver])
 			msg_pt.add_row(['PMC Release', pmc_mn2_signed])
-			if variant == 'PMCCNP' or (variant == 'CSME' and major >= 12) : msg_pt.add_row(['PMC SKU', pmc_pch_sku])
+			if variant == 'PMCCNP' or (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) :
+				msg_pt.add_row(['PMC SKU', pmc_pch_sku])
 			msg_pt.add_row(['PMC Stepping', pmc_pch_rev[0]])
 			msg_pt.add_row(['PMC Date', pmc_date])
 			if pmc_mn2_signed == 'Production' and (variant == 'CSME' and major >= 12) :
@@ -7171,7 +7213,7 @@ for file_in in source :
 	# Print Error/Warning/Note Messages
 	if param.print_msg : msg_rep(name_db)
 	
-	copy_on_msg() # Close input and copy it in case of messages
+	if not param.extr_mea : copy_on_msg() # Close input and copy it in case of messages
 		
 	if param.help_scr : mea_exit(0) # Only once for -?
 	

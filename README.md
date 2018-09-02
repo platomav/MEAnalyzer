@@ -17,7 +17,7 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the C
 
 #### **A1. ME Analyzer Features**
 
-- Supports all Engine firmware Families (CS)ME 2-12, (CS)TXE 0-4, (CS)SPS 1-4
+- Supports all Engine firmware Families (CS)ME 2-12, (CS)TXE 0-4, (CS)SPS 1-5
 - Supports all types of firmware images (Engine Regions, SPI/BIOS etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
 - Detection of Production, Pre-Production, ROM-Bypass etc Releases

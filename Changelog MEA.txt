@@ -1,3 +1,10 @@
+v1.60.0 r136
+
+Added support for CSSPS 5 firmware
+Improved support for CSE Extension 0
+Fixed (CS)SPS $FPT offset detection
+Fixed ROM-Bypass Release detection
+
 v1.57.0 r134
 
 Added new CSE Key Hash Usages detection
