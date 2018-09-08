@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.60.0'
+title = 'ME Analyzer v1.61.0'
 
 import os
 import re
@@ -40,10 +40,8 @@ col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
 mea_os = sys.platform
 if mea_os == 'win32' :
 	cl_wipe = 'cls'
-	os_dir = '\\'
 elif mea_os.startswith('linux') or mea_os == 'darwin' :
 	cl_wipe = 'clear'
-	os_dir = '//'
 else :
 	print(col_r + '\nError: ' + col_e + 'Unsupported platform "%s"\n' % mea_os)
 	if ' -exit' not in sys.argv : input('Press enter to exit')
@@ -56,9 +54,7 @@ try :
 	assert mea_py >= (3,6)
 except :
 	print(col_r + '\nError: ' + col_e + 'Python >= 3.6 required, not %d.%d!\n' % (mea_py[0],mea_py[1]))
-	if ' -exit' not in sys.argv :
-		if mea_py[0] < 3 : raw_input('Press enter to exit')
-		else : input('Press enter to exit')
+	if ' -exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
 	sys.exit(-1)
 	
@@ -94,7 +90,6 @@ class MEA_Param :
 	def __init__(self, source) :
 	
 		self.all = ['-?','-skip','-extr','-msg','-hid','-unp86','-ext86','-bug86','-pdb','-dbname','-mass','-dfpt','-exit','-redir']
-
 		self.win = ['-extr','-msg','-hid'] # Windows only
 		
 		if mea_os == 'win32' : self.val = self.all
@@ -2909,13 +2904,13 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 	# Create firmware extraction folder
 	if variant == 'CSSPS' : fw_name = "%0.2d.%0.2d.%0.2d.%0.3d_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db)
 	else : fw_name = "%d.%d.%d.%0.4d_%s_%s_%s" % (major, minor, hotfix, build, sku_db, rel_db, type_db)
-	if os.path.isdir(mea_dir + os_dir + fw_name) : shutil.rmtree(mea_dir + os_dir + fw_name)
-	os.mkdir(mea_dir + os_dir + fw_name)
+	if os.path.isdir(os.path.join(mea_dir, fw_name, '')) : shutil.rmtree(os.path.join(mea_dir, fw_name, ''))
+	os.mkdir(os.path.join(mea_dir, fw_name, ''))
 	
 	# Show & Store CSE Layout Table info
 	if cse_lt_exist :
 		cse_lt_info = cse_lt.hdr_print()
-		cse_lt_fname = mea_dir + os_dir + fw_name + os_dir + 'CSE LT [0x%0.6X]' % cse_lt_off
+		cse_lt_fname = os.path.join(mea_dir, fw_name, 'CSE LT [0x%0.6X]' % cse_lt_off)
 		
 		print('%s\n' % cse_lt_info)
 		
@@ -2940,8 +2935,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 			part_empty = part[4]
 			
 			if not part_empty : # Skip Empty Partitions
-				file_name = fw_name + os_dir + 'CSE LT ' + part_name + ' [0x%0.6X].bin' % part_start # Start offset covers any cases with duplicate name entries (CSE_Layout_Table_17)
-				mod_fname = mea_dir + os_dir + file_name
+				file_name = os.path.join(fw_name, 'CSE LT ' + part_name + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (CSE_Layout_Table_17)
+				mod_fname = os.path.join(mea_dir, file_name)
 				
 				with open(mod_fname, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
 			
@@ -2983,8 +2978,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 		
 		print(pt) # Show Partition details
 		
-		if cse_lt_exist : fpt_fname = mea_dir + os_dir + fw_name + os_dir + 'CSE LT Data [0x%0.6X]' % fpt_start
-		else : fpt_fname = mea_dir + os_dir + fw_name + os_dir + 'FPT [0x%0.6X]' % fpt_start
+		if cse_lt_exist : fpt_fname = os.path.join(mea_dir, fw_name, 'CSE LT Data [0x%0.6X]' % fpt_start)
+		else : fpt_fname = os.path.join(mea_dir, fw_name, 'FPT [0x%0.6X]' % fpt_start)
 		
 		# Store Flash Partition Table ($FPT) Data
 		if not cse_lt_exist : # Stored at CSE LT section too
@@ -3014,8 +3009,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 			if not part_empty : # Skip Empty Partitions
 				part_name += ' %0.4X' % part_inid
 			
-				file_name = fw_name + os_dir + part_name + ' [0x%0.6X].bin' % part_start # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
-				mod_fname = mea_dir + os_dir + file_name
+				file_name = os.path.join(fw_name, part_name + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
+				mod_fname = os.path.join(mea_dir, file_name)
 				
 				with open(mod_fname, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
 			
@@ -3048,8 +3043,8 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 		
 		print('\n%s' % pt) # Show Entry details
 		
-		if cse_lt_exist : bpdt_fname = mea_dir + os_dir + fw_name + os_dir + 'CSE LT Boot x [%d]' % len(bpdt_hdr_all)
-		else : bpdt_fname = mea_dir + os_dir + fw_name + os_dir + 'BPDT [%d]' % len(bpdt_hdr_all)
+		if cse_lt_exist : bpdt_fname = os.path.join(mea_dir, fw_name, 'CSE LT Boot x [%d]' % len(bpdt_hdr_all))
+		else : bpdt_fname = os.path.join(mea_dir, fw_name, 'BPDT [%d]' % len(bpdt_hdr_all))
 		
 		# Store Boot Partition Description Table (BPDT/IFWI) Info
 		with open(bpdt_fname + '.txt', 'a', encoding = 'utf-8') as bpdt_file :
@@ -3074,13 +3069,13 @@ def cse_unpack(fpt_part_all, bpdt_part_all, fw_type, file_end, fpt_start, fpt_ch
 			if not part_empty : # Skip Empty Partitions
 				part_name += ' %0.4X' % part_inid
 				
-				file_name = fw_name + os_dir + part_name + ' [0x%0.6X].bin' % part_start # Start offset covers any cases with duplicate name entries ("Unknown" etc)
-				mod_fname = mea_dir + os_dir + file_name
+				file_name = os.path.join(fw_name, part_name + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries ("Unknown" etc)
+				mod_fname = os.path.join(mea_dir, file_name)
 				
 				with open(mod_fname, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
 				
 				part_data = reading[part_start:part_end]
-				with open(mea_dir + os_dir + file_name, 'w+b') as part_file : part_file.write(part_data)
+				with open(os.path.join(mea_dir, file_name), 'w+b') as part_file : part_file.write(part_data)
 				
 				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name, part_start, part_end) + col_e)
 				
@@ -3840,8 +3835,8 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 		ext_inid = cpd_all_attr[0][9] # Partition Instance ID
 		
 		pt.title = col_y + 'Detected %s Module(s) at %s %0.4X [0x%0.6X]' % (len(cpd_all_attr), cpd_pname, ext_inid, cpd_poffset) + col_e
-		folder_name = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [0x%0.6X]' % (cpd_pname, ext_inid, cpd_poffset) + os_dir
-		info_fname = mea_dir + os_dir + fw_name + os_dir + '%s %0.4X [0x%0.6X].txt' % (cpd_pname, ext_inid, cpd_poffset)
+		folder_name = os.path.join(mea_dir, fw_name, '%s %0.4X [0x%0.6X]' % (cpd_pname, ext_inid, cpd_poffset), '')
+		info_fname = os.path.join(mea_dir, fw_name, '%s %0.4X [0x%0.6X].txt' % (cpd_pname, ext_inid, cpd_poffset))
 		
 		cpd_hdr_ver = reading[cpd_poffset + 8] # $CPD Version Tag
 		if cpd_hdr_ver == 2 : cpd_phdr = get_struct(reading, cpd_poffset, CPD_Header_2)
@@ -4361,7 +4356,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
 	HUFFMAN_SYMBOLS = {}
 	HUFFMAN_UNKNOWNS = {}
 	mapping_types = {'code' : 0x20, 'data' : 0x60}
-	huffman_dict = mea_dir + os_dir + 'Huffman.dat'
+	huffman_dict = os.path.join(mea_dir, 'Huffman.dat')
 	
 	# Check if Huffman dictionary version is supported
 	if (cse_variant, cse_major) in [('CSME', 11), ('CSSPS', 4)] : dict_version = 11
@@ -4725,7 +4720,7 @@ def copy_on_msg() :
 	# At least one message needs a file copy
 	if copy :
 		file_name = os.path.basename(file_in)
-		check_dir = mea_dir + os_dir + '__CHECK__' + os_dir
+		check_dir = os.path.join(mea_dir, '__CHECK__', '')
 		
 		if not os.path.isdir(check_dir) : os.mkdir(check_dir)
 		
@@ -4828,23 +4823,22 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 # Format firmware version
 def fw_ver(major,minor,hotfix,build) :
 	if variant in ['SPS','CSSPS'] :
-		version = "%s.%s.%s.%s" % ("{0:02d}".format(major), "{0:02d}".format(minor), "{0:02d}".format(hotfix), "{0:03d}".format(build)) # xx.xx.xx.xxx
+		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
 	else :
-		version = "%s.%s.%s.%s" % (major, minor, hotfix, build)
+		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
 	
 	return version
 
-# Detect Compressed Fujitsu region
+# Detect Fujitsu Compressed ME Region
 def fuj_umem_ver(me_fd_start) :
-	rgn_fuj_hdr = reading[me_fd_start:me_fd_start + 0x4]
-	rgn_fuj_hdr = binascii.b2a_hex(rgn_fuj_hdr).decode('utf-8').upper()
-	version = "NaN"
-	if rgn_fuj_hdr == "554DC94D" : # Fujitsu Compressed ME Region with header UMEM
-		major = int(binascii.b2a_hex(reading[me_fd_start + 0xB:me_fd_start + 0xD][::-1]), 16)
-		minor = int(binascii.b2a_hex(reading[me_fd_start + 0xD:me_fd_start + 0xF][::-1]), 16)
-		hotfix = int(binascii.b2a_hex(reading[me_fd_start + 0xF:me_fd_start + 0x11][::-1]), 16)
-		build = int(binascii.b2a_hex(reading[me_fd_start + 0x11:me_fd_start + 0x13][::-1]), 16)
-		version = "%s.%s.%s.%s" % (major, minor, hotfix, build)
+	version = 'NaN'
+	
+	if reading[me_fd_start:me_fd_start + 0x4] == b'\x55\x4D\xC9\x4D' : # UMEM
+		major = int.from_bytes(reading[me_fd_start + 0xB:me_fd_start + 0xD], 'little')
+		minor = int.from_bytes(reading[me_fd_start + 0xD:me_fd_start + 0xF], 'little')
+		hotfix = int.from_bytes(reading[me_fd_start + 0xF:me_fd_start + 0x11], 'little')
+		build = int.from_bytes(reading[me_fd_start + 0x11:me_fd_start + 0x13], 'little')
+		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
 	
 	return version
 	
@@ -5059,13 +5053,6 @@ def msg_rep(name_db) :
 	
 	if (err_stor or warn_stor or note_stor) or param.hid_find : print('') # Rule 1
 
-# Force string to be printed as ASCII, ignore errors
-def force_ascii(string) :
-	# Input string is bare and only for printing (no open(), no Colorama etc)
-	ascii_str = str((string.encode('ascii', 'ignore')).decode('utf-8', 'ignore'))
-	
-	return ascii_str
-
 # Scan all files of a given directory
 def mass_scan(f_path) :
 	mass_files = []
@@ -5087,7 +5074,7 @@ param = MEA_Param(sys.argv)
 arg_num = len(sys.argv)
 
 # Set dependencies paths
-db_path = mea_dir + os_dir + 'MEA.dat'
+db_path = os.path.join(mea_dir, 'MEA.dat')
 
 # Check if dependencies exist
 depend_db = os.path.isfile(db_path)
@@ -5101,7 +5088,7 @@ if not param.skip_intro :
 	
 	if arg_num == 2 :
 		print("Press Enter to skip or input -? to list options\n")
-		print("\nFile:       " + col_g + "%s" % force_ascii(os.path.basename(sys.argv[1])) + col_e)
+		print("\nFile:       " + col_g + "%s" % os.path.basename(sys.argv[1]) + col_e)
 	elif arg_num > 2 :
 		print("Press Enter to skip or input -? to list options\n")
 		print("\nFiles:       " + col_y + "Multiple" + col_e)
@@ -5145,7 +5132,7 @@ else :
 	if mea_os == 'win32' : ctypes.windll.kernel32.SetConsoleTitleW(title) # Set console window title
 
 if param.mass_scan :
-	in_path = input('\nType the full folder path : ')
+	in_path = input('\nEnter the full folder path : ')
 	source = mass_scan(in_path)
 else :
 	source = sys.argv[1:] # Skip script/executable
@@ -5217,6 +5204,7 @@ for file_in in source :
 	pmc_not_comp = False
 	sps3_chk_fail = False
 	fuj_rgn_exist = False
+	sps_opr_found = False
 	fpt_romb_found = False
 	fitc_ver_found = False
 	pmcp_fwu_found = False
@@ -5347,7 +5335,7 @@ for file_in in source :
 		
 		# Engine Region exists but cannot be identified
 		if fd_me_rgn_exist :
-			fuj_version = fuj_umem_ver(me_fd_start) # Check if ME Region is Fujitsu UMEM compressed (me_fd_start from spi_fd function)
+			fuj_version = fuj_umem_ver(me_fd_start) # Check if ME Region is Fujitsu UMEM compressed
 			
 			# ME Region is Fujitsu UMEM compressed
 			if fuj_version != 'NaN' :
@@ -5355,9 +5343,9 @@ for file_in in source :
 				
 				if param.extr_mea : no_man_text = 'NaN %s_NaN_UMEM %s NaN NaN' % (fuj_version, fuj_version)
 			
-			# ME Region is X58 Test?
+			# ME Region is X58 ROMB Test
 			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Found' + col_y + ' X58 Test ' + col_e + 'Intel Engine firmware'
+				no_man_text = 'Found' + col_y + ' X58 ROMB Test ' + col_e + 'Intel Engine firmware'
 				
 				if param.extr_mea : no_man_text = 'NaN NaN_NaN_X58 NaN NaN NaN'
 			
@@ -5378,9 +5366,9 @@ for file_in in source :
 				
 				if param.extr_mea : no_man_text = 'NaN %s_NaN_UMEM %s NaN NaN' % (fuj_version, fuj_version)
 			
-			# Image is X58 Test?
-			elif reading[0:8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Found' + col_y + ' X58 Test ' + col_e + 'Intel Engine firmware'
+			# Image is X58 ROMB Test
+			elif reading[:0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
+				no_man_text = 'Found' + col_y + ' X58 ROMB Test ' + col_e + 'Intel Engine firmware'
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_X58 NaN NaN NaN"
 			
@@ -5410,7 +5398,7 @@ for file_in in source :
 		if not param.extr_mea and not param.print_msg :
 			print()
 			msg_pt = ext_table([], False, 1)
-			msg_pt.add_row([col_c + '%s (%d/%d)' % (textwrap.wrap(force_ascii(os.path.basename(file_in)), width=45)[0], cur_count, in_count) + col_e])
+			msg_pt.add_row([col_c + '%s (%d/%d)' % (textwrap.wrap(os.path.basename(file_in), width=45)[0], cur_count, in_count) + col_e])
 			print(msg_pt)
 		
 		if param.extr_mea :
@@ -5426,34 +5414,6 @@ for file_in in source :
 		continue # Next input file
 
 	# Engine firmware found (for > break), Manifest analysis
-	
-	# CSE Code Location
-	# CSME11 --> Engine Region ($FPT)
-	# CSME12 --> Engine Region (CSE LT > BPx)
-	# CSTXE --> BIOS/IAFW Region (BPDT)
-	# CSSPS4 --> Engine Region ($FPT)
-	# CSSPS5 --> Engine Region (CSE LT > BPx)
-	
-	# CSE Data Location
-	# CSME11 --> Engine Region ($FPT > MFS)
-	# CSME12 --> Engine Region (CSE LT > BPx)
-	# CSTXE --> BIOS/IAFW Region (BPDT)
-	# CSSPS4 --> Engine Region ($FPT > MFS)
-	# CSSPS5 --> Engine Region (CSE LT > BPx)
-	
-	# CSE Data Initialization Location
-	# CSME11 --> Engine Region ($FPT > MFS)
-	# CSME12 --> Engine Region (CSE LT > Data)
-	# CSTXE --> Device Expansion 1 Region ($FPT)
-	# CSSPS4 --> Engine Region ($FPT > MFS)
-	# CSSPS5 --> Engine Region (CSE LT > Data)
-	
-	# CSE ROM-Bypass Location
-	# CSME11 --> Engine Region ($FPT > ROMB)
-	# CSME12 --> Engine Region (CSE LT > Data > ROMB)
-	# CSTXE --> Engine Region (maybe in $FPT > ROMB)
-	# CSSPS4 --> Engine Region ($FPT > ROMB)
-	# CSSPS5 --> Engine Region (CSE LT > Data > ROMB)
 	
 	# Detect Intel Flash Descriptor
 	fd_exist,start_fd_match,end_fd_match,fd_count = spi_fd_init()
@@ -5529,16 +5489,6 @@ for file_in in source :
 						
 			# Show CSE LT partition info on demand (-dfpt)
 			if param.fpt_disp : print('%s\n' % pt_dcselt)
-		
-		# Multiple MERecovery 0x100 $FPT header bypass (example: Clevo)
-		while reading[start_fw_start_match + 0x100:start_fw_start_match + 0x104] == b'$FPT' : # next $FPT = previous + 0x100
-			start_fw_start_match += 0x100 # Adjust $FPT offset to the next header
-			fpt_count -= 1 # Clevo MERecovery $FPT is ignored when reporting multiple firmware
-		
-		# Multiple MERecovery + GbERecovery 0x2100 $FPT header bypass (example: Clevo)
-		while reading[start_fw_start_match + 0x2100:start_fw_start_match + 0x2104] == b'$FPT' : # next $FPT = previous + 0x2100
-			start_fw_start_match += 0x2100 # Adjust $FPT offset to the next header
-			fpt_count -= 1  # Clevo MERecovery + GbERecovery $FPT is ignored when reporting multiple firmware
 		
 		# Analyze $FPT header
 		pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Owner' + col_e, col_y + 'Start' + col_e, col_y + 'Size' + col_e, col_y + 'End' + col_e,
@@ -5634,10 +5584,13 @@ for file_in in source :
 			
 			p_store_all.append([p_name, p_offset_spi, p_size]) # For $FPT Recovery/Operational adjustment
 			
-			# Detect if firmware has ROM-Bypass firmware ROMB
+			# Detect if firmware has ROM-Bypass (ROMB) partition 
 			if p_name == 'ROMB' and not p_empty : fpt_romb_found = True
 			
-			# Detect if CSE firmware is stitched with PMC firmware (PMCP)
+			# Detect if firmware has Operational (OPRx) partition
+			if p_name.startswith('OPR') and not p_empty : sps_opr_found = True
+			
+			# Detect if firmware has Power Management Controller (PMCP) partition
 			if p_name == 'PMCP' and not p_empty :
 				pmcp_found = True
 				pmcp_fwu_found = True # CSME12+ FWUpdate tool requires PMC
@@ -6203,14 +6156,8 @@ for file_in in source :
 		fw_type = 'Update' # No Region detected, Update
 	
 	# Check for Fujitsu UMEM ME Region (RGN/$FPT or UPD/$MN2)
-	if fd_me_rgn_exist :
-		fuj_umem_spi = reading[me_fd_start:me_fd_start + 0x4]
-		fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
-		if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True # Fujitsu ME Region (RGN or UPD) with header UMEM
-	else :
-		fuj_umem_spi = reading[0x0:0x4]
-		fuj_umem_spi = binascii.b2a_hex(fuj_umem_spi).decode('utf-8').upper()
-		if fuj_umem_spi == "554DC94D" : fuj_rgn_exist = True
+	if fd_me_rgn_exist and reading[me_fd_start:me_fd_start + 0x4] == b'\x55\x4D\xC9\x4D' : fuj_rgn_exist = True
+	elif reading[:0x4] == b'\x55\x4D\xC9\x4D' : fuj_rgn_exist = True
 	
 	# Detect Firmware Release (Production, Pre-Production, ROM-Bypass, Other)
 	mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
@@ -6959,10 +6906,13 @@ for file_in in source :
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
-		# Set Recovery/Operational Type via Extension 3
+		# Set Recovery or Operational Region Type
 		if not rgn_exist :
-			if ext_pname == 'FTPR' : fw_type = 'Recovery'
-			elif ext_pname == 'OPR' : fw_type = 'Operational'
+			# Intel releases OPR as partition ($CPD) but REC as region ($FPT)
+			if ext_pname == 'FTPR' : fw_type = 'Recovery' # Non-Intel POR for REC
+			elif ext_pname == 'OPR' : fw_type = 'Operational' # Intel POR for OPR
+		elif not ifwi_exist and not sps_opr_found :
+			fw_type = 'Recovery' # Intel POR for REC ($FPT + FTPR)
 			
 		sku = '%d' % fw_0C_sku1
 		sku_db = ext32_info[1] + '_SKU' + sku
@@ -6978,11 +6928,8 @@ for file_in in source :
 			if pmcp_found :
 				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmcp_not_in_db,pmc_platform,pmc_date = pmc_anl(pmc_mn2_ver)
 				
-				# Verify FTPR & PMC compatibility (PCH & SKU)
-				if pmc_pch_gen < 300 or pmc_fw_rel == 0 :
-					pass # Old CNP 300-series PMC versioning
-				elif pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != 'H' or (sku_stp != 'NaN' and pmc_pch_rev[0] != sku_stp) :
-					pmc_not_comp = True
+				# Verify OPR & PMC compatibility
+				if pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != 'H' : pmc_not_comp = True
 	
 		# Module Extraction for all CSSPS
 		if param.me11_mod_extr :
@@ -7051,7 +6998,7 @@ for file_in in source :
 	name_db_hash = '%s_%s' % (name_db, rsa_sig_hash)
 	
 	if param.db_print_new :
-		with open(mea_dir + os_dir + 'MEA_DB_NEW.txt', 'a', encoding = 'utf-8') as db_file : db_file.write(name_db_hash + '\n')
+		with open(os.path.join(mea_dir, 'MEA_DB_NEW.txt'), 'a', encoding = 'utf-8') as db_file : db_file.write(name_db_hash + '\n')
 		continue # Next input file
 	
 	# Search Database for firmware
@@ -7112,7 +7059,7 @@ for file_in in source :
 	elif not param.print_msg :
 		print()
 		msg_pt = ext_table(['Field', 'Value'], False, 1)
-		msg_pt.title = col_c + '%s (%d/%d)' % (textwrap.wrap(force_ascii(os.path.basename(file_in)), width=45)[0], cur_count, in_count) + col_e
+		msg_pt.title = col_c + '%s (%d/%d)' % (textwrap.wrap(os.path.basename(file_in), width=45)[0], cur_count, in_count) + col_e
 		
 		msg_pt.add_row(['Firmware Family', variant_p])
 		msg_pt.add_row(['Firmware Version', fw_ver(major,minor,hotfix,build)])
@@ -7200,7 +7147,7 @@ for file_in in source :
 	
 	if pmc_not_comp : gen_msg(warn_stor, col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, '', True)
 	
-	if fuj_rgn_exist : gen_msg(warn_stor, col_m + 'Warning: Fujitsu Intel Engine firmware detected!' + col_e, '', True)
+	if fuj_rgn_exist : gen_msg(warn_stor, col_m + 'Warning: Fujitsu Intel Engine firmware detected!' + col_e, '', False)
 	
 	if fpt_count > 1 : gen_msg(note_stor, col_y + 'Note: Multiple (%d) Intel Engine firmware detected in file!' % fpt_count + col_e, '', True)
 	
