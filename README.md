@@ -9,7 +9,7 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/VOp78Or.png)
+![](https://i.imgur.com/Ox0bzTM.png)
 
 ## **A. About ME Analyzer**
 
@@ -74,15 +74,13 @@ There are various parameters which enhance or modify the default behavior of ME 
 
 During operation, ME Analyzer may encounter issues that can trigger Notes, Warnings and/or Errors. Notes (yellow/green color) provide useful information about a characteristic of this particular firmware. Warnings (purple color) notify the user of possible problems that can cause system instability. Errors (red color) are shown when something unexpected or problematic is encountered.
 
-## **C. Execute/Download ME Analyzer**
+## **C. Download ME Analyzer**
 
-ME Analyzer is developed using Python 3.6 and can work under Windows, Linux and macOS operating systems. It consists of two files, the executable (MEA.exe or MEA) and the database (MEA.dat). Regarding the executable, already built/frozen/compiled binaries are provided by me for Windows only (icon designed by [Those Icons](https://thoseicons.com/)). Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should be "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bundled with the latest executable release, title should be "DB rXX". For Linux and macOS or courageous Windows users, the build/freeze/compile instructions for all three OS can be found below.
-
-**Note:** To extract the already built/frozen/compiled ME Analyzer archives, you need to use programs which support RAR5 compression!
+ME Analyzer consists of three files, the executable (MEA.exe or MEA) and the databases (MEA.dat & Huffman.dat). An already built/frozen/compiled binary is provided by me for Windows only (icon designed by [Those Icons](https://thoseicons.com/)). Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should be "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bundled with the latest executable release, title should be "DB rXX". To extract the already built/frozen/compiled archive, you need to use programs which support RAR5 compression.
 
 #### **C1. Compatibility**
 
-ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python 3.6 support. Any latter v3.x releases might work depending on whether MEA's prerequisites are also compatible. Windows users who plan to use the already built/frozen/compiled binaries must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
+ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python 3.6 support. Windows users who plan to use the already built/frozen/compiled binary must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
 
 #### **C2. Code Prerequisites**
 
@@ -90,12 +88,6 @@ To run ME Analyzer's python script, you need to have the following 3rd party Pyt
 
 * [Colorama](https://pypi.python.org/pypi/colorama/)
 * [PTable](https://github.com/platomav/PTable/tree/boxchar)
-
-To build/freeze/compile ME Analyzer's python script, you can use whatever you like. The following are verified to work:
-
-* [Py2exe](https://pypi.python.org/pypi/py2exe/) (Windows)
-* [Py2app](https://pypi.python.org/pypi/py2app/) (macOS)
-* [PyInstaller](https://pypi.org/project/PyInstaller/) (Windows/Linux/macOS)
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
@@ -105,15 +97,15 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 
 > python --version
 
-2. Use pip to install PyInstaller (PyPi):
+2. Use pip to install PyInstaller:
 
 > pip3 install pyinstaller
 
-3. Use pip to install colorama (PyPi):
+3. Use pip to install colorama:
 
 > pip3 install colorama
 
-4. Use pip to install PTable (Github, boxchar branch):
+4. Use pip to install PTable:
 
 > pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
 
@@ -127,7 +119,7 @@ At dist folder you should find the final MEA executable
 
 **Note:** Some pictures are outdated and depict older ME Analyzer versions.
 
-![](https://i.imgur.com/VOp78Or.png)
+![](https://i.imgur.com/Ox0bzTM.png)
 
 ![](https://i.imgur.com/6UNqSe8.png)
 

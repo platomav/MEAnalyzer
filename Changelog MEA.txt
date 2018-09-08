@@ -1,3 +1,9 @@
+v1.61.0 r137
+
+Improved CSSPS Recovery detection
+Improved support for multiple OS
+Various code cleanup improvements
+
 v1.60.0 r136
 
 Added support for CSSPS 5 firmware
