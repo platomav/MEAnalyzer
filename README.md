@@ -87,7 +87,12 @@ ME Analyzer should work at all Windows, Linux or macOS operating systems which h
 To run ME Analyzer's python script, you need to have the following 3rd party Python modules installed:
 
 * [Colorama](https://pypi.python.org/pypi/colorama/)
+
+> pip3 install colorama
+
 * [PTable](https://github.com/platomav/PTable/tree/boxchar)
+
+> pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
