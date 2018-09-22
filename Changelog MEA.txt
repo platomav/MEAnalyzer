@@ -1,3 +1,7 @@
+v1.61.1 r139
+
+Added two more known bad CSE hashes
+
 v1.61.0 r137
 
 Improved CSSPS Recovery detection
