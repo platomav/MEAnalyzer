@@ -9,11 +9,11 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/Ox0bzTM.png)
+![](https://i.imgur.com/uahcIi1.png)
 
 ## **A. About ME Analyzer**
 
-ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the Converged Security Management Engine, Converged Security Trusted Execution Engine, Converged Security Server Platform Services, Management Engine, Trusted Execution Engine, Server Platform Services & Power Management Controller families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) firmware, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
+ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (Converged Security) Management Engine, (Converged Security) Trusted Execution Engine, (Converged Security) Server Platform Services & Power Management Controller families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) code & file system, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
 
 #### **A1. ME Analyzer Features**
 
@@ -67,8 +67,8 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -dbname : Renames input file based on unique DB name
 * -dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers
 * -unp86  : Unpacks all CSE Converged Security Engine firmware
-* -bug86  : Enables debug/verbose mode during CSE unpacking
-* -ext86  : Prints all Extension info during CSE unpacking
+* -bug86  : Enables debug/pause mode during CSE unpacking
+* -ver86  : Enables full verbose mode during CSE unpacking
 
 #### **B3. ME Analyzer Error Control**
 
@@ -86,8 +86,17 @@ ME Analyzer should work at all Windows, Linux or macOS operating systems which h
 
 To run ME Analyzer's python script, you need to have the following 3rd party Python modules installed:
 
-* [Colorama](https://pypi.python.org/pypi/colorama/)
+* [Colorama](https://pypi.org/project/colorama/)
+
+> pip3 install colorama
+
+* [CRCCheck](https://pypi.org/project/crccheck/)
+
+> pip3 install crccheck
+
 * [PTable](https://github.com/platomav/PTable/tree/boxchar)
+
+> pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
@@ -105,11 +114,15 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 
 > pip3 install colorama
 
-4. Use pip to install PTable:
+4. Use pip to install crccheck:
+
+> pip3 install crccheck
+
+5. Use pip to install PTable:
 
 > pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
 
-5. Build/Freeze/Compile ME Analyzer:
+6. Build/Freeze/Compile ME Analyzer:
 
 > pyinstaller --noupx --onefile MEA.py
 
@@ -119,7 +132,7 @@ At dist folder you should find the final MEA executable
 
 **Note:** Some pictures are outdated and depict older ME Analyzer versions.
 
-![](https://i.imgur.com/Ox0bzTM.png)
+![](https://i.imgur.com/uahcIi1.png)
 
 ![](https://i.imgur.com/6UNqSe8.png)
 
@@ -135,6 +148,8 @@ At dist folder you should find the final MEA executable
 
 ![](https://i.imgur.com/dLVMFlg.png)
 
+![](https://i.imgur.com/3ofDnwl.png)
+
 ![](https://i.imgur.com/febB1yM.png)
 
 ![](https://i.imgur.com/JGljfRQ.png)
@@ -146,6 +161,10 @@ At dist folder you should find the final MEA executable
 ![](https://i.imgur.com/D012Cpt.png)
 
 ![](https://i.imgur.com/cvHhCO2.png)
+
+![](https://i.imgur.com/U4jLUPS.png)
+
+![](https://i.imgur.com/crUf9f9.png)
 
 ![](https://i.imgur.com/YEd7frw.png)
 
