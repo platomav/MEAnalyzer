@@ -1,3 +1,17 @@
+v1.70.0 r141
+
+Added CSE ME File System (MFS) unpacking
+Added display of MFS Configuration State
+Added two known bad CSE firmware hashes
+Improved CSE Manifest Extensions analysis
+Improved CSE firmware unpacking speed
+Improved CSE firmware analysis speed
+Improved CSE Unlock Token unpacking
+Improved support for CSE Extension 1
+Improved support for multiple OS
+Renamed parameter -ext86 to -ver86
+Various code cleanup improvements
+
 v1.61.1 r139
 
 Added two more known bad CSE hashes
