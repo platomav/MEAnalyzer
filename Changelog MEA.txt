@@ -1,3 +1,7 @@
+v1.70.1 r141
+
+Fixed a crash at CSE firmware unpacking
+
 v1.70.0 r141
 
 Added CSE ME File System (MFS) unpacking

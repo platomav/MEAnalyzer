@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.70.0'
+title = 'ME Analyzer v1.70.1'
 
 import os
 import re
@@ -3254,7 +3254,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	ansi_escape = re.compile(r'\x1b[^m]*m') # Generate ANSI Color and Font Escape Character Sequences
 	
 	# Create main Firmware Extraction Directory
-	fw_name = os.path.basename(file_in)
+	fw_name = 'Unpacked_' + os.path.basename(file_in)
 	if os.path.isdir(os.path.join(mea_dir, fw_name, '')) : shutil.rmtree(os.path.join(mea_dir, fw_name, ''))
 	os.mkdir(os.path.join(mea_dir, fw_name, ''))
 	
