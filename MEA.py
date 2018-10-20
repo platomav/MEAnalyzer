@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.70.1'
+title = 'ME Analyzer v1.70.2'
 
 import os
 import re
@@ -4561,6 +4561,7 @@ def cse_anl_err(ext_err_msg, checked_hashes = None) :
 # noinspection PyUnusedLocal
 def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	mfs_info = [] # MFS Initial Info Printing
+	mfs_err_stor = [] # MFS Initial Message Storage
 	mfs_buffer_init = reading[mfs_start:mfs_end] # MFS Initial Buffer
 	
 	mfsb_hdr = get_struct(mfs_buffer_init, 0, MFS_Backup) # Check if input MFS is in MFS Backup state
@@ -4731,6 +4732,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		if i in all_chunks_dict : all_mfs_sys[i * (chunk_size - 2):(i + 1) * (chunk_size - 2)] = bytearray(all_chunks_dict[i])
 	
 	# Parse MFS System Volume Structure
+	if not all_chunks_dict : return mfs_err_stor, parsed_indexes, intel_cfg_mfs, mfs_info # The final System Area Buffer must not be empty
 	vol_hdr = get_struct(all_chunks_dict[0], 0, MFS_Volume_Header) # System Volume is at the LAST Index 0 Chunk (the dictionary does that automatically)
 	if param.me11_mod_extr :
 		print('\n%s' % vol_hdr.mfs_print()) # Print System Volume Structure Info during CSE Unpacking
@@ -6344,6 +6346,9 @@ for file_in in source :
 							(start_man_match, end_man_match) = rec_man_match.span()
 							start_man_match += p_rec_fix[1] + 0xB # Add Recovery/Operational offset and 8680.{9} sanity check before .$MN2 or .$MAN
 							end_man_match += p_rec_fix[1]
+		else :
+			# More than two $FPT detected, probably Intel Engine Capsule image
+			mfs_found = False
 		
 		# Check for extra $FPT Entries, wrong NumPartitions (0x2+ for SPS3 Checksum)
 		while reading[fpt_step + 0x2:fpt_step + 0xC] not in [b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF',b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'] :

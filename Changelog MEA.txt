@@ -1,3 +1,7 @@
+v1.70.2 r142
+
+Fixed crash at Intel Engine Capsule images
+
 v1.70.1 r141
 
 Fixed a crash at CSE firmware unpacking
