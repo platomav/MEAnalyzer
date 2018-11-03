@@ -1,3 +1,9 @@
+v1.70.3 r144
+
+Added new CSE Key Hash Usages
+Added new known bad CSE firmware hash
+Improved CSE File System info display
+
 v1.70.2 r142
 
 Fixed crash at Intel Engine Capsule images

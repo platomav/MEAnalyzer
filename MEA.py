@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.70.2'
+title = 'ME Analyzer v1.70.3'
 
 import os
 import re
@@ -472,7 +472,7 @@ class MN2_Manifest(ctypes.LittleEndianStructure) : # Manifest $MAN/$MN2 (MANIFES
 		("Year",			uint16_t),		# 0x16
 		("Size",			uint32_t),		# 0x18 dwords (0x2000 max)
 		("Tag",				char*4),		# 0x1C
-		("NumModules",		uint32_t),		# 0x20 Unknown at CSE (some FTPR > Kernel value)
+		("NumModules",		uint32_t),		# 0x20 Internal Info at CSE (FTPR > Kernel)
 		("Major",			uint16_t),		# 0x24
 		("Minor",			uint16_t),		# 0x26
 		("Hotfix",			uint16_t),		# 0x28
@@ -512,7 +512,7 @@ class MN2_Manifest(ctypes.LittleEndianStructure) : # Manifest $MAN/$MN2 (MANIFES
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
-		pt.add_row(['Unknown', '0x%X' % self.NumModules])
+		pt.add_row(['Internal Info', '0x%X' % self.NumModules])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
 		pt.add_row(['Security Version Number', '%d' % self.SVN])
 		pt.add_row(['Reserved 0', '0x%X' % self.SVN_8])
@@ -856,7 +856,7 @@ class MFS_Config_Record(ctypes.LittleEndianStructure) : # MFS Configuration Reco
 		pt.add_row(['File Size', '0x%X' % self.FileSize])
 		pt.add_row(['Owner User ID', '%0.4X' % self.OwnerUserID])
 		pt.add_row(['Owner Group ID', '%0.4X' % self.OwnerGroupID])
-		pt.add_row(['File Offset', '0x%X' % self.FileOffset])
+		#pt.add_row(['File Offset', '0x%X' % self.FileOffset])
 		
 		return pt
 		
@@ -2723,7 +2723,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 			0x80860032 : ['ISH FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860033 : ['IUNIT FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860040 : ['Anti-Rollback', ['Enabled', 'Disabled']], # (BtGuardArbOemKeyManifest)
-			0x80860051 : ['ABL Elements', ['Enabled', 'Disabled']], # Guess, not in XML/PFT
+			0x80860051 : ['OEM BIOS Payload', ['Enabled', 'Disabled']], # (KnobIdValues)
 			0x80860101 : ['Change Device Lifecycle', ['No', 'Customer Care', 'RnD', 'Refurbish']],
 			0x80860201 : ['Co-Signing', ['Enabled', 'Disabled']]
 			}
@@ -3138,6 +3138,7 @@ mfs_type = {0: 'root', 1: 'home', 2: 'bin', 3: 'susram', 4: 'fpf', 5: 'dev', 6: 
 cse_known_bad_hashes = [
 ('1E2FD3B838010854E7490776ACC8E4CB6FE03D602151DF653BA392FF6E0D29B4','B2EE55B55A787362F49DF79F57403DE2DC6B2D09077BA732583FF2F80C10F306'), # CSME 12.0.0.7075_CON_LP_A_PRE > FTPR > FTPR.man
 ('4D0ADC668CAB1E694ED165CA36D5CFF3F13FFDFEB1A2BBD121334A098485E309','0ADBCBA2EAEAA7307247D6D6747521CFBC3B9AD988BA9F949217DFBC32ECB864'), # CSME 12.0.0.7075_COR_LP_A_PRE > FTPR > FTPR.man
+('CC2866DC330789AFB764E335F8F7396CE7E098128FD988238F24C38EE450F8F0','FC4608D9894D56474C14A6EC238650C929E8A9DD5C6C759AD6BE4A8E37024A25'), # CSME 11.8.58.3511_SLM_LP_C0_NPDM_PRD > FTPR > FTPR.man
 ('9831E6A8BD82EAE593161B3BFB3CD787EF4B8308C5ED0869EC5C29D2812AE07C','8362AC40855AF85779D66ECC0DEBB5D5E807873395807EEB853D235D286D4AB2'), # CSME 11.8.55.3510_SLM_H_D0_PRD > FTPR > FTPR.man
 ('E3DFAF8004464C3C77E562679BD177F81FB6D12D88A91CA4BEAFB1C65E724EA1','EE93E0318058FDC1D51906F50A4494B786D2874AB42CD4E5EFC029BBBB4733D8'), # CSME 11.8.55.3510_SLM_LP_C0_NPDM_PRD > FTPR > FTPR.man
 ('0833D56054E84412DDA84B400D13A13160D4ECEF6ABE407023D0AB502EA2A3EE','2394556989CA959938370811AD3937AAC02354671DB02704404E69CB816AFCF8'), # CSME 11.8.50.3425_SLM_H_D0_PRD > FTPR > FTPR.man
@@ -3221,6 +3222,7 @@ key_dict = {
 			10 : 'LOCL', # AMT Localization
 			11 : 'Unlock Token',
 			13 : 'USB Type C D-PHY',
+			14 : 'PCH Configuration',
 			# OEM (32-127)
 			32 : 'Boot Policy',
 			33 : 'iUnit Boot Loader', # Imaging Unit (Camera)
@@ -3241,6 +3243,7 @@ key_dict = {
 			48 : 'OEM DAL', # Dynamic Application Loader
 			49 : 'OEM DNX IFWI R1', # XML v1.0 (Download and Execute v1)
 			53 : 'OEM DNX IFWI R2', # XML v2.4 (Download and Execute v2)
+			57 : 'OEM Descriptor',
 			}
 
 # Unpack Engine CSE firmware
@@ -4949,8 +4952,7 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 def mfs_cfg_anl(buffer, rec_folder, root_folder, config_rec_size) :
 	# Generate MFS Configuration Records Log
 	mfs_pt = ext_table([col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Size' + col_e, col_y + 'Integrity' + col_e, col_y + 'Encryption' + col_e,
-			 col_y + 'Anti-Replay' + col_e, col_y + 'Rights' + col_e, col_y + 'OEM' + col_e, col_y + 'MCA' + col_e, col_y + 'Access Unknown' + col_e,
-			 col_y + 'Options Unknown' + col_e, col_y + 'Path' + col_e], True, 1)
+			 col_y + 'Anti-Replay' + col_e, col_y + 'Rights' + col_e, col_y + 'OEM' + col_e, col_y + 'MCA' + col_e, col_y + 'Unknown' + col_e, col_y + 'Path' + col_e], True, 1)
 	mfs_pt.title = col_y + 'MFS Configuration Records' + col_e
 	
 	rec_count = int.from_bytes(buffer[:4], 'little') # MFS Configuration Records Count
@@ -4978,7 +4980,7 @@ def mfs_cfg_anl(buffer, rec_folder, root_folder, config_rec_size) :
 			
 		# Append MFS Configuration Record Info to Log
 		mfs_pt.add_row([rec_name, ['File','Folder'][record_type], '0x%X' % rec_size, ['No','Yes'][integrity], ['No','Yes'][encryption], ['No','Yes'][anti_replay],
-		''.join(map(str, rec_hdr.get_rights(unix_rights))), ['No','Yes'][fitc_cfg], ['No','Yes'][mca_upd], '{0:03b}b'.format(acc_unk), '{0:014b}b'.format(opt_unk), local_mfs_path])
+		''.join(map(str, rec_hdr.get_rights(unix_rights))), ['No','Yes'][fitc_cfg], ['No','Yes'][mca_upd], '{0:03b}b'.format(acc_unk) + ' {0:014b}b'.format(opt_unk), local_mfs_path])
 		
 	mfs_txt(mfs_pt, root_folder, os.path.join(root_folder + 'home_records'), 'w') # Store/Print MFS Configuration Records Log
 	
@@ -7833,9 +7835,9 @@ for file_in in source :
 			if pmc_mn2_signed == 'Production' and (variant == 'CSME' and major >= 12) :
 				msg_pt.add_row(['PMC Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
 		
-		if ((variant == 'CSME' and major >= 12) or (variant == 'CSTXE' and major >= 3)) and not wcod_found :
-			msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_config)]])
-			msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed or oemp_found)]])
+		if variant == 'CSTXE' and major >= 3 and not wcod_found : msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_config)]])
+			
+		if variant in ('CSME','CSTXE','CSSPS') and not wcod_found : msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed or oemp_found)]])
 			
 		if (rgn_exist or ifwi_exist) and variant in ('CSME','CSTXE','CSSPS','TXE') : msg_pt.add_row(['OEM Unlock Token', ['No','Yes'][int(utok_found)]])
 		
@@ -7884,7 +7886,7 @@ for file_in in source :
 	
 	if fpt_num_fail : gen_msg(warn_stor, col_m + 'Warning: Wrong $FPT entry count %s, expected %s!' % (fpt_num_file,fpt_num_calc) + col_e, True)
 	
-	if pmc_not_comp : gen_msg(warn_stor, col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, True)
+	if pmc_not_comp : gen_msg(warn_stor, col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False)
 	
 	if fuj_rgn_exist : gen_msg(warn_stor, col_m + 'Warning: Fujitsu Intel Engine firmware detected!' + col_e, False)
 	
