@@ -67,7 +67,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -dbname : Renames input file based on unique DB name
 * -dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers
 * -unp86  : Unpacks all CSE Converged Security Engine firmware
-* -bug86  : Enables debug/pause mode during CSE unpacking
+* -bug86  : Enables pause on error mode during CSE unpacking
 * -ver86  : Enables full verbose mode during CSE unpacking
 
 #### **B3. ME Analyzer Error Control**
