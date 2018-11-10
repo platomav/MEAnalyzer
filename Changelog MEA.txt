@@ -1,3 +1,9 @@
+v1.72.0 r145
+
+Improved CSE File System unpacking output display
+Improved CSME 12 and CSSPS 5 Huffman symbols
+Fixed bug which ignored the -ver86 parameter
+
 v1.70.3 r144
 
 Added new CSE Key Hash Usages
