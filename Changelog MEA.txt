@@ -1,3 +1,10 @@
+v1.73.0 r146
+
+Improved handling of corrupt CSE File Systems
+Improved handling and display of all messages
+Improved CSE unpacking speed of LZMA modules
+Various code cleanup improvements
+
 v1.72.0 r145
 
 Improved CSE File System unpacking output display
