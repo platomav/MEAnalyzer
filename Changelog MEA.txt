@@ -1,3 +1,13 @@
+v1.74.0 r147
+
+Improved Initialized CSE File System support
+Improved CSME 12 SKU Platform detection
+Improved TXE 1.0 1.25MB I/T SKU detection
+Improved known bad CSE firmware hashes
+Improved CSME 12 and CSSPS 5 Huffman symbols
+Fixed wrong $FPT CSSPS File System detection
+Fixed crash when copying files with messages
+
 v1.73.0 r146
 
 Improved handling of corrupt CSE File Systems
