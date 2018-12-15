@@ -1,3 +1,11 @@
+v1.76.0 r148
+
+Added CSME 12 & CSTXE 4 Initialized File System support
+Added CSME 12 PCH Stepping(s) detection via File System
+Added CSE Extension 0x10 2nd Revision detection
+Improved CSE File System Quota Storage support
+Improved CSE File System error handling
+
 v1.74.0 r147
 
 Improved Initialized CSE File System support

@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.74.0'
+title = 'ME Analyzer v1.76.0'
 
 import os
 import re
@@ -901,7 +901,7 @@ class MFS_Config_Record_GetOptions(ctypes.Union):
 	]
 	
 # noinspection PyTypeChecker
-class MFS_Home_Record(ctypes.LittleEndianStructure) : # MFS Home Directory Record
+class MFS_Home_Record_0x18(ctypes.LittleEndianStructure) : # MFS Home Directory Record 0x18
 	_pack_ = 1
 	_fields_ = [
 		('FileInfo',		uint32_t),		# 0x00
@@ -912,6 +912,8 @@ class MFS_Home_Record(ctypes.LittleEndianStructure) : # MFS Home Directory Recor
 		('FileName',		char*12),		# 0x0C
 		# 0x18
 	]
+	
+	# Remember to also adjust MFS_Home_Record_0x1C for common fields
 	
 	def mfs_print(self) :
 		fvalue = ['No','Yes']
@@ -934,6 +936,63 @@ class MFS_Home_Record(ctypes.LittleEndianStructure) : # MFS Home Directory Recor
 		pt.add_row(['Owner User ID', '%0.4X' % self.OwnerUserID])
 		pt.add_row(['Owner Group ID', '%0.4X' % self.OwnerGroupID])
 		pt.add_row(['Unknown Salt', '0x%X' % self.UnknownSalt])
+		pt.add_row(['File Name', self.FileName.decode('utf-8')])
+		
+		return pt
+		
+	@staticmethod
+	def get_rights(f4) :
+		bits = format(f4, '09b')
+		for i in range(len(bits)) :
+			yield 'rwxrwxrwx'[i] if bits[i] == '1' else '-'
+	
+	def get_flags(self) :
+		f_flags = MFS_Home_Record_GetFileInfo()
+		f_flags.asbytes = self.FileInfo
+		a_flags = MFS_Home_Record_GetAccess()
+		a_flags.asbytes = self.AccessMode
+		
+		return f_flags.b.FileIndex, f_flags.b.IntegritySalt, f_flags.b.FileSystemID, a_flags.b.UnixRights, a_flags.b.Integrity, \
+		       a_flags.b.Encryption, a_flags.b.AntiReplay, a_flags.b.Unknown0, a_flags.b.KeyType, a_flags.b.RecordType, a_flags.b.Unknown1
+			   
+# noinspection PyTypeChecker
+class MFS_Home_Record_0x1C(ctypes.LittleEndianStructure) : # MFS Home Directory Record 0x1C
+	_pack_ = 1
+	_fields_ = [
+		('FileInfo',		uint32_t),		# 0x00
+		('AccessMode',		uint16_t),		# 0x04
+		('OwnerUserID',		uint16_t),		# 0x06
+		('OwnerGroupID',	uint16_t),		# 0x08
+		('UnknownSalt',		uint16_t*3),	# 0x0A
+		('FileName',		char*12),		# 0x10
+		# 0x1C
+	]
+	
+	# Remember to also adjust MFS_Home_Record_0x18 for common fields
+	
+	def mfs_print(self) :
+		fvalue = ['No','Yes']
+		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11 = self.get_flags()
+		
+		UnknownSalt = ''.join('%0.4X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.UnknownSalt))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'MFS Home Record' + col_e
+		pt.add_row(['File Index', '%d' % f1])
+		pt.add_row(['Integrity Salt', '0x%X' % f2])
+		pt.add_row(['File System Type', mfs_type[f3]])
+		pt.add_row(['Access Rights', ''.join(map(str, self.get_rights(f4)))])
+		pt.add_row(['Integrity Protection', fvalue[f5]])
+		pt.add_row(['Encryption Protection', fvalue[f6]])
+		pt.add_row(['Anti-Replay Protection', fvalue[f7]])
+		pt.add_row(['Access Mode Unknown 0', '{0:01b}b'.format(f8)])
+		pt.add_row(['Key Type', ['Intel','OEM'][f9]])
+		pt.add_row(['Record Type', ['File','Folder'][f10]])
+		pt.add_row(['Access Mode Unknown 1', '{0:01b}b'.format(f11)])
+		pt.add_row(['Owner User ID', '%0.4X' % self.OwnerUserID])
+		pt.add_row(['Owner Group ID', '%0.4X' % self.OwnerGroupID])
+		pt.add_row(['Unknown Salt', UnknownSalt])
 		pt.add_row(['File Name', self.FileName.decode('utf-8')])
 		
 		return pt
@@ -983,9 +1042,9 @@ class MFS_Home_Record_GetAccess(ctypes.Union):
 		('b', MFS_Home_Record_Access),
 		('asbytes', uint16_t)
 	]
-	
+
 # noinspection PyTypeChecker
-class MFS_Security_Table(ctypes.LittleEndianStructure) : # MFS Security Table
+class MFS_Security_Table_0x34(ctypes.LittleEndianStructure) : # MFS Security Table 0x34
 	_pack_ = 1
 	_fields_ = [
 		('HMACSHA256',		uint32_t*8),	# 0x00 HMAC SHA-256
@@ -1027,13 +1086,13 @@ class MFS_Security_Table(ctypes.LittleEndianStructure) : # MFS Security Table
 		return pt
 	
 	def get_flags(self) :
-		s_flags = MFS_Security_Table_GetFlags()
+		s_flags = MFS_Security_Table_GetFlags_0x34()
 		s_flags.asbytes = self.Flags
 		
 		return s_flags.b.Unknown0, s_flags.b.AntiReplay, s_flags.b.Encryption, s_flags.b.Unknown1, s_flags.b.ARIndex, \
 			   s_flags.b.Unknown2, s_flags.b.SVN, s_flags.b.Unknown3
 
-class MFS_Security_Table_Flags(ctypes.LittleEndianStructure):
+class MFS_Security_Table_Flags_0x34(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('Unknown0', uint32_t, 1),
 		('AntiReplay', uint32_t, 1),
@@ -1045,9 +1104,63 @@ class MFS_Security_Table_Flags(ctypes.LittleEndianStructure):
 		('Unknown3', uint32_t, 3)
 	]
 	
-class MFS_Security_Table_GetFlags(ctypes.Union):
+class MFS_Security_Table_GetFlags_0x34(ctypes.Union):
 	_fields_ = [
-		('b', MFS_Security_Table_Flags),
+		('b', MFS_Security_Table_Flags_0x34),
+		('asbytes', uint32_t)
+	]
+			   
+# noinspection PyTypeChecker
+class MFS_Security_Table_0x28(ctypes.LittleEndianStructure) : # MFS Security Table 0x28
+	_pack_ = 1
+	_fields_ = [
+		('HMAC',			uint32_t*4),	# 0x00 HMAC MD5 ?
+		('Flags',			uint32_t),		# 0x10
+		('Reserved',		uint32_t*2),	# 0x14
+		('Unknown',			uint32_t*3),	# 0x1C
+		# 0x28
+	]
+	
+	def mfs_print(self) :
+		fvalue = ['No','Yes']
+		f1,f2,f3,f4,f5 = self.get_flags()
+		
+		HMAC = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HMAC))
+		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Unknown = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Unknown))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'MFS Security Table' + col_e
+		pt.add_row(['HMAC', HMAC])
+		pt.add_row(['Flags Unknown 0', '{0:09b}b'.format(f1)])
+		pt.add_row(['Security Version Number', '%d' % f2])
+		pt.add_row(['Flags Unknown 1', '{0:05b}b'.format(f3)])
+		pt.add_row(['Encryption Protection', fvalue[f4]])
+		pt.add_row(['Flags Unknown 2', '{0:09b}b'.format(f5)])
+		pt.add_row(['Reserved', Reserved])
+		pt.add_row(['Unknown', Unknown])
+		
+		return pt
+		
+	def get_flags(self) :
+		s_flags = MFS_Security_Table_GetFlags_0x28()
+		s_flags.asbytes = self.Flags
+		
+		return s_flags.b.Unknown0, s_flags.b.SVN, s_flags.b.Unknown1, s_flags.b.Encryption, s_flags.b.Unknown2
+			   
+class MFS_Security_Table_Flags_0x28(ctypes.LittleEndianStructure):
+	_fields_ = [
+		('Unknown0', uint32_t, 9),
+		('SVN', uint32_t, 8), # Security Version Number (0 < SVN <= 255, 255 = 11111111 or 8-bit length)
+		('Unknown1', uint32_t, 5),
+		('Encryption', uint32_t, 1),
+		('Unknown2', uint32_t, 9)
+	]
+	
+class MFS_Security_Table_GetFlags_0x28(ctypes.Union):
+	_fields_ = [
+		('b', MFS_Security_Table_Flags_0x28),
 		('asbytes', uint32_t)
 	]
 	
@@ -1057,7 +1170,7 @@ class MFS_Quota_Storage_Header(ctypes.LittleEndianStructure) : # MFS Quota Stora
 	_fields_ = [
 		('Signature',		uint32_t),		# 0x00
 		('Revision',		uint16_t),		# 0x04
-		('EntryCount',		uint16_t),		# 0x06 Should match FTPR > vfs.met > Extension 13 Entry Count
+		('EntryCount',		uint16_t),		# 0x06 Should match FTPR/NFTP > vfs.met > Extension 13 Entries
 		# 0x08
 	]
 	
@@ -1068,106 +1181,6 @@ class MFS_Quota_Storage_Header(ctypes.LittleEndianStructure) : # MFS Quota Stora
 		pt.add_row(['Signature', '0x%0.8X' % self.Signature])
 		pt.add_row(['Revision', '%d' % self.Revision])
 		pt.add_row(['Entry Count', '%d' % self.EntryCount])
-		
-		return pt
-
-# noinspection PyTypeChecker
-class MFS_Quota_Storage_Entry_0xC(ctypes.LittleEndianStructure) : # MFS Quota Storage Entry 0xC
-	_pack_ = 1
-	_fields_ = [
-		('UserID',			uint16_t),		# 0x00 Should match FTPR/NFTP > vfs.met > Extension 13 Entry > User ID
-		('Reserved',		uint16_t),		# 0x02 0xAAAA
-		('Unknown0',		uint32_t),		# 0x04
-		('Unknown1',		uint32_t),		# 0x08
-		# 0x0C
-	]
-	
-	def mfs_print(self) :
-		pt = ext_table(['Field', 'Value'], False, 1)
-		
-		pt.title = col_y + 'MFS Quota Storage Entry' + col_e
-		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
-		pt.add_row(['Reserved', '0x%X' % self.Reserved])
-		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
-		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
-		
-		return pt		
-	
-# noinspection PyTypeChecker
-class MFS_Quota_Storage_Entry_0x10(ctypes.LittleEndianStructure) : # MFS Quota Storage Entry 0x10
-	_pack_ = 1
-	_fields_ = [
-		('UserID',			uint16_t),		# 0x00 Should match FTPR/NFTP > vfs.met > Extension 13 Entry > User ID
-		('Reserved',		uint16_t),		# 0x02 0xAAAA
-		('Unknown0',		uint32_t),		# 0x04
-		('Unknown1',		uint32_t),		# 0x08
-		('Unknown2',		uint32_t),		# 0x0C
-		# 0x10
-	]
-	
-	def mfs_print(self) :
-		pt = ext_table(['Field', 'Value'], False, 1)
-		
-		pt.title = col_y + 'MFS Quota Storage Entry' + col_e
-		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
-		pt.add_row(['Reserved', '0x%X' % self.Reserved])
-		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
-		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
-		pt.add_row(['Unknown 2', '0x%X' % self.Unknown2])
-		
-		return pt
-	
-# noinspection PyTypeChecker
-class MFS_Quota_Storage_Entry_0x14(ctypes.LittleEndianStructure) : # MFS Quota Storage Entry 0x14
-	_pack_ = 1
-	_fields_ = [
-		('UserID',			uint16_t),		# 0x00 Should match FTPR/NFTP > vfs.met > Extension 13 Entry > User ID
-		('Reserved',		uint16_t),		# 0x02 0xAAAA
-		('Unknown0',		uint32_t),		# 0x04
-		('Unknown1',		uint32_t),		# 0x08
-		('Unknown2',		uint32_t),		# 0x0C
-		('Unknown3',		uint32_t),		# 0x10
-		# 0x14
-	]
-	
-	def mfs_print(self) :
-		pt = ext_table(['Field', 'Value'], False, 1)
-		
-		pt.title = col_y + 'MFS Quota Storage Entry' + col_e
-		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
-		pt.add_row(['Reserved', '0x%X' % self.Reserved])
-		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
-		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
-		pt.add_row(['Unknown 2', '0x%X' % self.Unknown2])
-		pt.add_row(['Unknown 3', '0x%X' % self.Unknown3])
-		
-		return pt
-		
-# noinspection PyTypeChecker
-class MFS_Quota_Storage_Entry_0x18(ctypes.LittleEndianStructure) : # MFS Quota Storage Entry 0x18
-	_pack_ = 1
-	_fields_ = [
-		('UserID',			uint16_t),		# 0x00 Should match FTPR/NFTP > vfs.met > Extension 13 Entry > User ID
-		('Reserved',		uint16_t),		# 0x02 0xAAAA
-		('Unknown0',		uint32_t),		# 0x04
-		('Unknown1',		uint32_t),		# 0x08
-		('Unknown2',		uint32_t),		# 0x0C
-		('Unknown3',		uint32_t),		# 0x10
-		('Unknown4',		uint32_t),		# 0x14
-		# 0x18
-	]
-	
-	def mfs_print(self) :
-		pt = ext_table(['Field', 'Value'], False, 1)
-		
-		pt.title = col_y + 'MFS Quota Storage Entry' + col_e
-		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
-		pt.add_row(['Reserved', '0x%X' % self.Reserved])
-		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
-		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
-		pt.add_row(['Unknown 2', '0x%X' % self.Unknown2])
-		pt.add_row(['Unknown 3', '0x%X' % self.Unknown3])
-		pt.add_row(['Unknown 4', '0x%X' % self.Unknown4])
 		
 		return pt
 		
@@ -2255,38 +2268,57 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3
 class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - iUnit (IUNP) (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
-		("Tag",				uint32_t),		# 0x00
-		("Size",			uint32_t),		# 0x04
-		("Unknown",			uint32_t),		# 0x08 1
-		("Reserved0",		uint32_t*4),	# 0x0C
-		("SizeComp",		uint32_t),		# 0x1C
-		("SizeUncomp",		uint32_t),		# 0x20
-		("Day",				uint8_t),		# 0x24
-		("Month",			uint8_t),		# 0x25
-		("Year",			uint16_t),		# 0x26
-		("Hash",			uint32_t*8),	# 0x28 Big Endian
-		("Reserved1",		uint32_t*6),	# 0x48
-		# 0x60
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('Revision',		uint32_t),		# 0x08
+		('Reserved',		uint32_t*4),	# 0x0C
+		# 0x1C
 	]
 	
 	def ext_print(self) :
-		Reserved0 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved0))
-		Date = '%0.4X-%0.2X-%0.2X' % (self.Year, self.Month, self.Day)
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
-		Reserved1 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved1))
+		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 16, Imaging Unit (iUnit/Camera)' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Unknown', '0x%X' % self.Unknown])
-		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 4 else Reserved0])
-		pt.add_row(['Size Compressed', '0x%X' % self.SizeComp])
-		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
+		pt.add_row(['Revision', '%d' % self.Revision])
+		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
+		
+		return pt
+		
+# noinspection PyTypeChecker
+class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - CSME11/CSME12/CSTXE3/CSTXE4/CSSPS4/CSSPS5 - iUnit (IUNP) (not in XML, Reverse Engineered)
+	_pack_ = 1
+	_fields_ = [
+		('Chunk',			uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('Day',				uint8_t),		# 0x08
+		('Month',			uint8_t),		# 0x09
+		('Year',			uint16_t),		# 0x0A
+		('Hash',			uint32_t*8),	# 0x0C Big Endian
+		('Unknown0',		uint32_t),		# 0x2C
+		('Unknown1',		uint32_t),		# 0x30 Base Address ?
+		('Reserved',		uint32_t*4),	# 0x34
+		# 0x44
+	]
+	
+	def ext_print(self) :
+		Date = '%0.4X-%0.2X-%0.2X' % (self.Year, self.Month, self.Day)
+		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 16, Chunk' + col_e
+		pt.add_row(['Number', '%d' % self.Chunk])
+		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Date', Date])
 		pt.add_row(['Hash', Hash])
-		pt.add_row(['Reserved 1', '0x0' if Reserved1 == '00000000' * 6 else Reserved1])
+		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
+		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
+		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
 		
 		return pt
 
@@ -3173,7 +3205,7 @@ ext_tag_rev_hdr_cssps5 = []
 ext_tag_rev_mod_cssps5 = [0x0]
 
 # CSE Extensions without Modules
-ext_tag_mod_none = [0x4,0xA,0xC,0x10,0x11,0x13,0x16,0x18,0x19,0x1A,0x32]
+ext_tag_mod_none = [0x4,0xA,0xC,0x11,0x13,0x16,0x18,0x19,0x1A,0x32]
 
 # CSE Extensions with Module Count
 ext_tag_mod_count = [0x1,0x2,0x12,0x14,0x15]
@@ -3186,6 +3218,12 @@ cssps_platform = {'GE': 'Greenlow', 'PU': 'Purley', 'HA': 'Harrisonville', 'PE':
 
 # CSE File System ID
 mfs_type = {0: 'root', 1: 'home', 2: 'bin', 3: 'susram', 4: 'fpf', 5: 'dev', 6: 'umafs'}
+
+# CSE File System Home Directory Record Structures
+home_rec_struct = {0x18:MFS_Home_Record_0x18, 0x1C:MFS_Home_Record_0x1C}
+
+# CSE File System Home Directory Security Structures
+sec_hdr_struct = {0x28:MFS_Security_Table_0x28, 0x34:MFS_Security_Table_0x34}
 
 # CSE Known Bad Partition/Module Hashes
 cse_known_bad_hashes = [
@@ -3256,6 +3294,7 @@ ext_dict = {
 			'CSE_Ext_0D_Mod_R2' : CSE_Ext_0D_Mod_R2,
 			'CSE_Ext_0E_Mod' : CSE_Ext_0E_Mod,
 			'CSE_Ext_0F_Mod' : CSE_Ext_0F_Mod,
+			'CSE_Ext_10_Mod' : CSE_Ext_10_Mod,
 			'CSE_Ext_12_Mod' : CSE_Ext_12_Mod,
 			'CSE_Ext_14_HashArray' : CSE_Ext_14_HashArray,
 			'CSE_Ext_14_RegionMap' : CSE_Ext_14_RegionMap,
@@ -3531,10 +3570,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	for cpdrange in cpd_match_ranges :
 		(start_cpd_emod, end_cpd_emod) = cpdrange.span()
 		
-		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,x4,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12 \
+		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,x4,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12,ext_iunit_val \
 		= ext_anl(reading, '$CPD', start_cpd_emod, file_end, [variant, major, minor, hotfix, build], None)
 		
-		mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val)
+		mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val)
 	
 # Analyze CSE Extensions
 # noinspection PyUnusedLocal
@@ -3555,6 +3594,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	dnx_rcip_len = -1
 	start_man_match = -1
 	dnx_hash_arr_off = -1
+	iunit_chunk_start = -1
 	hash_arr_valid_count = 0
 	chunk_hash_valid_count = 0
 	cpd_hdr = None
@@ -3577,9 +3617,11 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	cpd_mod_names = []
 	cpd_ext_names = []
 	mn2_hdr_print = []
+	iunit_chunk_valid = []
 	ext32_info = ['UNK', 'XX']
 	ext12_info = ['00000000', 'NA', 0, 'NA'] # SKU Capabilities, SKU Type, LBG Support, SKU Platform
 	ext_dnx_val = [-1, False, False] # [DnXVer, AllHashArrValid, AllChunkValid]
+	ext_iunit_val = [False] # [AllChunkValid]
 	ext_phval = [False, False, 0, 0]
 	mn2_sigs = [False, -1, -1, True, -1, None]
 	variant,major,minor,hotfix,build = ftpr_var_ver
@@ -3817,7 +3859,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 							hash_arr_hdr_count = ext_hdr_p.HashArrHdrCount # Hashes Array Header Count
 							chunk_hash_size = ext_hdr_p.ChunkHashSize # Hashes Array Chunk Hash Size
 							rcip_chunk_size = ext_hdr_p.ChunkSize # RCIP IFWI Chunk Size
-							rcip_chunk_count = int(dnx_rcip_len / rcip_chunk_size)  # RCIP IFWI Chunk Count
+							rcip_chunk_count = int(dnx_rcip_len / rcip_chunk_size) # RCIP IFWI Chunk Count
 							ifwi_rgn_count = ext_hdr_p.IFWIRegionCount # IFWI Region Count (eMMC/UFS)
 							
 							# Parse each Hashes Array Header
@@ -4051,17 +4093,34 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				
 				elif ext_tag == 0x10 :
 					ext_hdr = get_struct(buffer, cpd_ext_offset, ext_struct_name)
-					ext_length = ctypes.sizeof(ext_struct_name)
+					CSE_Ext_10_length = ctypes.sizeof(ext_struct_name)
+					CSE_Ext_10_Chunk_offset = cpd_ext_offset + CSE_Ext_10_length # Offset of 1st iUnit Extension Entry/Chunk
+					CSE_Ext_10_Chunk_length = ctypes.sizeof(ext_struct_mod) # iUnit Extension Entry/Chunk Size
+					CSE_Ext_10_Chunk_area = cpd_ext_end - CSE_Ext_10_Chunk_offset # iUnit Extension Entries/Chunks Area
+					CSE_Ext_10_Chunk_count = divmod(CSE_Ext_10_Chunk_area, CSE_Ext_10_Chunk_length) # Number of iUnit Entries/Chunks
+					CSE_Ext_10_iUnit_offset = cpd_ext_end # iUnit Module data begin after iUnit Metadata
+					while buffer[CSE_Ext_10_iUnit_offset] == 0xFF : CSE_Ext_10_iUnit_offset += 1 # Skip padding before iUnit Module data
 					
-					# Detect CSE Extension without Modules different size & notify user
-					if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
-						cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e)
+					# Check if iUnit Entries/Chunks Area is divisible by Entry/Chunk Size size
+					if CSE_Ext_10_Chunk_count[1] != 0 :
+						cse_anl_err(col_r + 'Error: Detected non-divisible CSE Extension 0x%0.2X at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e)
 					
-					mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
-					mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.Hash) # Metadata's Module Hash (BE)
+					# Parse all iUnit Module Chunks via their Extension Metadata
+					for chunk in range(CSE_Ext_10_Chunk_count[0]) :
+						chunk_hdr = get_struct(buffer, CSE_Ext_10_Chunk_offset + chunk * CSE_Ext_10_Chunk_length, ext_struct_mod) # iUnit Chunk Metadata
+						iunit_chunk_size = chunk_hdr.Size # iUnit Module Chunk Size
+						if chunk == 0 : iunit_chunk_start = CSE_Ext_10_iUnit_offset + chunk_hdr.Unknown1 # First Chunk starts from a Base Address ?
+						iunit_chunk_hash_mea = sha_256(buffer[iunit_chunk_start:iunit_chunk_start + iunit_chunk_size]).upper() # iUnit Module Chunk MEA Hash
+						iunit_chunk_hash_ext = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in chunk_hdr.Hash) # iUnit Module Chunk Intel Hash (BE)
+						iunit_chunk_valid.append(iunit_chunk_hash_mea == iunit_chunk_hash_ext) # Store iUnit Module Chunk(s) Hash validation results
+						iunit_chunk_start += iunit_chunk_size # Next iUnit Module Chunk starts at the previous plus its size
 					
-					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, mod_uncomp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
-				
+					# Verify that all iUnit Module data Chunks are valid
+					if iunit_chunk_valid == [True] * len(iunit_chunk_valid) : ext_iunit_val[0] = True
+					
+					CSE_Ext_10_iUnit_size = iunit_chunk_start - CSE_Ext_10_iUnit_offset # iUnit Module full Size for CSE Unpacking
+					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, CSE_Ext_10_iUnit_size, CSE_Ext_10_iUnit_size, 0, 0, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
+						
 				elif ext_tag == 0x11 :
 					ext_hdr = get_struct(buffer, cpd_ext_offset, ext_struct_name)
 					ext_length = ctypes.sizeof(ext_struct_name)
@@ -4213,7 +4272,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					if mod_data == b'\xFF' * mod_comp_size or cpd_entry_offset >= file_end : cpd_mod_attr[mod][6] = 1 # Determine if Module is Empty/Missing
 					
 					break
-					
+				
 			# Detect $FPT Partition Size mismatch vs CSE_Ext_03/16
 			for part in fpt_part_all :
 				# Verify that CSE_Ext_03/16.PartitionSize exists and that the same $CPD Partition was found at fpt_part_all
@@ -4276,10 +4335,10 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					
 		for mod_index in ibbp_del : del cpd_mod_attr[mod_index] # Delete missing Module's Attributes
 	
-	return cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info
+	return cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val
 
 # Analyze & Store CSE Modules
-def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phval, ext_dnx_val) :
+def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val) :
 	# noinspection PyUnusedLocal
 	mea_hash_c = 0
 	mea_hash_u = 0
@@ -4463,7 +4522,8 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 				# MFS Configuration
 				elif mod_name in ('intl.cfg','fitc.cfg') :
 					mfs_file_no = 6 if mod_name == 'intl.cfg' else 7
-					if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d ...' % mfs_file_no + col_e) # Print working message during CSE Unpacking
+					mfs_file_name = {6:'Intel Configuration', 7:'OEM Configuration'}
+					if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file_no, mfs_file_name[mfs_file_no]) + col_e)
 					rec_folder = os.path.join(mea_dir, folder_name, mod_name, '')
 					# noinspection PyUnusedLocal
 					pch_init_info = mfs_cfg_anl(mfs_file_no, mod_data, rec_folder, rec_folder, 0x1C, []) # Parse MFS Configuration Records
@@ -4504,6 +4564,13 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						elif mod_name == 'version' :
 							print(col_m + '\n    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						elif param.me11_mod_bug :
+							input(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+						else :
+							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					elif cpd_pname in ('IUNP','IUNM') :
+						if (mod_name,ext_iunit_val[0]) == ('iunit',True) :
+							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						elif param.me11_mod_bug :
 							input(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						else :
@@ -4682,10 +4749,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	index_size_dat = 0x1 # MFS Data Page Index Entry Length
 	page_hdr_size = 0x12 # MFS Page Header Structure Size
 	vol_hdr_size = 0xE # MFS Volume Header Structure Size
-	sec_hdr_size = 0x34 # MFS Security Table Structure Size
-	vfs_hdr_size = 0x8 # MFS Quota Storage Header Structure Size
 	config_rec_size = 0x1C # MFS Config Record Structure Size
-	home_rec_size = 0x18 # MFS Home Directory Record Structure Size
 	mfs_files = [] # MFS Low Level Files Numbers & Contents
 	mfs_page_init = [] # MFS Total Unsorted Pages Contents
 	sys_page_sorted = [] # MFS Total Sorted System Pages Contents
@@ -4698,6 +4762,10 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	pch_init_info = [] # Store PCH Initialization Table Info
 	chunks_max_sys = sys_count * ((page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_size)) # MFS Maximum System Chunks Count
 	chunks_max_dat = dat_count * ((page_size - page_hdr_size) // (index_size_dat + chunk_size)) # MFS Maximum Data Chunks Count (= Actual)
+	
+	# Set MFS Security Table Structure Size
+	if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4)] : sec_hdr_size = 0x34
+	else : sec_hdr_size = 0x28
 	
 	# Sort MFS System & Data Pages
 	for page_index in range(page_count) :
@@ -4888,16 +4956,16 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	for mfs_file in mfs_files :
 		# Parse MFS Low Level Files 1 (Unknown), 2-3 (Anti-Replay) and 4 (SVN Migration)
 		if mfs_file[1] and mfs_file[0] in (1,2,3,4) :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d ...' % mfs_file[0] + col_e) # Print working message during CSE Unpacking
+			mfs_file_name = {1:'Unknown', 2:'Anti-Replay', 3:'Anti-Replay', 4:'SVN Migration'}
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name[mfs_file[0]]) + col_e)
 			parsed_indexes.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-			mfs_file_name = {1:'Unknown', 2:'Anti-Replay', 3:'Anti-Replay', 4:'SVN Migration'}[mfs_file[0]]
-			file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
+			file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name[mfs_file[0]]), '')
 			file_data = mfs_file[1][:-sec_hdr_size] # MFS Low Level File Contents without Security
 			file_sec = mfs_file[1][-sec_hdr_size:] # MFS Low Level File Security without Contents
-			file_sec_hdr = get_struct(file_sec, 0, MFS_Security_Table) # MFS Low Level File Security Structure
+			file_sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Low Level File Security Structure
 			if param.me11_mod_ext :
 				file_sec_ptv = file_sec_hdr.mfs_print() # MFS Low Level File Security Structure Info
-				file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_file_name) # Adjust Security Structure Verbose Info Title
+				file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_file_name[mfs_file[0]]) # Adjust Security Structure Verbose Info Title
 				print('\n%s' % file_sec_ptv) # Print Security Structure Info during Verbose CSE Unpacking
 			file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Contents Path
 			file_sec_path = os.path.join(file_folder, 'Integrity.bin') # MFS Low Level File Security Path
@@ -4907,128 +4975,83 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		
 		# Parse MFS Low Level File 5 (Quota Storage)
 		elif mfs_file[1] and mfs_file[0] == 5 :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d ...' % mfs_file[0] + col_e) # Print working message during CSE Unpacking
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File 5 (Quota Storage) ...' + col_e)
 			parsed_indexes.append(mfs_file[0]) # Set MFS Low Level File 5 as Parsed
-			file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d Quota Storage' % mfs_file[0], '')
-			vfs_hdr_path = os.path.join(file_folder, 'Header.bin') # MFS Quota Storage Header Path
-			vfs_data_path = os.path.join(file_folder, 'Quota_records.bin') # MFS Quota Storage Contents Path
+			file_folder = os.path.join(mea_dir, mfs_folder, '005 Quota Storage', '')
+			file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File 5 Contents Path
+			file_sec_path = os.path.join(file_folder, 'Integrity.bin') # MFS Low Level File 5 Security Path
 			
-			vfs_rec_patt = list(re.compile(br'..\xAA\xAA').finditer(mfs_file[1][:])) # Find all MFS Quota Storage Records via their Reserved 0xAAAA field
-			vfs_rec_size = vfs_rec_patt[1].start() - vfs_rec_patt[0].start() # Determine MFS Quota Storage Record Size via pattern offset difference
-			vfs_rec_hdr = {0xC:MFS_Quota_Storage_Entry_0xC, 0x10:MFS_Quota_Storage_Entry_0x10, 0x14:MFS_Quota_Storage_Entry_0x14, 0x18:MFS_Quota_Storage_Entry_0x18}
+			# Detect MFS Low Level File 5 (Quota Storage) Security
+			if (variant,major) == ('CSME',12) :
+				file_data = mfs_file[1][:-sec_hdr_size] # MFS Low Level File 5 Contents without Security
+				file_sec = mfs_file[1][-sec_hdr_size:] # MFS Low Level File 5 Security without Contents
+				mfs_write(file_folder, file_sec_path, file_sec) # Store MFS Low Level File 5 Security
+				file_sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Low Level File 5 Security Structure
+				mfs_txt(file_sec_hdr.mfs_print(), file_folder, file_sec_path, 'w', False) # Store/Print MFS Low Level File 5 Security Info
+				if param.me11_mod_ext :
+					file_sec_ptv = file_sec_hdr.mfs_print() # MFS Low Level File 5 Security Structure Info
+					file_sec_ptv.title = 'MFS 005 Quota Storage Integrity' # Adjust Security Structure Verbose Info Title
+					print('\n%s' % file_sec_ptv) # Print Security Structure Info during Verbose CSE Unpacking
+			else :
+				file_data = mfs_file[1][:] # MFS Low Level File 5 Contents
 			
-			# MFS Quota Storage Record Size must be known for proper parsing
-			if vfs_rec_size not in vfs_rec_hdr :
-				mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown MFS Storage Quota Entry Size (%d)' % vfs_rec_size + col_e, 'error', False, [])
-				vfs_rec_size = 0xC # Fallback to smallest size to avoid crash
-			
-			# Determine Header & Record Start/End offsets
-			if vfs_rec_patt[0].start() == vfs_hdr_size : # Header at the beginning
-				vfs_hdr_start = 0
-				vfs_rec_start = vfs_hdr_size
-				vfs_rec_end = len(mfs_file[1][:])
-			elif vfs_rec_patt[-1].start() + vfs_rec_size == len(mfs_file[1][:]) - vfs_hdr_size : # Header at the end
-				vfs_hdr_start = len(mfs_file[1][:]) - vfs_hdr_size
-				vfs_rec_start = 0
-				vfs_rec_end = vfs_hdr_start
-			else : # No Header
-				vfs_hdr_start = -1
-				vfs_rec_start = 0
-				vfs_rec_end = len(mfs_file[1][:])
-			
-			# Parse MFS Quota Storage Header, if applicable
-			if vfs_hdr_start >= 0 :
-				vfs_hdr_data = mfs_file[1][vfs_hdr_start:vfs_hdr_start + vfs_hdr_size] # MFS Quota Storage Header Contents
-				mfs_write(file_folder, vfs_hdr_path, vfs_hdr_data) # Store MFS Quota Storage Header Contents
-				vfs_hdr = get_struct(vfs_hdr_data, 0, MFS_Quota_Storage_Header) # MFS Quota Storage Header Structure
-				if param.me11_mod_ext:
-					vfs_hdr_ptv = vfs_hdr.mfs_print() # MFS Quota Storage Header Structure Info
-					vfs_hdr_ptv.title = 'MFS 005 Quota Storage Header' # Adjust Header Structure Verbose Info Title
-					print('\n%s' % vfs_hdr_ptv) # Print Structure Info during Verbose CSE Unpacking
-				mfs_txt(vfs_hdr.mfs_print(), file_folder, vfs_hdr_path[:-4], 'w', False) # Store/Print MFS Quota Storage Header Info
-			
-			vfs_rec_all = mfs_file[1][vfs_rec_start:vfs_rec_end] # MFS Quota Storage Records/Contents
-			mfs_write(file_folder, vfs_data_path, vfs_rec_all) # Store MFS Quota Storage Contents
-			vfs_rec_count = divmod(len(vfs_rec_all), vfs_rec_size)[0] # Count MFS Quota Storage Records manually
-			
-			# Setup MFS Quota Storage Records Info
-			if vfs_rec_size == 0xC :
-				mfs_pt = ext_table([col_y + 'User ID' + col_e, col_y + 'Reserved' + col_e, col_y + 'Unknown 0' + col_e, col_y + 'Unknown 1' + col_e], True, 1)
-			elif vfs_rec_size == 0x10 :
-				mfs_pt = ext_table([col_y + 'User ID' + col_e, col_y + 'Reserved' + col_e, col_y + 'Unknown 0' + col_e, col_y + 'Unknown 1' + col_e, 
-									col_y + 'Unknown 2' + col_e], True, 1)
-			elif vfs_rec_size == 0x14 :
-				mfs_pt = ext_table([col_y + 'User ID' + col_e, col_y + 'Reserved' + col_e, col_y + 'Unknown 0' + col_e, col_y + 'Unknown 1' + col_e, 
-									col_y + 'Unknown 2' + col_e, col_y + 'Unknown 3' + col_e], True, 1)
-			elif vfs_rec_size == 0x18 :
-				mfs_pt = ext_table([col_y + 'User ID' + col_e, col_y + 'Reserved' + col_e, col_y + 'Unknown 0' + col_e, col_y + 'Unknown 1' + col_e, 
-									col_y + 'Unknown 2' + col_e, col_y + 'Unknown 3' + col_e, col_y + 'Unknown 4' + col_e], True, 1)
-			
-			# Parse MFS Quota Storage Records
-			for rec in range(vfs_rec_count) :
-				vfs_rec = get_struct(vfs_rec_all, rec * vfs_rec_size, vfs_rec_hdr[vfs_rec_size]) # MFS Quota Storage Record Structure
-				vfs_rec_data = vfs_rec_all[rec * vfs_rec_size:rec * vfs_rec_size + vfs_rec_size] # MFS Quota Storage Record Contents
-				
-				if vfs_rec_size == 0xC :
-					# noinspection PyUnboundLocalVariable
-					mfs_pt.add_row(['0x%0.4X' % vfs_rec.UserID, '0x%X' % vfs_rec.Reserved, '0x%X' % vfs_rec.Unknown0, '0x%X' % vfs_rec.Unknown1])
-				elif vfs_rec_size == 0x10 :
-					mfs_pt.add_row(['0x%0.4X' % vfs_rec.UserID, '0x%X' % vfs_rec.Reserved, '0x%X' % vfs_rec.Unknown0, '0x%X' % vfs_rec.Unknown1, 
-								'0x%X' % vfs_rec.Unknown2])
-				elif vfs_rec_size == 0x14 :
-					mfs_pt.add_row(['0x%0.4X' % vfs_rec.UserID, '0x%X' % vfs_rec.Reserved, '0x%X' % vfs_rec.Unknown0, '0x%X' % vfs_rec.Unknown1, 
-								'0x%X' % vfs_rec.Unknown2, '0x%X' % vfs_rec.Unknown3])
-				elif vfs_rec_size == 0x18 :
-					mfs_pt.add_row(['0x%0.4X' % vfs_rec.UserID, '0x%X' % vfs_rec.Reserved, '0x%X' % vfs_rec.Unknown0, '0x%X' % vfs_rec.Unknown1, 
-								'0x%X' % vfs_rec.Unknown2, '0x%X' % vfs_rec.Unknown3, '0x%X' % vfs_rec.Unknown4])
-					
-				vfs_rec_id = vfs_rec.UserID # MFS Quota Storage Record User ID (FTPR/NFTP > vfs.met > Extension 13 Entry)
-				vfs_rec_path = os.path.join(file_folder, '%0.4X.bin' % vfs_rec_id) # MFS Quota Storage Record Contents Path
-				mfs_write(file_folder, vfs_rec_path, vfs_rec_data) # Store MFS Quota Storage Record Contents
-				mfs_txt(vfs_rec.mfs_print(), file_folder, vfs_rec_path, 'w', False) # Store/Print MFS Quota Storage Record Info
-
-			mfs_pt.title = col_y + 'MFS 005 Quota Storage Records' + col_e # Adjust MFS Quota Storage Records Info Title
-			
-			mfs_txt(mfs_pt, file_folder, os.path.join(file_folder, 'Quota_records'), 'w', True) # Store/Print MFS Quota Storage Records Info
+			mfs_write(file_folder, file_data_path, file_data) # Store MFS Low Level File 5 Contents
 		
-		# Parse MFS Low Level File 6 (intl.cfg) and 7 (fitc.cfg)
+		# Parse MFS Low Level File 6 (Intel Configuration) and 7 (OEM Configuration)
 		elif mfs_file[1] and mfs_file[0] in (6,7) :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d ...' % mfs_file[0] + col_e) # Print working message during CSE Unpacking
+			mfs_file_name = {6:'Intel Configuration', 7:'OEM Configuration'}
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name[mfs_file[0]]) + col_e)
 			if mfs_file[0] == 6 : intel_cfg_mfs = sha_256(mfs_file[1]).upper() # Store MFS Intel Configuration SHA-256
 			parsed_indexes.append(mfs_file[0]) # Set MFS Low Level Files 6,7 as Parsed
-			rec_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], {6:'Intel Configuration', 7:'OEM Configuration'}[mfs_file[0]]), '')
+			rec_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name[mfs_file[0]]), '')
 			root_folder = rec_folder # Store File Root Folder for Local Path printing
 			
 			pch_init_info = mfs_cfg_anl(mfs_file[0], mfs_file[1], rec_folder, root_folder, config_rec_size, pch_init_info) # Parse MFS Configuration Records
 		
 		# Parse MFS Low Level File 8 (Home Directory)
 		elif mfs_file[1] and mfs_file[0] == 8 :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d ...' % mfs_file[0] + col_e) # Print working message during CSE Unpacking
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File 8 (Home Directory) ...' + col_e)
 			parsed_indexes.append(mfs_file[0]) # Set MFS Low Level File 8 as Parsed
-			root_folder = os.path.join(mea_dir, mfs_folder, '%0.3d Home Directory' % mfs_file[0], 'home', '') # MFS Home Directory Root folder is called "home"
-			init_folder = os.path.join(mea_dir, mfs_folder, '%0.3d Home Directory' % mfs_file[0], '') # MFS Home Directory Parent folder for printing
+			root_folder = os.path.join(mea_dir, mfs_folder, '008 Home Directory', 'home', '') # MFS Home Directory Root folder is called "home"
+			init_folder = os.path.join(mea_dir, mfs_folder, '008 Home Directory', '') # MFS Home Directory Parent folder for printing
+			
+			# Detect MFS Home Directory Record Size
+			home_rec_patt = list(re.compile(br'\x2E[\x00\xAA]{10}').finditer(mfs_file[1][:])) # Find the first Current (.) & Parent (..) directory markers
+			if len(home_rec_patt) < 2 : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown Home Directory Record Structure!' + col_e, 'error', False, [])
+			home_rec_size = home_rec_patt[1].start() - home_rec_patt[0].start() - 1 # Determine MFS Home Directory Record Size via pattern offset difference
 			file_8_data = mfs_file[1][:-sec_hdr_size] # MFS Home Directory Root/Start (Low Level File 8) Contents
-			file_8_records = len(file_8_data) // home_rec_size # MFS Home Directory Root/Start (Low Level File 8) Records Count
+			if divmod(len(file_8_data), home_rec_size)[1] != 0 :
+				mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown Home Directory Record or Security Size!' + col_e, 'error', False, [])
+				home_rec_size = 0x0 # Crash at next step due to division by 0
+			
+			file_8_records = divmod(len(file_8_data), home_rec_size)[0] # MFS Home Directory Root/Start (Low Level File 8) Records Count
 			
 			# Generate MFS Home Directory Records Log
-			mfs_pt = ext_table([col_y + 'File System' + col_e, col_y + 'Index' + col_e, col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Size' + col_e,
-			col_y + 'Integrity' + col_e, col_y + 'IR Salt' + col_e, col_y + 'Encryption' + col_e, col_y + 'Key' + col_e, col_y + 'SVN' + col_e, col_y + 'Nonce' + col_e,
-			col_y + 'AntiReplay' + col_e, col_y + 'AR Index' + col_e, col_y + 'AR Random' + col_e, col_y + 'AR Counter' + col_e, col_y + 'Rights' + col_e,
-			col_y + 'User ID' + col_e, col_y + 'Group ID' + col_e, col_y + 'HMAC SHA-256' + col_e, col_y + 'Unknown Salt' + col_e, col_y + 'Unknown' + col_e,
-			col_y + 'Path' + col_e], True, 1)
-			mfs_pt.title = col_y + 'MFS 008 Home Directory Records' + col_e
+			if sec_hdr_size == 0x34 :
+				mfs_pt = ext_table([col_y + 'File System' + col_e, col_y + 'Index' + col_e, col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Size' + col_e,
+				col_y + 'Integrity' + col_e, col_y + 'IR Salt' + col_e, col_y + 'Encryption' + col_e, col_y + 'Key' + col_e, col_y + 'SVN' + col_e, col_y + 'Nonce' + col_e,
+				col_y + 'AntiReplay' + col_e, col_y + 'AR Index' + col_e, col_y + 'AR Random' + col_e, col_y + 'AR Counter' + col_e, col_y + 'Rights' + col_e,
+				col_y + 'User ID' + col_e, col_y + 'Group ID' + col_e, col_y + 'HMAC SHA-256' + col_e, col_y + 'Unknown Salt' + col_e, col_y + 'Unknown' + col_e,
+				col_y + 'Path' + col_e], True, 1)
+				mfs_pt.title = col_y + 'MFS 008 Home Directory Records' + col_e
+			elif sec_hdr_size == 0x28 :
+				mfs_pt = ext_table([col_y + 'File System' + col_e, col_y + 'Index' + col_e, col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Size' + col_e,
+				col_y + 'Integrity' + col_e, col_y + 'IR Salt' + col_e, col_y + 'Encryption' + col_e, col_y + 'Key' + col_e, col_y + 'SVN' + col_e, col_y + 'AntiReplay' + col_e,
+				col_y + 'Rights' + col_e, col_y + 'User ID' + col_e, col_y + 'Group ID' + col_e, col_y + 'Unknown Salt' + col_e, col_y + 'HMAC' + col_e, col_y + 'Unknown Flags' + col_e,
+				col_y + 'Unknown' + col_e, col_y + 'Reserved' + col_e, col_y + 'Path' + col_e], True, 1)
+				mfs_pt.title = col_y + 'MFS 008 Home Directory Records' + col_e
+			else :
+				mfs_pt = None
 			
 			mfs_home_anl(mfs_files, file_8_data, file_8_records, root_folder, home_rec_size, sec_hdr_size, parsed_indexes, init_folder, mfs_pt) # Parse MFS Home Directory Root Records
 			
-			#mfs_pt.sortby = col_y + 'Path' + col_e
-			
 			mfs_txt(mfs_pt, init_folder, os.path.join(init_folder + 'home_records'), 'w', True) # Store/Print MFS Home Directory Records Log
 		
-		# Parse MFS Low Level File 9 when it contains FTPR Manifest Backup
+		# Parse MFS Low Level File 9 (Manifest Backup), if applicable
 		elif mfs_file[1] and mfs_file[0] == 9 and man_pat.search(mfs_file[1][:0x20]) :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d ...' % mfs_file[0] + col_e) # Print working message during CSE Unpacking
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File 9 (Manifest Backup) ...' + col_e)
 			parsed_indexes.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
-			file_9_folder = os.path.join(mea_dir, mfs_folder, '%0.3d Manifest Backup' % mfs_file[0], '') # MFS Manifest Backup root folder
+			file_9_folder = os.path.join(mea_dir, mfs_folder, '009 Manifest Backup', '') # MFS Manifest Backup root folder
 			file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
 			mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
 			# noinspection PyTypeChecker
@@ -5048,30 +5071,43 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 # noinspection PyUnusedLocal
 def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_size, sec_hdr_size, parsed_indexes, init_folder, mfs_pt) :
 	for record in range(file_records) : # Process MFS Home Directory Record
-		file_rec = get_struct(file_buffer, record * home_rec_size, MFS_Home_Record) # MFS Home Directory Record Structure
+		file_rec = get_struct(file_buffer, record * home_rec_size, home_rec_struct[home_rec_size]) # MFS Home Directory Record Structure
 		file_name = file_rec.FileName.decode('utf-8') # MFS Home Directory Record Name
 		user_id = '0x%0.4X' % file_rec.OwnerUserID # MFS Home Directory Record Owner User ID
 		group_id = '0x%0.4X' % file_rec.OwnerGroupID # MFS Home Directory Record Owner Group ID
-		unk_salt = '0x%0.4X' % file_rec.UnknownSalt # MFS Home Directory Record Unknown Salt
+		if home_rec_size == 0x18 : unk_salt = '0x%0.4X' % file_rec.UnknownSalt # MFS Home Directory Record 0x18 Unknown Salt
+		elif home_rec_size == 0x1C : unk_salt = '0x' + ''.join('%0.4X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(file_rec.UnknownSalt))
 		file_index,integrity_salt,fs_id,unix_rights,integrity,encryption,anti_replay,unk0,key_type,rec_type,unk1 = file_rec.get_flags() # Get MFS Home Directory Record Flags
 		
-		# Split MFS Home Directory Record Contents & Security, if Integrity Protection is present
+		file_data = mfs_files[file_index][1] if mfs_files[file_index][1] else b'' # MFS Home Directory Record Contents
+		sec_hmac, sec_encr_nonce, sec_ar_random, sec_ar_counter, sec_svn, sec_ar_idx, sec_res, sec_unk = [''] * 8
+		sec_unk0, sec_ar, sec_encr, sec_unk1, sec_unk2, sec_unk3 = [0] * 6
+		
 		if integrity :
+			# Split MFS Home Directory Record Contents & Security, if Integrity Protection is present
 			file_data = mfs_files[file_index][1][:-sec_hdr_size] if mfs_files[file_index][1] else b'' # MFS Home Directory Record Contents without Security
 			file_sec = mfs_files[file_index][1][-sec_hdr_size:] if mfs_files[file_index][1] else b'' # MFS Home Directory Record Security without Contents
-			if file_sec : # Get MFS Home Directory Record Security Info
-				sec_hdr = get_struct(file_sec, 0, MFS_Security_Table) # MFS Home Directory Record/File or Record/Folder Security Structure
-				sec_unk0, sec_ar, sec_encr, sec_unk1, sec_ar_idx, sec_unk2, sec_svn, sec_unk3 = sec_hdr.get_flags()
-				sec_hmac256 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.HMACSHA256))
-				sec_encr_nonce = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.ARValues_Nonce)) if sec_encr else ''
-				sec_ar_random = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 0)[0] if sec_ar else ''
-				sec_ar_counter = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 4)[0] if sec_ar else ''
-				if not sec_encr : sec_svn = ''
-				if not sec_ar : sec_ar_idx = ''
-		else :
-			file_data = mfs_files[file_index][1] if mfs_files[file_index][1] else b'' # MFS Home Directory Record Contents
-			# noinspection PyTypeChecker
-			sec_hmac256, sec_encr_nonce, sec_ar_random, sec_ar_counter, sec_svn, sec_ar_idx, sec_unk0, sec_ar, sec_encr, sec_unk1, sec_unk2, sec_unk3 = [''] * 6 + [0] * 6
+			
+			# Parse MFS Home Directory Record Security Info
+			if file_sec : 
+				sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Home Directory Record/File or Record/Folder Security Structure
+				
+				if sec_hdr_size == 0x34 :
+					sec_unk0, sec_ar, sec_encr, sec_unk1, sec_ar_idx, sec_unk2, sec_svn, sec_unk3 = sec_hdr.get_flags()
+					
+					sec_hmac = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.HMACSHA256))
+					sec_encr_nonce = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.ARValues_Nonce)) if sec_encr else ''
+					sec_ar_random = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 0)[0] if sec_ar else ''
+					sec_ar_counter = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 4)[0] if sec_ar else ''
+					if not sec_encr : sec_svn = ''
+					if not sec_ar : sec_ar_idx = ''
+				elif sec_hdr_size == 0x28 :
+					sec_unk0, sec_svn, sec_unk1, sec_encr, sec_unk2 = sec_hdr.get_flags()
+					
+					sec_hmac = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.HMAC))
+					sec_res = '0x' + ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.Reserved))
+					sec_unk = '0x' + ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.Unknown))
+					if not sec_encr : sec_svn = ''
 		
 		# Store & Print MFS Home Directory Root/Start (8) Record Contents & Security Info
 		if file_index == 8 and file_name == '.' : # MFS Low Level File 8 at Current (.) directory
@@ -5088,7 +5124,7 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected bad File System ID %d at MFS Home Directory > %0.3d %s' % (fs_id, file_index, file_name) + col_e, 'error', False, [])
 		
 		# MFS Home Directory Record Nested Records Count
-		file_records = len(file_data) // home_rec_size
+		file_records = divmod(len(file_data), home_rec_size)[0]
 		
 		# MFS Home Directory Record is a Folder Marker
 		if file_name in ('.','..') :
@@ -5097,11 +5133,18 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 			if parsed_indexes[-1] != 8 : continue # Skip logging & further parsing for Current (.) & Parent (..) directories of Low Level Files after 8 (home)
 			
 			# Append MFS Home Directory Record/Folder Info to Log
-			# noinspection PyUnboundLocalVariable
-			mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'Folder', '0x0', ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
-			sec_svn, sec_encr_nonce, ['No','Yes'][anti_replay], sec_ar_idx, sec_ar_random, sec_ar_counter, ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, sec_hmac256, unk_salt,
-			'{0:01b}b'.format(unk0) + ' {0:01b}b'.format(unk1) + ' {0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3),
-			os.path.relpath(folder_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
+			if sec_hdr_size == 0x34 :
+				# noinspection PyUnboundLocalVariable
+				mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'Folder', '0x0', ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
+				sec_svn, sec_encr_nonce, ['No','Yes'][anti_replay], sec_ar_idx, sec_ar_random, sec_ar_counter, ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, sec_hmac, unk_salt,
+				'{0:01b}b'.format(unk0) + ' {0:01b}b'.format(unk1) + ' {0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3),
+				os.path.relpath(folder_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
+			elif sec_hdr_size == 0x28 :
+				# noinspection PyUnboundLocalVariable
+				mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'Folder', '0x0', ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
+				sec_svn, ['No','Yes'][anti_replay], ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, unk_salt, sec_hmac,
+				'{0:09b}b'.format(sec_unk0) + ' {0:05b}b'.format(sec_unk1) + ' {0:09b}b'.format(sec_unk2), sec_unk, sec_res,
+				os.path.relpath(folder_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
 			
 			continue # Log but skip further parsing of Current (.) & Parent (..) Low Level File 8 (home) directories
 		
@@ -5118,10 +5161,16 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 				mfs_txt(sec_hdr.mfs_print(), os.path.normpath(os.path.join(root_folder)), sec_path, 'w', False) # Store/Print MFS Home Directory Record/File Security Info
 			
 			# Append MFS Home Directory Record/File Info to Log
-			mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'File', '0x%X' % len(file_data), ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
-			sec_svn, sec_encr_nonce, ['No','Yes'][anti_replay], sec_ar_idx, sec_ar_random, sec_ar_counter, ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, sec_hmac256,
-			unk_salt, '{0:01b}b'.format(unk0) + ' {0:01b}b'.format(unk1) + ' {0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3),
-			os.path.relpath(file_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
+			if sec_hdr_size == 0x34 :
+				mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'File', '0x%X' % len(file_data), ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
+				sec_svn, sec_encr_nonce, ['No','Yes'][anti_replay], sec_ar_idx, sec_ar_random, sec_ar_counter, ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, sec_hmac,
+				unk_salt, '{0:01b}b'.format(unk0) + ' {0:01b}b'.format(unk1) + ' {0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3),
+				os.path.relpath(file_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
+			elif sec_hdr_size == 0x28 :
+				mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'File', '0x%X' % len(file_data), ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
+				sec_svn, ['No','Yes'][anti_replay], ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, unk_salt, sec_hmac,
+				'{0:09b}b'.format(sec_unk0) + ' {0:05b}b'.format(sec_unk1) + ' {0:09b}b'.format(sec_unk2), sec_unk, sec_res,
+				os.path.relpath(file_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
 		
 		# MFS Home Directory Record is a Folder (Type 1)
 		else :
@@ -5130,10 +5179,16 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 			if file_sec : mfs_txt(sec_hdr.mfs_print(), folder_path, folder_path + '_integrity', 'w', False) # Store/Print MFS Home Directory Record/Folder Security Info
 			
 			# Append MFS Home Directory Record/Folder Info to Log
-			mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'Folder', '0x0', ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
-			sec_svn, sec_encr_nonce, ['No','Yes'][anti_replay], sec_ar_idx, sec_ar_random, sec_ar_counter, ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id,
-			sec_hmac256, unk_salt, '{0:01b}b'.format(unk0) + ' {0:01b}b'.format(unk1) + ' {0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3),
-			os.path.relpath(folder_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
+			if sec_hdr_size == 0x34 :
+				mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'Folder', '0x0', ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
+				sec_svn, sec_encr_nonce, ['No','Yes'][anti_replay], sec_ar_idx, sec_ar_random, sec_ar_counter, ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id,
+				sec_hmac, unk_salt, '{0:01b}b'.format(unk0) + ' {0:01b}b'.format(unk1) + ' {0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3),
+				os.path.relpath(folder_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
+			elif sec_hdr_size == 0x28 :
+				mfs_pt.add_row([mfs_type[fs_id], file_index, file_name, 'Folder', '0x0', ['No','Yes'][integrity], '0x%X' % integrity_salt, ['No','Yes'][encryption], ['Intel','OEM',''][key_type],
+				sec_svn, ['No','Yes'][anti_replay], ''.join(map(str, file_rec.get_rights(unix_rights))), user_id, group_id, unk_salt, sec_hmac,
+				'{0:09b}b'.format(sec_unk0) + ' {0:05b}b'.format(sec_unk1) + ' {0:09b}b'.format(sec_unk2), sec_unk, sec_res,
+				os.path.relpath(folder_path, start=init_folder) if file_index >= 8 else mfs_type[fs_id]])
 			
 			mfs_home_anl(mfs_files, file_data, file_records, folder_path, home_rec_size, sec_hdr_size, parsed_indexes, init_folder, mfs_pt) # Recursively parse all Folder Records
 	
@@ -5169,12 +5224,24 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 			rec_hdr_pt.add_row(['Local MFS Path', local_mfs_path]) # Add Local MFS File Path to MFS Configuration Record Structure Info
 			mfs_txt(rec_hdr_pt, rec_folder, rec_file, 'w', False) # Store/Print MFS Configuration Record Info
 			
-			# Get PCH info via Intel Configuration > PCH Initialization Table
+			# Get PCH info via MFS Intel Configuration > PCH Initialization Table
 			if mfs_file == 6 and rec_name == 'mphytbl' :
-				pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Can be used for SKU Platform detection
-				pch_init_stp = rec_data[3] & 0xF # Absolute or Bitfield value depending on firmware
-				pch_init_rev = rec_data[2]
-				pch_init_info = [pch_init_plt, pch_init_stp, pch_init_rev]
+				pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual PCH SKU Platform (CNP-H, TGP-LP etc)
+				pch_init_stp = rec_data[3] & 0xF # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
+				pch_init_rev = rec_data[2] # PCH Initialization Table Revision
+				pch_true_stp = [] # Actual PCH Stepping(s) (A, B, C etc)
+				
+				# Detect Actual PCH Stepping(s) for CSME 12
+				if variant == 'CSME' and major == 12 :
+					if mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x1) \
+					or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x1 and mn2_ftpr_hdr.Day >= 0x25) :
+						# Bitfield for CSME >=~ 12.0.0.1058 @ 2018-01-25 (0011 = --BA, 0110 = -CB-)
+						for i in range(4) : pch_true_stp.append('DCBA'[i]) if pch_init_stp & (1<<(4-1-i)) else ''
+					else :
+						# Absolute for CSME ~< 12.0.0.1058 @ 2018-01-25 (0 = A, 1 = B, 2 = C, 3 = D etc)
+						pch_true_stp = [{0:'A',1:'B',2:'C',3:'D',4:'E'}[pch_init_stp]]
+					
+				pch_init_info = [mfs_file, pch_init_plt, pch_true_stp, pch_init_rev] # Output PCH Initialization Table Info
 			
 		if rec_name == '..' : continue # Parse but skip logging of Parent (..) directory
 		
@@ -6470,7 +6537,7 @@ for file_in in source :
 				pmcp_found = True
 				pmcp_fwu_found = True # CSME12+ FWUpdate tool requires PMC
 				
-				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
+				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
 				
 			# Detect if firmware has CSE File System Partition
 			if p_name in ('MFS','AFSP') and not p_empty :
@@ -6606,7 +6673,7 @@ for file_in in source :
 				pmcp_found = True
 				pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
 				
-				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
+				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
 			
 			if p_type == 5 and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x2] == b'\xAA\x55' : # Secondary BPDT (S-BPDT)
 				init_s_bpdt_ver = int.from_bytes(reading[start_fw_start_match + 0x6:start_fw_start_match + 0x8], 'little') # BPDT Version
@@ -6662,7 +6729,7 @@ for file_in in source :
 						pmcp_found = True
 						pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
 						
-						x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
+						x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
 					
 					# Store all Secondary BPDT entries for extraction
 					bpdt_part_all.append([s_p_name,s_p_offset_spi,s_p_offset_spi + s_p_size,s_p_type,s_p_empty,'Secondary',cse_in_id])
@@ -7480,10 +7547,11 @@ for file_in in source :
 			continue # Next input file
 		
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,\
-		oem_config,oem_signed,cpd_mn2_info = ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None) # Get CSE Attributes
+		oem_config,oem_signed,cpd_mn2_info,ext_iunit_val = ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None) # Get CSE Attributes
 		
 		# Set CSE File System Configuration State
 		try :
+		#if True :
 			if mfs_found and not param.me11_mod_extr :
 				parsed_indexes,intel_cfg_mfs,mfs_info,pch_init_info = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant) # Get MFS Attributes
 				
@@ -7494,8 +7562,9 @@ for file_in in source :
 				# MFS missing, determine via FTPR > fitc.cfg
 				mfs_state = 'Configured'
 		except :
+		#else :
 			# MFS analysis failed, maybe corrupted
-			mfs_state = col_r + 'Unknown' + col_e
+			mfs_state = col_r + 'Error' + col_e
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -7519,9 +7588,9 @@ for file_in in source :
 		elif fw_0C_sku2 == 2 : pos_sku_ext = 'N' # ???
 		
 		# Detect SKU Platform via MFS Intel PCH Initialization Table
-		if pch_init_info and '-LP' in pch_init_info[0] : pos_sku_tbl = 'LP'
-		elif pch_init_info and '-H' in pch_init_info[0] : pos_sku_tbl = 'H'
-		elif pch_init_info and '-N' in pch_init_info[0] : pos_sku_tbl = 'N'
+		if pch_init_info and '-LP' in pch_init_info[1] : pos_sku_tbl = 'LP'
+		elif pch_init_info and '-H' in pch_init_info[1] : pos_sku_tbl = 'H'
+		elif pch_init_info and '-N' in pch_init_info[1] : pos_sku_tbl = 'N'
 		
 		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
 		
@@ -7631,16 +7700,12 @@ for file_in in source :
 				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
 				if sku_result == 'H' and fw_0C_sku0 in ('3111BED0','3111BFD0','7DF7FEDF','7DF7FFDF','11009A40') : sku_result = 'LP'
 				elif sku_result == 'LP' and fw_0C_sku0 in ('3111BDD0','7DF7FDDF','11009940') : sku_result = 'H'
-				elif sku_result == 'H' : warn_stor.append([col_m + 'Warning: Used SKU Platform detection is unreliable!' + col_e, True])
+				elif sku_result == 'H' : warn_stor.append([col_m + 'Warning: Used unreliable SKU Platform detection!' + col_e, True])
 			
 			sku = sku_init + ' ' + sku_result
 			
 			# Set PCH/SoC Stepping, if not found at DB
-			if sku_stp == 'NaN' :
-				
-				# Adjust Production PCH/SoC Stepping from known values
-				if sku_result == 'H' and (minor > 0 or (minor == 0 and hotfix > 0 or (hotfix == 0 and build >= 1062))) : sku_stp = 'B'
-				#elif sku_result == 'H' : sku_stp = 'A' # <= 12.0.0.xxxx
+			if sku_stp == 'NaN' and pch_init_info : sku_stp = ''.join(map(str, pch_init_info[2]))
 			
 			# Detected stitched PMC firmware
 			if pmcp_found :
@@ -7649,7 +7714,7 @@ for file_in in source :
 				# Verify FTPR & PMC compatibility (PCH & SKU)
 				if pmc_pch_gen < 300 or pmc_fw_rel == 0 :
 					pass # Old CNP 300-series PMC versioning
-				elif pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] != sku_stp) :
+				elif pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
 					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
 			
 			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
@@ -7709,10 +7774,11 @@ for file_in in source :
 			continue # Next input file
 		
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,\
-		oem_config,oem_signed,cpd_mn2_info = ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None) # Detect CSE Attributes
+		oem_config,oem_signed,cpd_mn2_info,ext_iunit_val = ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None) # Detect CSE Attributes
 		
 		# Set CSE File System Configuration State
 		try :
+		#if True :
 			if mfs_found and not param.me11_mod_extr :
 				parsed_indexes,intel_cfg_mfs,mfs_info,pch_init_info = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant) # Get MFS Attributes
 				
@@ -7723,8 +7789,9 @@ for file_in in source :
 				# MFS missing, determine via FTPR > fitc.cfg
 				mfs_state = 'Configured'
 		except :
+		#else :
 			# MFS analysis failed, maybe corrupted
-			mfs_state = col_r + 'Unknown' + col_e
+			mfs_state = col_r + 'Error' + col_e
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -7811,10 +7878,11 @@ for file_in in source :
 			continue # Next input file
 		
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,\
-		oem_config,oem_signed,cpd_mn2_info = ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None) # Detect CSE Attributes
+		oem_config,oem_signed,cpd_mn2_info,ext_iunit_val = ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None) # Detect CSE Attributes
 		
 		# Set CSE File System Configuration State
 		try :
+		#if True :
 			if mfs_found and not param.me11_mod_extr :
 				parsed_indexes,intel_cfg_mfs,mfs_info,pch_init_info = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant) # Get MFS Attributes
 				
@@ -7825,8 +7893,9 @@ for file_in in source :
 				# MFS missing, determine via FTPR > fitc.cfg
 				mfs_state = 'Configured'
 		except :
+		#else :
 			# MFS analysis failed, maybe corrupted
-			mfs_state = col_r + 'Unknown' + col_e
+			mfs_state = col_r + 'Error' + col_e
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -7866,7 +7935,7 @@ for file_in in source :
 			continue # Next input file
 		
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,\
-		oem_config,oem_signed,cpd_mn2_info = ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None) # Detect CSE Attributes
+		oem_config,oem_signed,cpd_mn2_info,ext_iunit_val = ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None) # Detect CSE Attributes
 		
 		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,upd_found,pmc_platform,pmc_date = pmc_anl(cpd_mn2_info)
 		
@@ -7941,7 +8010,7 @@ for file_in in source :
 		fw_db.close()
 	else :
 		can_search_db = False # Do not search DB for PMC or Partial Update
-		
+	
 	if can_search_db and not rgn_over_extr_found and not fw_in_db_found :
 		note_stor.append([col_g + 'Note: This %s firmware was not found at the database, please report it!' % variant_p + col_e, True])
 	
@@ -7996,8 +8065,9 @@ for file_in in source :
 			msg_pt.add_row(['Firmware SKU', sku])
 		
 		if (variant in ('CSME','CSTXE') or variant.startswith('PMC')) and not wcod_found :
-			if sku_stp != 'NaN' : msg_pt.add_row(['Chipset Stepping', sku_stp])
-			else : msg_pt.add_row(['Chipset Stepping', 'Unknown'])
+			if sku_stp == 'NaN' : msg_pt.add_row(['Chipset Stepping', 'Unknown'])
+			elif (variant,major) == ('CSME',12) : msg_pt.add_row(['Chipset Stepping', ', '.join(map(str, list(sku_stp)))])
+			else : msg_pt.add_row(['Chipset Stepping', sku_stp])
 		
 		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS']) and not wcod_found :
 			msg_pt.add_row(['Security Version Number', svn])
@@ -8029,7 +8099,7 @@ for file_in in source :
 		
 		msg_pt.add_row(['Firmware Date', date])
 
-		if variant in ('CSME','CSTXE','CSSPS') : msg_pt.add_row(['File System State', mfs_state])
+		if variant in ('CSME','CSTXE','CSSPS') and not wcod_found : msg_pt.add_row(['File System State', mfs_state])
 		
 		if rgn_exist or variant.startswith('PMC') :
 			if (variant,major,release) == ('ME',6,'ROM-Bypass') : msg_pt.add_row(['Firmware Size', 'Unknown'])
