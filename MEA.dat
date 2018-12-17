@@ -1,5 +1,5 @@
 ***	ME Analyzer Engine Firmware Repository Database ***
-***	Revision r148 (2018-12-14 , 15:42) ***
+***	Revision r148.1 (2018-12-17 , 18:41) ***
 
 *** Converged Security Management Engine (CSME) ***
 
@@ -1969,7 +1969,7 @@ RSAPKEY_TBD1_86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894 (M
 *** MEA-ID_Family_MajorMinor_SKU__Version ***
 
 Latest_CSME_120_CONH__12.0.20.1303
-Latest_CSME_120_CORH__12.0.10.1127
+Latest_CSME_120_CORH__12.0.20.1301
 Latest_CSME_120_CONLP__12.0.10.1128
 Latest_CSME_120_CORLP__12.0.0.0000
 Latest_CSME_120_SLMH__12.0.11.1130

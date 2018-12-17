@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.76.0'
+title = 'ME Analyzer v1.76.1'
 
 import os
 import re
@@ -3659,7 +3659,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_hdr.get_flags()
 			mn2_rsa_sig = buffer[start_man_match - 0x1B + 0x184:start_man_match - 0x1B + 0x284] # Read $MN2 RSA Signature
 			mn2_rsa_sig_hash = sha_256(mn2_rsa_sig).upper() # Generate $MN2 RSA Signature SHA-256 hash
-			cpd_mn2_info = [mn2_hdr.Major, mn2_hdr.Minor, mn2_hdr.Hotfix, mn2_hdr.Build, ['Production','Debug'][mn2_flags_debug], mn2_rsa_sig_hash, mn2_date]
+			cpd_mn2_info = [mn2_hdr.Major, mn2_hdr.Minor, mn2_hdr.Hotfix, mn2_hdr.Build, ['Production','Debug'][mn2_flags_debug], mn2_rsa_sig_hash, mn2_date, mn2_hdr.SVN]
 		
 			if param.me11_mod_extr : mn2_sigs = rsa_sig_val(mn2_hdr, buffer, start_man_match - 0x1B) # For each Partition
 		else :
@@ -5310,9 +5310,6 @@ def pmc_anl(mn2_info) :
 	
 	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Compatibility-Maintenance, Build, Release, RSA Sig Hash]
 	
-	pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
-	pmc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
-	
 	# Search DB for PMC firmware
 	fw_db = db_open()
 	for line in fw_db :
@@ -5352,7 +5349,11 @@ def pmc_anl(mn2_info) :
 		
 	if pmcp_not_in_db : note_stor.append([col_g + 'Note: This PMC %s firmware was not found at the database, please report it!' % pmc_platform + col_e, True])
 	
-	return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmcp_upd_found, pmc_platform, mn2_info[6]
+	if pmc_platform == 'CNP' : pmc_fw_ver = '%s.%s.%0.2d.%0.4d' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
+	else : pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
+	pmc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
+	
+	return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmcp_upd_found, pmc_platform, mn2_info[6], mn2_info[7]
 
 # CSE Huffman Dictionary Loader by IllegalArgument
 # Dictionaries by Dmitry Sklyarov & IllegalArgument
@@ -6182,6 +6183,7 @@ for file_in in source :
 	svn = -1
 	pvbit = -1
 	sku_me = -1
+	pmc_svn = -1
 	mod_size = 0
 	fw_0C_lbg = 0
 	sku_type = -1
@@ -6194,6 +6196,7 @@ for file_in in source :
 	fpt_start = -1
 	mfs_start = -1
 	mfs_size = 0
+	pmcp_size = 0
 	oem_signed = 0
 	fpt_length = -1
 	fpt_version = -1
@@ -6536,6 +6539,7 @@ for file_in in source :
 			if p_name == 'PMCP' and not p_empty :
 				pmcp_found = True
 				pmcp_fwu_found = True # CSME12+ FWUpdate tool requires PMC
+				pmcp_size = p_size
 				
 				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
 				
@@ -6672,6 +6676,7 @@ for file_in in source :
 			if p_name == 'PMCP' and not p_empty :
 				pmcp_found = True
 				pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
+				pmcp_size = p_size
 				
 				x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
 			
@@ -6728,6 +6733,7 @@ for file_in in source :
 					if p_name == 'PMCP' and not p_empty :
 						pmcp_found = True
 						pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
+						pmcp_size = s_p_size
 						
 						x0,x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['NaN', -1, -1, -1, -1], None)
 					
@@ -7709,7 +7715,7 @@ for file_in in source :
 			
 			# Detected stitched PMC firmware
 			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date = pmc_anl(pmc_mn2_ver)
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 				
 				# Verify FTPR & PMC compatibility (PCH & SKU)
 				if pmc_pch_gen < 300 or pmc_fw_rel == 0 :
@@ -7837,7 +7843,7 @@ for file_in in source :
 		
 		# Detected stitched PMC firmware
 		if pmcp_found :				
-			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date = pmc_anl(pmc_mn2_ver)
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 			
 			if pmc_mn2_signed != release or pmc_platform != platform or (sku_stp != 'NaN' and pmc_pch_rev != sku_stp) :
 				warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
@@ -7919,7 +7925,7 @@ for file_in in source :
 			
 			# Detected stitched PMC firmware
 			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date = pmc_anl(pmc_mn2_ver)
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 				
 				# Verify OPR & PMC compatibility
 				if pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != 'H' :
@@ -7937,13 +7943,14 @@ for file_in in source :
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,\
 		oem_config,oem_signed,cpd_mn2_info,ext_iunit_val = ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None) # Detect CSE Attributes
 		
-		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,upd_found,pmc_platform,pmc_date = pmc_anl(cpd_mn2_info)
+		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(cpd_mn2_info)
 		
 		sku = pmc_pch_sku
 		sku_stp = pmc_pch_rev[0]
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
+		if (platform,major) == ('CNP',300) : hotfix = '%0.2d' % hotfix
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PMC firmware size
 		
@@ -8053,24 +8060,26 @@ for file_in in source :
 		msg_pt = ext_table(['Field', 'Value'], False, 1)
 		msg_pt.title = col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e
 		
-		msg_pt.add_row(['Firmware Family', variant_p])
-		msg_pt.add_row(['Firmware Version', fw_ver(major,minor,hotfix,build)])
-		msg_pt.add_row(['Firmware Release', release])
-		msg_pt.add_row(['Firmware Type', fw_type])
+		msg_pt.add_row(['Family', variant_p])
+		msg_pt.add_row(['Version', fw_ver(major,minor,hotfix,build)])
+		msg_pt.add_row(['Release', release])
+		msg_pt.add_row(['Type', fw_type])
 		
 		if (variant == 'CSTXE' and 'Unknown' not in sku) or ((variant,sku) == ('SPS','NaN')) or (variant.startswith('PMC')
 		and variant != 'PMCCNP') or wcod_found :
 			pass
 		else :
-			msg_pt.add_row(['Firmware SKU', sku])
+			msg_pt.add_row(['SKU', sku])
 		
 		if (variant in ('CSME','CSTXE') or variant.startswith('PMC')) and not wcod_found :
 			if sku_stp == 'NaN' : msg_pt.add_row(['Chipset Stepping', 'Unknown'])
 			elif (variant,major) == ('CSME',12) : msg_pt.add_row(['Chipset Stepping', ', '.join(map(str, list(sku_stp)))])
 			else : msg_pt.add_row(['Chipset Stepping', sku_stp])
 		
-		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS']) and not wcod_found :
+		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith('PMC')) and not wcod_found :
 			msg_pt.add_row(['Security Version Number', svn])
+			
+		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS']) and not wcod_found :
 			msg_pt.add_row(['Version Control Number', vcn])
 		
 		if [variant,major,wcod_found] == ['CSME',11,False] :
@@ -8080,16 +8089,6 @@ for file_in in source :
 		if variant == 'ME' and major == 7 : msg_pt.add_row(['Patsburg PCH Support', ['No','Yes'][is_patsburg]])
 		
 		if pvbit in [0,1] and wcod_found is False : msg_pt.add_row(['Production Version', ['No','Yes'][pvbit]])
-		
-		if pmcp_found :
-			msg_pt.add_row(['PMC Version', pmc_fw_ver])
-			msg_pt.add_row(['PMC Release', pmc_mn2_signed])
-			if variant == 'PMCCNP' or (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) :
-				msg_pt.add_row(['PMC SKU', pmc_pch_sku])
-			msg_pt.add_row(['PMC Stepping', pmc_pch_rev[0]])
-			msg_pt.add_row(['PMC Date', pmc_date])
-			if pmc_mn2_signed == 'Production' and (variant == 'CSME' and major >= 12) :
-				msg_pt.add_row(['PMC Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
 			
 		if variant in ('CSME','CSTXE','CSSPS') and not wcod_found : msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed or oemp_found)]])
 			
@@ -8097,14 +8096,14 @@ for file_in in source :
 		
 		if variant == 'CSME' and major >= 12 and not wcod_found : msg_pt.add_row(['FWUpdate Support', ['No','Yes'][int(pmcp_fwu_found)]])
 		
-		msg_pt.add_row(['Firmware Date', date])
+		msg_pt.add_row(['Date', date])
 
 		if variant in ('CSME','CSTXE','CSSPS') and not wcod_found : msg_pt.add_row(['File System State', mfs_state])
 		
 		if rgn_exist or variant.startswith('PMC') :
-			if (variant,major,release) == ('ME',6,'ROM-Bypass') : msg_pt.add_row(['Firmware Size', 'Unknown'])
+			if (variant,major,release) == ('ME',6,'ROM-Bypass') : msg_pt.add_row(['Size', 'Unknown'])
 			elif (variant,fd_devexp_rgn_exist) == ('CSTXE',True) : pass
-			else : msg_pt.add_row(['Firmware Size', '0x%X' % eng_fw_end])
+			else : msg_pt.add_row(['Size', '0x%X' % eng_fw_end])
 		
 		if fitc_ver_found :
 			msg_pt.add_row(['Flash Image Tool', fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build)])
@@ -8115,9 +8114,29 @@ for file_in in source :
 		
 		if platform != 'NaN' : msg_pt.add_row(['Chipset Support', platform])
 		
-		if variant not in ['SPS','CSSPS'] and upd_rslt != '' : msg_pt.add_row(['Firmware Latest', upd_rslt])
+		if variant not in ['SPS','CSSPS'] and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
 		
 		print(msg_pt)
+		
+		if pmcp_found :
+			msg_pmc_pt = ext_table(['Field', 'Value'], False, 1)
+			msg_pmc_pt.title = 'Power Management Controller'
+			
+			msg_pmc_pt.add_row(['Family', 'PMC'])
+			msg_pmc_pt.add_row(['Version', pmc_fw_ver])
+			msg_pmc_pt.add_row(['Release', pmc_mn2_signed])
+			msg_pmc_pt.add_row(['Type', 'Independent'])
+			if variant == 'PMCCNP' or (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) :
+				msg_pmc_pt.add_row(['Chipset SKU', pmc_pch_sku])
+			msg_pmc_pt.add_row(['Chipset Stepping', pmc_pch_rev[0]])
+			msg_pmc_pt.add_row(['Security Version Number', pmc_svn])
+			msg_pmc_pt.add_row(['Date', pmc_date])
+			msg_pmc_pt.add_row(['Size', '0x%X' % pmcp_size])
+			msg_pmc_pt.add_row(['Chipset Support', pmc_platform])
+			if pmc_mn2_signed == 'Production' and (variant == 'CSME' and major >= 12) :
+				msg_pmc_pt.add_row(['Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
+			
+			print(msg_pmc_pt)
 	
 	# Print Messages which must be at the end of analysis
 	if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])

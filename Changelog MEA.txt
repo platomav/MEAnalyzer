@@ -1,3 +1,8 @@
+v1.76.1 r148.1
+
+Added CSE PMC Security Version Number detection
+Separated CSE Engine and PMC output table info
+
 v1.76.0 r148
 
 Added CSME 12 & CSTXE 4 Initialized File System support
