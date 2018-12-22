@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2018 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.76.1'
+title = 'ME Analyzer v1.76.2'
 
 import os
 import re
@@ -2808,6 +2808,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 			0x80860032 : ['ISH FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860033 : ['IUNIT FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860040 : ['Anti-Rollback', ['Enabled', 'Disabled']], # (BtGuardArbOemKeyManifest)
+			0x80860050 : ['PSF and System Agent Debug', ['PSF & System Agent Disabled', 'System Agent Enabled', 'PSF Enabled', 'PSF & System Agent Enabled']], # (KnobIdValues)
 			0x80860051 : ['OEM BIOS Payload', ['Enabled', 'Disabled']], # (KnobIdValues)
 			0x80860101 : ['Change Device Lifecycle', ['No', 'Customer Care', 'RnD', 'Refurbish']],
 			0x80860201 : ['Co-Signing', ['Enabled', 'Disabled']]
@@ -6483,8 +6484,7 @@ for file_in in source :
 			p_type_values = {0: 'Code', 1: 'Data', 2: 'NVRAM', 3: 'Generic', 4: 'EFFS', 5: 'ROM'} # Only 0 & 1 for CSE
 			p_type_print = p_type_values[p_type] if p_type in p_type_values else 'Unknown'
 			
-			if p_offset in [4294967295, 0] or p_size == 0 or (
-			p_size != 4294967295 and reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF') :
+			if p_offset in (0xFFFFFFFF, 0) or p_size == 0 or p_size != 0xFFFFFFFF and reading[p_offset_spi:p_offset_spi + p_size] in (b'', p_size * b'\xFF') :
 				p_empty = True
 			else :
 				p_empty = False
@@ -6516,10 +6516,10 @@ for file_in in source :
 				if p_owner in [b'\xFF\xFF\xFF\xFF', b''] : p_owner = '' # Missing
 				else : p_owner = p_owner.decode('utf-8', 'ignore')
 				
-				if p_offset in [4294967295, 0] : p_offset_print = ''
+				if p_offset in [0xFFFFFFFF, 0] : p_offset_print = ''
 				else : p_offset_print = '0x%0.6X' % p_offset_spi
 				
-				if p_size in [4294967295, 0] : p_size_print = ''
+				if p_size in [0xFFFFFFFF, 0] : p_size_print = ''
 				else : p_size_print = '0x%0.6X' % p_size
 				
 				if p_offset_print == '' or p_size_print == '' : p_end_print = ''
@@ -6649,7 +6649,7 @@ for file_in in source :
 			p_offset_spi = start_fw_start_match + p_offset
 			p_size = bpdt_entry.Size
 			
-			if reading[p_offset_spi:p_offset_spi + p_size] == p_size * b'\xFF' : p_empty = True
+			if p_offset in (0xFFFFFFFF, 0) or p_size in (0xFFFFFFFF, 0) or reading[p_offset_spi:p_offset_spi + p_size] in (b'', p_size * b'\xFF') : p_empty = True
 			else : p_empty = False
 			
 			if p_type in bpdt_dict : p_name = bpdt_dict[p_type]
@@ -6661,10 +6661,10 @@ for file_in in source :
 			
 			# Store BPDT Partition info for -dfpt
 			if param.fpt_disp :
-				if p_offset in [4294967295, 0] : p_offset_print = ''
+				if p_offset in [0xFFFFFFFF, 0] : p_offset_print = ''
 				else : p_offset_print = '0x%0.6X' % p_offset_spi
 				
-				if p_size in [4294967295, 0] : p_size_print = ''
+				if p_size in [0xFFFFFFFF, 0] : p_size_print = ''
 				else : p_size_print = '0x%0.6X' % p_size
 				
 				if p_offset_print == '' or p_size_print == '' : p_end_print = ''
@@ -6705,7 +6705,7 @@ for file_in in source :
 					s_p_offset_spi = start_fw_start_match + s_p_offset
 					s_p_size = s_bpdt_entry.Size
 					
-					if s_p_offset in [4294967295, 0] or s_p_size in [4294967295, 0] or reading[s_p_offset_spi:s_p_offset_spi + s_p_size] == s_p_size * b'\xFF' :
+					if s_p_offset in (0xFFFFFFFF, 0) or s_p_size in (0xFFFFFFFF, 0) or reading[s_p_offset_spi:s_p_offset_spi + s_p_size] in (b'', s_p_size * b'\xFF') :
 						s_p_empty = True
 					else :
 						s_p_empty = False
@@ -6718,10 +6718,10 @@ for file_in in source :
 					
 					# Store BPDT Partition info for -dfpt
 					if param.fpt_disp :
-						if s_p_offset in [4294967295, 0] : s_p_offset_print = ''
+						if s_p_offset in [0xFFFFFFFF, 0] : s_p_offset_print = ''
 						else : s_p_offset_print = '0x%0.6X' % s_p_offset_spi
 						
-						if s_p_size in [4294967295, 0] : s_p_size_print = ''
+						if s_p_size in [0xFFFFFFFF, 0] : s_p_size_print = ''
 						else : s_p_size_print = '0x%0.6X' % s_p_size
 						
 						if s_p_offset_print == '' or s_p_size_print == '' : s_p_end_print = ''
@@ -7663,7 +7663,7 @@ for file_in in source :
 			elif minor in [10,11] : platform = 'BSF' # Basin Falls
 			elif minor in [20,21,22] : platform = 'LBG' # Lewisburg
 			
-			if minor in [0,5,6,7,10,20] : upd_found = True # INTEL-SA-00086
+			if minor in [0,5,6,7,10,20,21] : upd_found = True
 			
 			# Power Down Mitigation (PDM) is a SPT-LP C0 erratum, first fixed at ~11.0.0.1183
 			# Hardcoded in FTPR > BUP, Huffman decompression required to detect NPDM or YPDM
