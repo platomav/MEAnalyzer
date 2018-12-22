@@ -1,3 +1,8 @@
+v1.76.2 r149
+
+Improved $FPT and BPDT empty partition detection
+Improved CSE Extension 0x15 support
+
 v1.76.1 r148.1
 
 Added CSE PMC Security Version Number detection
