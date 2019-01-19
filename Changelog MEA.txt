@@ -1,3 +1,16 @@
+v1.80.0 r151
+
+Added initial firmware support for future platforms
+Added CSME & CSSPS Chipset Stepping(s) robust detection
+Added CSE Extensions & Structures Revision robust selection
+Improved CSME 12 & CSTXE 4 Initialized File System support
+Improved CSE Extensions 10, 15, 20, 22, 24, 25, 26, 48, 49
+Improved CSE unpacking speed via less disk I/O operations
+Improved CSE File System output logging during unpacking
+Improved Engine Manifest $MAN/$MN2 Header parsing
+Improved CSSPS Chipset Platform detection
+Improved code error exception handling
+
 v1.76.2 r149
 
 Improved $FPT and BPDT empty partition detection
