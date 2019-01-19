@@ -9,7 +9,7 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/uahcIi1.png)
+![](https://i.imgur.com/Ea85X86.png)
 
 ## **A. About ME Analyzer**
 
@@ -132,7 +132,7 @@ At dist folder you should find the final MEA executable
 
 **Note:** Some pictures are outdated and depict older ME Analyzer versions.
 
-![](https://i.imgur.com/uahcIi1.png)
+![](https://i.imgur.com/Ea85X86.png)
 
 ![](https://i.imgur.com/6UNqSe8.png)
 
