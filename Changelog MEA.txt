@@ -1,3 +1,16 @@
+v1.82.0 r152
+
+Added CSE Modules without Metadata unpacking support
+Added robust (CS)SPS Type (REC/OPR/EXTR) distinction
+Added CSME 12 COR EXTR-(Y/N) for FWUpdate compatibility
+Improved CSE File System output logging during unpacking
+Improved initial firmware support for future platforms
+Improved CSE BUP/FTPR IFWI BPDT Partition 02 detection
+Improved CSME 12 and CSSPS 5 Huffman symbol dictionary
+Improved CSE firmware hashes which are known to be bad
+Fixed PMC detection bugs & DB checking accuracy issues
+Fixed RSA Key & Signature hashing for future platforms
+
 v1.80.0 r151
 
 Added initial firmware support for future platforms
