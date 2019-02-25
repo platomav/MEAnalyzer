@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.82.0'
+title = 'ME Analyzer v1.82.1'
 
 import os
 import re
@@ -4162,6 +4162,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	cpd_ext_names = []
 	mn2_hdr_print = []
 	cpd_wo_met_info = []
+	cpd_wo_met_back = []
 	iunit_chunk_valid = []
 	ext32_info = ['UNK', 'XX']
 	ext12_info = ['00000000', 'NA', 0, 'NA'] # SKU Capabilities, SKU Type, LBG Support, SKU Platform
@@ -4261,6 +4262,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	
 		# Sort $CPD Entry Info based on Offset in ascending order
 		cpd_wo_met_info = sorted(cpd_wo_met_info, key=lambda entry: entry[1])
+		cpd_wo_met_back = cpd_wo_met_info # Backup for adjustments validation
 	
 	# Stage 2: Analyze Manifest & Metadata (must be before Module analysis)
 	for entry in range(0, cpd_num) :
@@ -4805,9 +4807,12 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	# $CPD contains Huffman Yes/No and Uncompressed Size but Compressed Size is needed for Header parsing during Huffman decompression
 	# RBEP > rbe and FTPR > pm Modules contain the Compressed Size, Uncompressed Size & Hash but without Names, only hardcoded DEV_IDs
 	# With only Huffman Yes/No bit at $CPD, we can no longer discern between Uncompressed, LZMA Compressed and Encrypted Modules
+	# This adjustment should only be required for Huffman Modules without Metadata but MEA adjusts everything for good measure
 	for i in range(len(cpd_wo_met_info)) : # All $CPD entries should be ordered by Offset in ascending order for the calculation
-		if (cpd_wo_met_info[i][1],cpd_wo_met_info[i][2]) == (0,0) : # Check if entry has Starting Offset & Size
+		if (cpd_wo_met_info[i][1],cpd_wo_met_info[i][2]) == (0,0) : # Check if entry has valid Starting Offset & Size
 			continue # Do not adjust empty entries to skip them during unpacking (i.e. fitc.cfg or oem.key w/o Data)
+		elif oem_config or oem_signed : # Check if entry is FIT/OEM customized and thus outside Stock/RGN Partition
+			continue # Do not adjust FIT/OEM-customized Partition entries (fitc.cfg, oem.key) since $CPD info is accurate
 		elif i < len(cpd_wo_met_info) - 1 : # For all entries, use the next module offset to find its size, if possible
 			cpd_wo_met_info[i][2] = cpd_wo_met_info[i + 1][1] - cpd_wo_met_info[i][1] # Size is Next Start - Current Start
 		elif ext_psize != -1 : # For the last entry, use CSE Extension 0x3/0x16 to find its size via the total Partition size
@@ -4815,7 +4820,11 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 		else : # For the last entry, if CSE Extension 0x3/0x16 is missing, find its size manually via EOF 0xFF padding
 			entry_size = buffer[cpd_offset + cpd_wo_met_info[i][1]:].find(b'\xFF\xFF') # There is no Huffman codeword 0xFFFF
 			if entry_size != -1 : cpd_wo_met_info[i][2] = entry_size # Size ends where the padding starts
-			else : cse_anl_err(col_r + 'Error: Could not determine size of module %s > %s!' % (cpd_name,cpd_wo_met_info[i][0]) + col_e)
+			else : cse_anl_err(col_r + 'Error: Could not determine size of Module %s > %s!' % (cpd_name,cpd_wo_met_info[i][0]) + col_e)
+			
+		if cpd_wo_met_info[i][2] > cpd_wo_met_back[i][2] or cpd_wo_met_info[i][2] < 0 : # Report obvious wrong Module Size adjustments
+			cpd_wo_met_info[i][2] = cpd_wo_met_back[i][2] # Restore default Module Size from backup in case of wrong adjustment
+			cse_anl_err(col_r + 'Error: Could not determine size of Module %s > %s!' % (cpd_name,cpd_wo_met_info[i][0]) + col_e)
 	
 	# Stage 4: Fill Metadata Hash from Manifest
 	for attr in cpd_ext_attr :
