@@ -1,3 +1,7 @@
+v1.82.1 r152
+
+Fixed CSE Modules without Metadata unpacking issue
+
 v1.82.0 r152
 
 Added CSE Modules without Metadata unpacking support
