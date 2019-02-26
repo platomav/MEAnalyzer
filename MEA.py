@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.82.1'
+title = 'ME Analyzer v1.82.2'
 
 import os
 import re
@@ -8826,8 +8826,8 @@ for file_in in source :
 							bup_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 							
 							if bup_decomp != b'' :
-								# C355B00189E55D (FFFF8D65F45B5E5F5DC355B00189E55DC3)
-								pdm_pat = re.compile(br'\xFF\xFF\x8D\x65\xF4\x5B\x5E\x5F\x5D\xC3\x55\xB0\x01\x89\xE5\x5D\xC3').search(bup_decomp)
+								# 5DC355B00189E55DC3
+								pdm_pat = re.compile(br'\x5D\xC3\x55\xB0\x01\x89\xE5\x5D\xC3').search(bup_decomp)
 							
 								if pdm_pat : sku_pdm = 'YPDM'
 								else : sku_pdm = 'NPDM'

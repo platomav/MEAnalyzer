@@ -30,7 +30,6 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (
 - Ability to validate Engine RSA Signature and Region table checksums
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to detect & analyze Integrated Firmware Images (IFWI/BPDT)
-- Detection of CSME 11 PCH-LP firmware Power Down Mitigation (PDM) erratum
 - Ability to analyze multiple files by drag & drop or by input path
 - Detection of unique Apple Macintosh Engine firmware "Slim" SKUs
 - Detection of multiple Engine regions in input file, number only
