@@ -1,3 +1,7 @@
+v1.82.2 r153
+
+Fixed CSME 11 PCH-LP Power Down Mitigation detection
+
 v1.82.1 r152
 
 Fixed CSE Modules without Metadata unpacking issue
