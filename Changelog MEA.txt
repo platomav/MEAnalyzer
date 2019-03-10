@@ -1,3 +1,10 @@
+v1.82.3 r154
+
+Improved CSME 12 COR EXTR FWUpdate Support detection
+Fixed CSE $FPT Uncharted Partitions start detection
+Fixed CSME 11 PCH-LP Power Down Mitigation detection
+Fixed PMC variant detection for future platforms
+
 v1.82.2 r153
 
 Fixed CSME 11 PCH-LP Power Down Mitigation detection

@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.82.2'
+title = 'ME Analyzer v1.82.3'
 
 import os
 import re
@@ -6080,7 +6080,7 @@ def pmc_anl(mn2_info) :
 	if variant == 'PMCICP' or (variant,major) in [('CSME',13)] :
 		pmc_platform = 'ICP'
 		
-		if mn2_info[0] == 400 :
+		if mn2_info[0] in (400,130) :
 			# 400.1.30.1063 = ICP + LP + PCH Compatibility D + PMC Maintenance 0 + PMC Revision 1063
 			if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 1 LP, 2 H
 			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[2] // 10], mn2_info[2] % 10) # 21 = PCH C PMC 1
@@ -6121,7 +6121,7 @@ def pmc_anl(mn2_info) :
 	pmc_mn2_signed_db = 'PRD' if pmc_mn2_signed == 'Production' else 'PRE'
 	
 	if pmc_platform in ('CNP','ICP') :
-		if mn2_info[0] < 300 :
+		if mn2_info[0] < 130 :
 			pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 			pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], mn2_info[6], pmc_mn2_signed_db, mn2_info[5])
 		else :
@@ -6796,7 +6796,7 @@ def get_variant() :
 	# Variant DB RSA Public Key not found, manual known correction
 	if variant == 'TBD3' and major in (12,13) : variant = 'CSME'
 	elif variant == 'TBD3' and major == 300 : variant = 'PMCCNP'
-	elif variant == 'TBD3' and major == 400 : variant = 'PMCICP'
+	elif variant == 'TBD3' and major in (400,130) : variant = 'PMCICP'
 	elif variant == 'TBD3' and major in (3,4) : variant = 'CSTXE'
 	elif variant == 'TBD1' and major == 11 : variant = 'CSME'
 	elif variant == 'TBD1' and 6 <= major <= 10 : variant = 'ME'
@@ -6816,11 +6816,11 @@ def get_variant() :
 				elif mod in ['bup_rcv', 'sku_mgr'] :
 					variant = 'CSSPS'
 					break
+				elif mod == 'PMCC000' and major in (400,130) : # 0 ICP
+					variant = 'PMCICP'
+					break
 				elif mod == 'PMCC000' and major <= 300 : # 0 CNP
 					variant = 'PMCCNP'
-					break
-				elif mod == 'PMCC000' and major == 400 : # 0 ICP
-					variant = 'PMCICP'
 					break
 				elif mod == 'PMCC002' : # 2 APL A
 					variant = 'PMCAPLA'
@@ -7210,6 +7210,7 @@ for file_in in source :
 	pmc_pch_rev = 'Unknown'
 	pmc_platform = 'Unknown'
 	pmc_mn2_signed = 'Unknown'
+	fwu_iup_result = 'Unknown'
 	mfs_state = 'Unconfigured'
 	cse_lt = None
 	pt_dfpt = None
@@ -7317,6 +7318,8 @@ for file_in in source :
 	cpd_offset_last = 0
 	p_end_last_cont = 0
 	devexp_fd_start = -1
+	uncharted_start = -1
+	p_end_last_back = -1
 	mod_end = 0xFFFFFFFF
 	p_max_size = 0xFFFFFFFF
 	eng_fw_end = 0xFFFFFFFF
@@ -8047,9 +8050,11 @@ for file_in in source :
 		# Last $FPT entry has size, scan for uncharted partitions
 		else :
 			
-			# TXE3+ uncharted DNXP starts 0x1000 after last $FPT entry for some reason
-			if variant == 'CSTXE' and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
-				if reading[p_end_last + 0x1000:p_end_last + 0x1004] == b'$CPD' : p_end_last += 0x1000
+			# Due to 4K $FPT Partition alignment, Uncharted can start after 0x0 to 0x1000 bytes
+			if not fd_exist and not cse_lt_exist and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
+				p_end_last_back = p_end_last # Store $FPT-based p_end_last offset for CSME 12+ FWUpdate Support detection
+				uncharted_start = reading[p_end_last:p_end_last + 0x1004].find(b'$CPD') # Should be within the next 4K bytes
+				if uncharted_start != -1 : p_end_last += uncharted_start # Adjust p_end_last to actual Uncharted start
 			
 			# ME8-10 WCOD/LOCL but works for ME7, TXE1-2, SPS2-3 even though these end at last $FPT entry
 			while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MN2' :
@@ -8826,8 +8831,8 @@ for file_in in source :
 							bup_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 							
 							if bup_decomp != b'' :
-								# 5DC355B00189E55DC3
-								pdm_pat = re.compile(br'\x5D\xC3\x55\xB0\x01\x89\xE5\x5D\xC3').search(bup_decomp)
+								# 55B00189E55DC3
+								pdm_pat = re.compile(br'\x55\xB0\x01\x89\xE5\x5D\xC3').search(bup_decomp)
 							
 								if pdm_pat : sku_pdm = 'YPDM'
 								else : sku_pdm = 'NPDM'
@@ -8905,7 +8910,7 @@ for file_in in source :
 				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 				
 				# Verify FTPR & PMC compatibility (PCH & SKU)
-				if pmc_mn2_signed != release or pmc_pch_gen != 400 or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
+				if pmc_mn2_signed != release or pmc_pch_gen not in (400,130) or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
 					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
 			
 			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
@@ -9143,7 +9148,7 @@ for file_in in source :
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
-		if (platform,major) == ('CNP',300) : hotfix = '%0.2d' % hotfix
+		if (platform,major) in [('CNP',300),('ICP',400),('ICP',130)] : hotfix = '%0.2d' % hotfix
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PMC firmware size
 		
@@ -9166,6 +9171,12 @@ for file_in in source :
 	# Create Firmware Type DB entry
 	fw_type, type_db = fw_types(fw_type)
 	
+	# Check for CSME 12+ FWUpdate Support/Compatibility
+	if variant == 'CSME' and major >= 12 and not wcod_found :
+		fwu_iup_check = True if type_db == 'EXTR' and sku_db.startswith('COR') else False
+		if fwu_iup_check and (uncharted_start != -1 or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
+		else : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
+	
 	# Create firmware DB names
 	if variant in ['CSSPS','SPS'] and sku != 'NaN' :
 		name_db = '%s_%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, rsa_sig_hash)
@@ -9173,7 +9184,7 @@ for file_in in source :
 	elif variant == 'SPS' :
 		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
-	elif (variant,major) in [('PMCCNP',300),('PMCICP',400)] : # PMC CNP A/B, PMC ICP
+	elif (variant,major) in [('PMCCNP',300),('PMCICP',400),('PMCICP',130)] : # PMC CNP A/B, PMC ICP
 		name_db = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db)
 	elif variant.startswith('PMC') : # PMC APL A/B, BXT C, GLK A/B, CNP A
@@ -9275,9 +9286,7 @@ for file_in in source :
 			
 		if (rgn_exist or ifwi_exist) and variant in ('CSME','CSTXE','CSSPS','TXE') : msg_pt.add_row(['OEM Unlock Token', ['No','Yes'][int(utok_found)]])
 		
-		if variant == 'CSME' and major >= 12 and not wcod_found :
-			fwu_iup_check = True if type_db == 'EXTR' and sku_db.startswith('COR') else False
-			msg_pt.add_row(['FWUpdate Support', 'Impossible' if fwu_iup_check and not fwu_iup_exist else ['No','Yes'][int(pmcp_fwu_found)]])
+		if variant == 'CSME' and major >= 12 and not wcod_found : msg_pt.add_row(['FWUpdate Support', fwu_iup_result])
 		
 		msg_pt.add_row(['Date', date])
 
@@ -9323,6 +9332,10 @@ for file_in in source :
 	
 	# Print Messages which must be at the end of analysis
 	if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
+	
+	if fwu_iup_result == 'Impossible' and uncharted_start != -1 :
+		fwu_iup_msg = (uncharted_start,p_end_last_back,p_end_last_back + uncharted_start)
+		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from 0x%X - 0x%X for FWUpdate Support!' % fwu_iup_msg + col_e, False])
 	
 	if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Engine firmware detected!' % fpt_count + col_e, True])
 	
