@@ -1,3 +1,8 @@
+v1.83.0 r159
+
+Added CSSPS 5 Milestone 4 Recovery firmware support
+Improved CSE firmware hashes which are known to be bad
+
 v1.82.3 r154
 
 Improved CSME 12 COR EXTR FWUpdate Support detection
