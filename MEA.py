@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.82.3'
+title = 'ME Analyzer v1.83.0'
 
 import os
 import re
@@ -4335,6 +4335,9 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				elif (variant,major) == ('CSME',13) or ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018)) or dnx_version == 2 :
 					if ext_tag in ext_tag_rev_hdr_csme12 : hdr_rev_tag = ext_tag_rev_hdr_csme12[ext_tag]
 					if ext_tag in ext_tag_rev_mod_csme12 : mod_rev_tag = ext_tag_rev_mod_csme12[ext_tag]
+				elif (variant,major) == ('CSSPS',5) and hotfix in (0,1,2,3) :
+					if ext_tag in ext_tag_rev_hdr_cssps503 : hdr_rev_tag = ext_tag_rev_hdr_cssps503[ext_tag]
+					if ext_tag in ext_tag_rev_mod_cssps503 : mod_rev_tag = ext_tag_rev_mod_cssps503[ext_tag]
 				elif (variant,major) == ('CSSPS',5) :
 					if ext_tag in ext_tag_rev_hdr_cssps5 : hdr_rev_tag = ext_tag_rev_hdr_cssps5[ext_tag]
 					if ext_tag in ext_tag_rev_mod_cssps5 : mod_rev_tag = ext_tag_rev_mod_cssps5[ext_tag]
@@ -5959,6 +5962,8 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 	pch_init_rev = rec_data[2] # PCH Initialization Table Revision
 	pch_true_stp = '' # Actual PCH Stepping(s) (A, B, C etc)
 	
+	if rec_data[0x2:0x6] == b'\xFF' * 4 : return pch_init_info # FUI!
+	
 	# Detect Actual PCH Stepping(s) for CSME 11 & CSSPS 4
 	if (variant,major) in [('CSME',11),('CSSPS',4)] :
 		if mn2_ftpr_hdr.Year > 0x2015 or (mn2_ftpr_hdr.Year == 0x2015 and mn2_ftpr_hdr.Month > 0x05) \
@@ -6890,7 +6895,13 @@ ext_tag_rev_mod_csme14 = {0xF:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 ext_tag_rev_hdr_cssps5 = {}
 
 # CSSPS 5 Revised Extension Modules
-ext_tag_rev_mod_cssps5 = {0x0:'_R2'}
+ext_tag_rev_mod_cssps5 = {0x1:'_R2',0x0:'_R2'}
+
+# CSSPS 5.0.0-3 Revised Extensions
+ext_tag_rev_hdr_cssps503 = {}
+
+# CSSPS 5.0.0-3 Revised Extension Modules
+ext_tag_rev_mod_cssps503 = {0x0:'_R2'}
 
 # CSE Extensions without Modules
 ext_tag_mod_none = [0x4,0xA,0xC,0x11,0x13,0x16,0x30,0x31,0x32]
@@ -7083,6 +7094,8 @@ cse_known_bad_hashes = [
 ('470A0E018AF18F6477029AFE0207307BCD77991272CF23DA741712DAB109C8F8','B570786DAAA91A9A0119BD6F4143160044B054663FB06317650AE77DD6842401'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_init
 ('35C7D3383E6B380C3B07CB41444448EC63E3F219C77E7D99DA19C5BFB856713B','785F395BC28544253332ACB1C5C65CDA7C24662D55DC8AB8F0E56543B865A4C3'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_d0d3
 ('4DCF921DC0A48D2967063969ED1314CB17AA03E86635A366E2750BE43A219D95','058C09ABE1D1AB2B28D1D06153908EDAE8B420967D54EC4F1F99AC0D0101454C'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > umac_d0
+('68819F7FD4F8F553FE7C2C04A0CA8CED4D773D24B67C66473C5238C20E3D00A4','C4A712E543AD878766E472260CDF5E3D4696EE99EEDFB23E1C3E3EAD1CE8F0AB'), # CSSPS 05.00.04.027_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
+('96B8E5165D9D06DE4A76D052F36C2C9A545F4CCF4A9B22CDB576FF532995FE36','16654D1058BA92586C13108F1BC1338DB5FDADCD0734D72D0A0A4889C8035C94'), # CSSPS 05.00.04.027_XX_SKU3_PRD_OPR > OPR > FTPR.man
 ('F6500536A3FBAE00394053FB10E7C367635DC17995C8B9E4A87E01DEB4D98765','5F6726ED993F3E756EA6C3B2161BBEBB57592D97756BA21660DB4AE78B3FE7C0'), # CSSPS 05.00.03.114_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
 ('967EF4C226EE159B705167C3EBBA237E7A19B539F9534243C25A8EEA6FF68CBB','30482E3A133DB7C2F3B306B78CC3F97186F99685C46233052FF70AB9D4F9D86A'), # CSSPS 05.00.03.114_XX_SKU3_PRD_OPR > OPR > FTPR.man
 ('37D7E80D7AA0086DC6F97458C78A6F1C1EDB6E6BF3300BD85272952CD0F26015','6D5988416826AE30DA3D74062582A133B14B4D2E232CC98CBC83C77CD3955DCA'), # CSSPS 05.00.03.107_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
@@ -7343,22 +7356,23 @@ for file_in in source :
 		(start_man_match, end_man_match) = man_range.span()
 		start_man_match += 0xB # Add 8680.{9} sanity check before .$MN2 or .$MAN
 		
-		pr_man_0 = (reading[end_man_match + 0x374:end_man_match + 0x378]) # FTPR,OPR (CSME 14+, CSTXE 5+, CSSPS 6+)
-		pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]) # FTPR,OPR (CSME 11-13, CSTXE 3-4, CSSPS 4-5)
-		pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x266]) # FT,OP (ME 6-10 Part 1, TXE 0-2 Part 1, SPS 2-3 Part 1)
-		pr_man_3 = (reading[end_man_match + 0x266:end_man_match + 0x268]) # PR,xx (ME 6-10 Part 2, TXE 0-2 Part 2)
-		pr_man_4 = (reading[end_man_match + 0x28C:end_man_match + 0x293]) # BRINGUP (ME 2-5)
+		pr_man_0 = (reading[end_man_match + 0x374:end_man_match + 0x378]) # FTPR,OPR (CSME 14 +, CSTXE 5 +, CSSPS 6 +)
+		pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]) # FTPR,OPR (CSME 11 - 13, CSTXE 3 - 4, CSSPS 4 - 5.0.3)
+		pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x266]) # FT,OP (ME 6 - 10 Part 1, TXE 0 - 2 Part 1, SPS 2 - 3 Part 1)
+		pr_man_3 = (reading[end_man_match + 0x266:end_man_match + 0x268]) # PR,xx (ME 6 - 10 Part 2, TXE 0 - 2 Part 2)
+		pr_man_4 = (reading[end_man_match + 0x28C:end_man_match + 0x293]) # BRINGUP (ME 2 - 5)
 		pr_man_5 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E7]) # EpsRecovery,EpsFirmware (SPS 1)
-		pr_man_6 = (reading[end_man_match + 0x270:end_man_match + 0x277]) # $MMEBUP (ME 6 BYP Part 1, SPS 2-3 Part 2)
+		pr_man_6 = (reading[end_man_match + 0x270:end_man_match + 0x277]) # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
 		pr_man_7 = (reading[end_man_match + 0x33C:end_man_match + 0x340]) # $MMX (ME 6 BYP Part 2)
 		pr_man_8 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10]) # $CPD LOCL detection
 		pr_man_9 = (re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F')).search(reading[0x290:0x299]) # $MMEWCOD_ detection
 		pr_man_10 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x50\x4D\x43\x50', re.DOTALL)).search(reading[:0x10]) # $CPD PMCP detection
+		pr_man_11 = (reading[end_man_match - 0x38:end_man_match - 0x31]) # bup_rcv (CSSPS 5.0.3 +)
 		
 		#break # Force MEA to accept any $MAN/$MN2 (Debug)
 		
-		if any(p in (pr_man_0, pr_man_1, pr_man_2 + pr_man_3, pr_man_2 + pr_man_6 + pr_man_7, pr_man_4, pr_man_5, pr_man_6 + pr_man_7) \
-		for p in (b'FTPR', b'OPR\x00', b'BRINGUP', b'EpsRecovery', b'EpsFirmware', b'OP$MMEBUP\x00\x00\x00\x00', b'$MMEBUP$MMX')) \
+		if any(p in (pr_man_0, pr_man_1, pr_man_2 + pr_man_3, pr_man_2 + pr_man_6 + pr_man_7, pr_man_4, pr_man_5, pr_man_6 + pr_man_7, pr_man_11) \
+		for p in (b'FTPR', b'OPR\x00', b'BRINGUP', b'EpsRecovery', b'EpsFirmware', b'OP$MMEBUP\x00\x00\x00\x00', b'$MMEBUP$MMX', b'bup_rcv')) \
 		or pr_man_8 or pr_man_9 or pr_man_10 :
 			# Recovery Manifest found
 			break
@@ -8895,9 +8909,9 @@ for file_in in source :
 				warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
 				
 				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				#if sku_result != 'LP' and fw_0C_sku0 in ('') : sku_result = 'LP'
-				#elif sku_result != 'H' and fw_0C_sku0 in ('') : sku_result = 'H'
-				#elif sku_result != 'N' and fw_0C_sku0 in ('') : sku_result = 'N'
+				if sku_result != 'LP' and fw_0C_sku0 in ('3131BED0') : sku_result = 'LP'
+				elif sku_result != 'N' and fw_0C_sku0 in ('') : sku_result = 'N'
+				elif sku_result != 'H' and fw_0C_sku0 in ('') : sku_result = 'H'
 				#elif sku_result == 'H' : warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
 			
 			sku = sku_init + ' ' + sku_result
