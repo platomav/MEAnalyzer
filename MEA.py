@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.83.0'
+title = 'ME Analyzer v1.84.0'
 
 import os
 import re
@@ -4810,7 +4810,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	# $CPD contains Huffman Yes/No and Uncompressed Size but Compressed Size is needed for Header parsing during Huffman decompression
 	# RBEP > rbe and FTPR > pm Modules contain the Compressed Size, Uncompressed Size & Hash but without Names, only hardcoded DEV_IDs
 	# With only Huffman Yes/No bit at $CPD, we can no longer discern between Uncompressed, LZMA Compressed and Encrypted Modules
-	# This adjustment should only be required for Huffman Modules without Metadata but MEA adjusts everything for good measure
+	# This adjustment should only be required for Huffman Modules without Metadata but MEA calculates everything just in case
 	for i in range(len(cpd_wo_met_info)) : # All $CPD entries should be ordered by Offset in ascending order for the calculation
 		if (cpd_wo_met_info[i][1],cpd_wo_met_info[i][2]) == (0,0) : # Check if entry has valid Starting Offset & Size
 			continue # Do not adjust empty entries to skip them during unpacking (i.e. fitc.cfg or oem.key w/o Data)
@@ -4928,15 +4928,21 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			mod_comp_size = cpd_entry_size # Compressed = Uncompressed (via $CPD) size by default since "Data" shouldn't have Metadata
 			mod_uncomp_size = cpd_entry_size # The Uncompressed Size can be taken directly from $CPD
 			
-			# When the firmware lacks Module Metadata, we must manually fill the Huffman Compression Type via $CPD and calculated Compressed Size
+			# When the firmware lacks Huffman Module Metadata, we must manually fill the Compression Type via $CPD and calculated Compressed Size
 			for i in range(len(cpd_wo_met_info)) :
-				if cpd_wo_met_info[i][0] == cpd_entry_name.decode('utf-8') :
+				if (cpd_wo_met_info[i][0], cpd_wo_met_info[i][3]) == (cpd_entry_name.decode('utf-8'), 1) :
 					mod_comp_type = cpd_wo_met_info[i][3] # As taken from $CPD Huffman Yes/No bit
 					mod_comp_size = cpd_wo_met_info[i][2] # As calculated at Stage 3 of the analysis
 					mod_size = mod_comp_size # Store calculated Compressed Size for Out of Partition Bounds check
 					break
 			
 			mod_data = buffer[cpd_entry_offset:cpd_entry_offset + mod_size]
+			
+			# When the firmware lacks LZMA Module Metadata, we must manually fill the Compression Type and calculated Uncompressed Size
+			if mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
+				mod_comp_type = 2 # Compression Type 2 is LZMA
+				mod_uncomp_size = int.from_bytes(mod_data[0x5:0xD], 'little') # LZMA Header 0x5-0xD (uint64) is the Uncompressed Size in LE
+			
 			if mod_data == b'\xFF' * mod_size or cpd_entry_offset >= file_end : mod_empty = 1 # Determine if Module is Empty/Missing
 			
 			cpd_mod_attr.append([cpd_entry_name.decode('utf-8'), mod_comp_type, 0, cpd_entry_offset, mod_comp_size, mod_uncomp_size, mod_empty, 0, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
@@ -5260,8 +5266,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 			# Store & Decompress LZMA Data
 			elif mod_comp == 2 :
 				
-				# Calculate LZMA Module Hash
-				mea_hash_c = get_hash(mod_data, len(mod_hash) // 2) # Compressed, Header zeros included (most LZMA Modules)
+				mod_data_r = mod_data # Store raw LZMA Module contents before zeros removal, for hashing
 				
 				# Remove zeros from LZMA header for decompression (inspired from Igor Skochinsky's me_unpack)
 				if mod_data.startswith(b'\x36\x00\x40\x00\x00') and mod_data[0xE:0x11] == b'\x00\x00\x00' :
@@ -5280,33 +5285,75 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					
 					print(col_c + '\n    Decompressed %s %s "%s"' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					
-					mod_hash_c_ok = mod_hash == mea_hash_c # Check Compressed LZMA validity
-					if not mod_hash_c_ok : # Skip Uncompressed LZMA hash if not needed
-						mea_hash_u = get_hash(mod_data_d, len(mod_hash) // 2) # Uncompressed (few LZMA Modules)
-						mod_hash_u_ok = mod_hash == mea_hash_u # Check Uncompressed LZMA validity
-					
-					if param.me11_mod_bug : # Debug
-						if mod_hash_c_ok :
-							print('\n    MOD: %s' % mod_hash) 
-							print('    MEA: %s' % mea_hash_c)
-						elif mod_hash_u_ok :
-							print('\n    MOD: %s' % mod_hash) 
-							print('    MEA: %s' % mea_hash_u)
+					# Open decompressed LZMA module for Hash validation, when Metadata info is available
+					if mod_hash != 0 :
+						# Calculate LZMA Module Hash
+						mea_hash_c = get_hash(mod_data_r, len(mod_hash) // 2) # Compressed, Header zeros included (most LZMA Modules)
+						
+						mod_hash_c_ok = mod_hash == mea_hash_c # Check Compressed LZMA validity
+						if not mod_hash_c_ok : # Skip Uncompressed LZMA hash if not needed
+							mea_hash_u = get_hash(mod_data_d, len(mod_hash) // 2) # Uncompressed (few LZMA Modules)
+							mod_hash_u_ok = mod_hash == mea_hash_u # Check Uncompressed LZMA validity
+						
+						if param.me11_mod_bug : # Debug
+							if mod_hash_c_ok :
+								print('\n    MOD: %s' % mod_hash) 
+								print('    MEA: %s' % mea_hash_c)
+							elif mod_hash_u_ok :
+								print('\n    MOD: %s' % mod_hash) 
+								print('    MEA: %s' % mea_hash_u)
+							else :
+								print('\n    MOD  : %s' % mod_hash)
+								print('    MEA C: %s' % mea_hash_c)
+								print('    MEA U: %s' % mea_hash_u)
+						
+						if mod_hash_c_ok or mod_hash_u_ok :
+							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							with open(mod_fname, 'wb') as mod_file : mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
-							print('\n    MOD  : %s' % mod_hash)
-							print('    MEA C: %s' % mea_hash_c)
-							print('    MEA U: %s' % mea_hash_u)
-					
-					if mod_hash_c_ok or mod_hash_u_ok :
-						print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-						with open(mod_fname, 'wb') as mod_file : mod_file.write(mod_data_d) # Decompression complete, valid data
-					else :
-						if param.me11_mod_bug and (mod_hash,mea_hash_c) not in cse_known_bad_hashes :
-							input(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-						else :
-							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							if param.me11_mod_bug and (mod_hash,mea_hash_c) not in cse_known_bad_hashes :
+								input(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
+							else :
+								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+								
+							with open(mod_fname, 'wb') as mod_file : mod_file.write(mod_data_d) # Decompression complete, invalid data
 							
-						with open(mod_fname, 'wb') as mod_file : mod_file.write(mod_data_d) # Decompression complete, invalid data
+					# Open decompressed LZMA module for Hash validation, when Metadata info is not available
+					# When the firmware lacks Module Metadata, check RBEP > rbe and FTPR > pm Modules instead
+					elif rbe_pm_met_hashes :
+						mea_hash_c = get_hash(mod_data_r, 0x20) # Compressed, Header zeros included (most LZMA Modules)
+						
+						mod_hash_c_ok = mea_hash_c in rbe_pm_met_hashes # Check Compressed LZMA validity
+						if not mod_hash_c_ok : # Skip Uncompressed LZMA hash if not needed
+							mea_hash_u = get_hash(mod_data_d, 0x20) # Uncompressed (few LZMA Modules)
+							mod_hash_u_ok = mea_hash_u in rbe_pm_met_hashes # Check Uncompressed LZMA validity
+						
+						if param.me11_mod_bug : # Debug
+							print('\n    MOD: No Metadata, validation via RBEP > rbe and FTPR > pm Modules') # Debug
+							if mod_hash_c_ok :
+								print('    MEA: %s' % mea_hash_c)
+							elif mod_hash_u_ok :
+								print('    MEA: %s' % mea_hash_u)
+							else :
+								print('    MEA C: %s' % mea_hash_c)
+								print('    MEA U: %s' % mea_hash_u)
+						
+						if mod_hash_c_ok :
+							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							rbe_pm_met_valid.append(mea_hash_c) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
+							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
+						elif mod_hash_u_ok :
+							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							rbe_pm_met_valid.append(mea_hash_u) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
+							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
+						else :
+							if param.me11_mod_bug and (mod_hash,mea_hash_c) not in cse_known_bad_hashes :
+								input(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
+							else :
+								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							
+							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, invalid data
+				
 				except :
 					if param.me11_mod_bug :
 						input(col_r + '\n    Failed to decompress %s %s "%s"' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
@@ -8909,9 +8956,9 @@ for file_in in source :
 				warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
 				
 				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				if sku_result != 'LP' and fw_0C_sku0 in ('3131BED0') : sku_result = 'LP'
-				elif sku_result != 'N' and fw_0C_sku0 in ('') : sku_result = 'N'
-				elif sku_result != 'H' and fw_0C_sku0 in ('') : sku_result = 'H'
+				if sku_result != 'LP' and fw_0C_sku0 in ('3131BED0','') : sku_result = 'LP'
+				elif sku_result != 'N' and fw_0C_sku0 in ('','') : sku_result = 'N'
+				elif sku_result != 'H' and fw_0C_sku0 in ('','') : sku_result = 'H'
 				#elif sku_result == 'H' : warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
 			
 			sku = sku_init + ' ' + sku_result
