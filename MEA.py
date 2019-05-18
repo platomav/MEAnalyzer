@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.84.0'
+title = 'ME Analyzer v1.85.0'
 
 import os
 import re
@@ -3803,7 +3803,7 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - SPS Platform ID (MFT_EXT
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Type', 'Unknown' if type_str not in cssps_type_fw else cssps_type_fw[type_str]])
-		pt.add_row(['Platform', 'Unknown' if platform_str not in cssps_platform else cssps_platform[platform_str]])
+		pt.add_row(['Platform', 'Unknown (%s)' % platform_str if platform_str not in cssps_platform else cssps_platform[platform_str]])
 		pt.add_row(['Reserved', '0x0' if self.Reserved == 0 else '0x%X' % self.Reserved])
 		
 		return pt
@@ -4335,7 +4335,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				elif (variant,major) == ('CSME',13) or ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018)) or dnx_version == 2 :
 					if ext_tag in ext_tag_rev_hdr_csme12 : hdr_rev_tag = ext_tag_rev_hdr_csme12[ext_tag]
 					if ext_tag in ext_tag_rev_mod_csme12 : mod_rev_tag = ext_tag_rev_mod_csme12[ext_tag]
-				elif (variant,major) == ('CSSPS',5) and hotfix in (0,1,2,3) :
+				elif (variant,major,minor) == ('CSSPS',5,0) and hotfix in (0,1,2,3) :
 					if ext_tag in ext_tag_rev_hdr_cssps503 : hdr_rev_tag = ext_tag_rev_hdr_cssps503[ext_tag]
 					if ext_tag in ext_tag_rev_mod_cssps503 : mod_rev_tag = ext_tag_rev_mod_cssps503[ext_tag]
 				elif (variant,major) == ('CSSPS',5) :
@@ -4738,6 +4738,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						mea_phash = get_hash(mea_pdata, ext_phlen)
 						ext_phval = [True, ext_phash == mea_phash, ext_phash, mea_phash]
 						if not ext_phval[1] and int(ext_phval[2], 16) != 0 :
+							if (variant,major) == ('CSSPS',5) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 5 Partition Hash is always wrong, ignore
 							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, (ext_phash,mea_phash))
 					
 					# Detect CSE Extension without Modules different size & notify user
@@ -5099,8 +5100,10 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						print(col_m + '\n    Hash of partition "%s" is UNKNOWN' % cpd_pname + col_e)
 					elif ext_phval[0] and ext_phval[1] : # Hash exists and is Valid
 						print(col_g + '\n    Hash of partition "%s" is VALID' % cpd_pname + col_e)
-					elif ext_phval[0] : # Hash exists but is Invalid
-						if param.me11_mod_bug and (ext_phval[2],ext_phval[3]) not in cse_known_bad_hashes :
+					elif ext_phval[0] : # Hash exists but is Invalid (CSSPS 5 Hash is always wrong)
+						if (variant,major) == ('CSSPS',5) :
+							print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d Ignore)' % (cpd_pname,variant,major) + col_e)
+						elif param.me11_mod_bug and (ext_phval[2],ext_phval[3]) not in cse_known_bad_hashes :
 							input(col_r + '\n    Hash of partition "%s" is INVALID' % cpd_pname + col_e) # Debug
 						else :
 							print(col_r + '\n    Hash of partition "%s" is INVALID' % cpd_pname + col_e)
@@ -6960,7 +6963,7 @@ ext_tag_mod_count = [0x1,0x2,0x12,0x14,0x15]
 cssps_type_fw = {'RC': 'Recovery', 'OP': 'Operational'}
 
 # CSE SPS SKU Platform ID
-cssps_platform = {'GE': 'Greenlow', 'PU': 'Purley', 'HA': 'Harrisonville', 'PE': 'Purley EPO', 'BA': 'Bakerville'}
+cssps_platform = {'GE': 'Greenlow', 'PU': 'Purley', 'HA': 'Harrisonville', 'PE': 'Purley EPO', 'BA': 'Bakerville', 'ME': 'Mehlow'}
 
 # CSE File System ID
 mfs_type = {0: 'root', 1: 'home', 2: 'bin', 3: 'susram', 4: 'fpf', 5: 'dev', 6: 'umafs'}
@@ -7101,7 +7104,7 @@ bpdt_dict = {
 			19 : 'LOCL', # CSE-LOCL Partition
 			20 : 'OEMP', # OEM KM Partition
 			23 : 'IOMP', # USB Type C IO Manageability Partition (UIOM)
-			24 : 'NPHY-MGPP', # USB Type C MG Partition (MGPP = NPHY)
+			24 : 'NPHY', # USB Type C MG Partition (NPHY = MGPP)
 			25 : 'TBTP', # USB Type C Thunderbolt Partition (TBT)
 			26 : 'PLTS', # Platform Settings
 			31 : 'DPHY', # USB Type C Dekel PHY
@@ -7141,14 +7144,7 @@ cse_known_bad_hashes = [
 ('470A0E018AF18F6477029AFE0207307BCD77991272CF23DA741712DAB109C8F8','B570786DAAA91A9A0119BD6F4143160044B054663FB06317650AE77DD6842401'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_init
 ('35C7D3383E6B380C3B07CB41444448EC63E3F219C77E7D99DA19C5BFB856713B','785F395BC28544253332ACB1C5C65CDA7C24662D55DC8AB8F0E56543B865A4C3'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_d0d3
 ('4DCF921DC0A48D2967063969ED1314CB17AA03E86635A366E2750BE43A219D95','058C09ABE1D1AB2B28D1D06153908EDAE8B420967D54EC4F1F99AC0D0101454C'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > umac_d0
-('68819F7FD4F8F553FE7C2C04A0CA8CED4D773D24B67C66473C5238C20E3D00A4','C4A712E543AD878766E472260CDF5E3D4696EE99EEDFB23E1C3E3EAD1CE8F0AB'), # CSSPS 05.00.04.027_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
-('96B8E5165D9D06DE4A76D052F36C2C9A545F4CCF4A9B22CDB576FF532995FE36','16654D1058BA92586C13108F1BC1338DB5FDADCD0734D72D0A0A4889C8035C94'), # CSSPS 05.00.04.027_XX_SKU3_PRD_OPR > OPR > FTPR.man
-('F6500536A3FBAE00394053FB10E7C367635DC17995C8B9E4A87E01DEB4D98765','5F6726ED993F3E756EA6C3B2161BBEBB57592D97756BA21660DB4AE78B3FE7C0'), # CSSPS 05.00.03.114_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
-('967EF4C226EE159B705167C3EBBA237E7A19B539F9534243C25A8EEA6FF68CBB','30482E3A133DB7C2F3B306B78CC3F97186F99685C46233052FF70AB9D4F9D86A'), # CSSPS 05.00.03.114_XX_SKU3_PRD_OPR > OPR > FTPR.man
-('37D7E80D7AA0086DC6F97458C78A6F1C1EDB6E6BF3300BD85272952CD0F26015','6D5988416826AE30DA3D74062582A133B14B4D2E232CC98CBC83C77CD3955DCA'), # CSSPS 05.00.03.107_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
-('4B23027311E2E28EAFA269C507B0A6D1F1BAD5D654CF042212C8F83C53E1D9F9','097ABC45CF6A316F606DE5233B5B1FB18E65BE0D285EA3ABC984E16931EB6CE0'), # CSSPS 05.00.03.107_XX_SKU3_PRD_OPR > OPR > FTPR.man
-('592ECB560234A46E6818118A561F2D01F72149203610F4C9D06D2A6F79A7AEF9','97709C6B21B551C35125EF740B183A10ADFD7865E4D5C0BC38220694438E9DE2'), # CSSPS 05.00.03.101_XX_SKU3_BA_PRD_REC > FTPR > FTPR.man
-('9869DB38F915FB9FD1D5ACD80A06F166EAF7494D79D8FC42D63DC87CB230AD8C','01AE49D94E580E42BF16065D4773AB73695403DD7C1B560ED76C41770EB9BB4C'), # CSSPS 05.00.03.101_XX_SKU3_PRD_OPR > OPR > FTPR.man
+('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSSPS 5 Extension 0x16 Hash)
 ]
 	
 # Get MEA Parameters from input
