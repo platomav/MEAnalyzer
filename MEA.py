@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.85.0'
+title = 'ME Analyzer v1.85.1'
 
 import os
 import re
@@ -45,7 +45,7 @@ else :
 	print(col_r + '\nError: Unsupported platform "%s"!\n' % mea_os + col_e)
 	if ' -exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
-	sys.exit(-1)
+	sys.exit(1)
 
 # Detect Python version
 mea_py = sys.version_info
@@ -55,7 +55,7 @@ except :
 	print(col_r + '\nError: Python >= 3.6 required, not %d.%d!\n' % (mea_py[0],mea_py[1]) + col_e)
 	if ' -exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
-	sys.exit(-1)
+	sys.exit(1)
 
 # Set ctypes Structure types
 char = ctypes.c_char
@@ -699,7 +699,7 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
-		pt.add_row(['Internal Info', '0x%X' % self.InternalInfo])
+		pt.add_row(['Unique Build Tag', '0x%X' % self.InternalInfo])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
 		pt.add_row(['Security Version Number', '%d' % self.SVN])
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
@@ -781,7 +781,7 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
-		pt.add_row(['Internal Info', '0x%X' % self.InternalInfo])
+		pt.add_row(['Unique Build Tag', '0x%X' % self.InternalInfo])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
 		pt.add_row(['Security Version Number', '%d' % self.SVN])
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
@@ -2795,6 +2795,34 @@ class CSE_Ext_0F_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (SIGNED_PACKAGE_I
 		pt.add_row(['Metadata Hash', MetadataHash])
 		
 		return pt
+		
+# noinspection PyTypeChecker
+class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_INFO_EXT_ENTRY, STRONG_SIGNED_PACKAGE_INFO_EXT_ENTRY)
+	_pack_ = 1
+	_fields_ = [
+		('Name',			char*12),		# 0x00
+		('Type',			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 OEM/IUP)
+		('SVN',				uint8_t),		# 0x0D
+		('HashSize',		uint16_t),		# 0x0E
+		('MetadataSize',	uint32_t),		# 0x10
+		('MetadataHash',	uint32_t*12),	# 0x14 SHA-384
+		# 0x44
+	]
+	
+	def ext_print(self) :
+		MetadataHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MetadataHash))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 15, Entry' + col_e
+		pt.add_row(['Name', self.Name.decode('utf-8')])
+		pt.add_row(['Type', ['Process','Shared Library','Data','OEM/IUP'][self.Type]])
+		pt.add_row(['Security Version Number', self.SVN])
+		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
+		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
+		pt.add_row(['Metadata Hash', MetadataHash])
+		
+		return pt
 
 # noinspection PyTypeChecker
 class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in XML, Reverse Engineered)
@@ -3417,7 +3445,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 			0x80860010 : ['Allow Visa Override', ['Disabled', 'Enabled']],
 			0x80860011 : ['Enable DCI', ['No', 'Yes']],
 			0x80860020 : ['ISH GDB Support', ['Disabled', 'Enabled']],
-			0x80860030 : ['Boot Guard', ['Reserved', 'Disabled', 'No Enforcement', 'No Timeouts', 'No Enforcement & Timeouts']] \
+			0x80860030 : ['Boot Guard', ['Nothing', 'Disabled', 'No Enforcement', 'No Timeouts', 'No Enforcement & Timeouts']] \
 			if self.variant == 'CSME' and self.major >= 12 else ['BIOS Secure Boot', ['Enforced', 'Allow RnD Keys & Policies', 'Disabled']],
 			0x80860031 : ['Audio FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
 			0x80860032 : ['ISH FW Authentication', ['Enforced', 'Allow RnD Keys', 'Disabled']],
@@ -6553,7 +6581,7 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 		print(col_e)
 	if not param.skip_pause : input('Press enter to exit')
 	colorama.deinit() # Stop Colorama
-	sys.exit(-1)
+	sys.exit(1)
 
 # Execute final actions
 def mea_exit(code=0) :
@@ -7027,6 +7055,7 @@ ext_dict = {
 			'CSE_Ext_0E_Mod' : CSE_Ext_0E_Mod,
 			'CSE_Ext_0F_Mod' : CSE_Ext_0F_Mod,
 			'CSE_Ext_0F_Mod_R2' : CSE_Ext_0F_Mod_R2,
+			'CSE_Ext_0F_Mod_R3' : CSE_Ext_0F_Mod_R3,
 			'CSE_Ext_10_Mod' : CSE_Ext_10_Mod,
 			'CSE_Ext_12_Mod' : CSE_Ext_12_Mod,
 			'CSE_Ext_14_HashArray' : CSE_Ext_14_HashArray,
@@ -7056,6 +7085,7 @@ key_dict = {
 			11 : 'Unlock Token',
 			13 : 'USB Type C D-PHY',
 			14 : 'PCH Configuration',
+			16 : 'Intel ISI',
 			# OEM (32-127)
 			32 : 'Boot Policy',
 			33 : 'iUnit Boot Loader', # Imaging Unit (Camera)
@@ -7077,6 +7107,7 @@ key_dict = {
 			49 : 'OEM DNX IFWI R1', # XML v1.0 (Download and Execute v1)
 			53 : 'OEM DNX IFWI R2', # XML v2.4 (Download and Execute v2)
 			57 : 'OEM Descriptor',
+			58 : 'OEM ISI',
 			}
 	
 # IFWI BPDT Entry Types
@@ -7109,6 +7140,8 @@ bpdt_dict = {
 			26 : 'PLTS', # Platform Settings
 			31 : 'DPHY', # USB Type C Dekel PHY
 			32 : 'PCHC', # PCH Configuration
+			33 : 'ISIF', # ISI Firmware
+			34 : 'ISIC', # ISI Configuration
 			}
 	
 # CSE PCH Platforms
@@ -7215,7 +7248,6 @@ elif not param.extr_mea and not param.print_msg :
 	
 if (arg_num < 2 and not param.help_scr and not param.mass_scan) or param.help_scr :
 	mea_help()
-	mea_exit(5)
 
 if param.mass_scan :
 	in_path = input('\nEnter the full folder path : ')
@@ -7386,7 +7418,7 @@ for file_in in source :
 		
 		print(col_r + '\nError: File %s was not found!' % file_in + col_e)
 		
-		if not param.mass_scan : mea_exit(0)
+		if not param.mass_scan : mea_exit(1)
 		else : continue
 	
 	with open(file_in, 'rb') as in_file : reading = in_file.read()
