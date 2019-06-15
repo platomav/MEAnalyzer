@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.85.1'
+title = 'ME Analyzer v1.86.0'
 
 import os
 import re
@@ -4137,10 +4137,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	for cpdrange in cpd_match_ranges :
 		(start_cpd_emod, end_cpd_emod) = cpdrange.span()
 		
-		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,x4,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12,ext_iunit_val \
+		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,ext12_info,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12,ext_iunit_val \
 		= ext_anl(reading, '$CPD', start_cpd_emod, file_end, [variant, major, minor, hotfix, build], None)
 		
-		rbe_pm_met_valid = mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val, rbe_pm_met_hashes, rbe_pm_met_valid)
+		rbe_pm_met_valid = mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val, rbe_pm_met_hashes, rbe_pm_met_valid, ext12_info)
 		
 	# Store all RBEP > rbe and FTPR > pm "Metadata" leftover Hashes for Huffman symbol reversing
 	# The leftover Hashes for Huffman symbol reversing should be n+1 if NFTP > pavp is encrypted
@@ -4606,6 +4606,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						
 						ext_phval = [True, ext_phash == mea_phash, ext_phash, mea_phash]
 						if not ext_phval[1] and int(ext_phval[2], 16) != 0 :
+							if (variant,major,minor,ext_psize) == ('CSME',11,8,0x88000) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSME 11.8 Slim Partition Hash is always wrong, ignore
 							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, (ext_phash,mea_phash))
 					
 					# Check Extension full size when Module Counter exists
@@ -4992,7 +4993,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	return cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val
 
 # Analyze & Store CSE Modules
-def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val, rbe_pm_met_hashes, rbe_pm_met_valid) :
+def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val, rbe_pm_met_hashes, rbe_pm_met_valid, ext12_info) :
 	# noinspection PyUnusedLocal
 	mea_hash_c = 0
 	mea_hash_u = 0
@@ -5128,8 +5129,10 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						print(col_m + '\n    Hash of partition "%s" is UNKNOWN' % cpd_pname + col_e)
 					elif ext_phval[0] and ext_phval[1] : # Hash exists and is Valid
 						print(col_g + '\n    Hash of partition "%s" is VALID' % cpd_pname + col_e)
-					elif ext_phval[0] : # Hash exists but is Invalid (CSSPS 5 Hash is always wrong)
-						if (variant,major) == ('CSSPS',5) :
+					elif ext_phval[0] : # Hash exists but is Invalid (CSME 11.8 SLM and CSSPS 5 Hashes are always wrong)
+						if (variant,major,minor,ext12_info[1]) == ('CSME',11,8,2) :
+							print(col_r + '\n    Hash of partition "%s" is INVALID (CSME 11.8 Slim Ignore)' % cpd_pname + col_e)
+						elif (variant,major) == ('CSSPS',5) :
 							print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d Ignore)' % (cpd_pname,variant,major) + col_e)
 						elif param.me11_mod_bug and (ext_phval[2],ext_phval[3]) not in cse_known_bad_hashes :
 							input(col_r + '\n    Hash of partition "%s" is INVALID' % cpd_pname + col_e) # Debug
@@ -7164,20 +7167,13 @@ pch_dict = {
 cse_known_bad_hashes = [
 ('1E2FD3B838010854E7490776ACC8E4CB6FE03D602151DF653BA392FF6E0D29B4','B2EE55B55A787362F49DF79F57403DE2DC6B2D09077BA732583FF2F80C10F306'), # CSME 12.0.0.7075_CON_LP_A_PRE > FTPR > FTPR.man
 ('4D0ADC668CAB1E694ED165CA36D5CFF3F13FFDFEB1A2BBD121334A098485E309','0ADBCBA2EAEAA7307247D6D6747521CFBC3B9AD988BA9F949217DFBC32ECB864'), # CSME 12.0.0.7075_COR_LP_A_PRE > FTPR > FTPR.man
-('22C3D2FAB27E72F0FBE84916F9D9576F1944F48C0BB56DD2A6D48F62DC48CA6E','74A8A77CB2E62D9FD002B4E086274C168F2D9CAA1434ED74D72A1ED068CFA868'), # CSME 11.8.60.3561_SLM_H_DA_PRD > FTPR > FTPR.man
-('83056892470FC65F08AA2258554F5D072F968F56B350310594D6C307FC6486E7','2B162ED7A0067B2AB9E765250A4F02FF69BA9DFBD74EE2F0889BF2BEC3D43EEB'), # CSME 11.8.60.3561_SLM_LP_C_NPDM_PRD > FTPR > FTPR.man
-('CC2866DC330789AFB764E335F8F7396CE7E098128FD988238F24C38EE450F8F0','FC4608D9894D56474C14A6EC238650C929E8A9DD5C6C759AD6BE4A8E37024A25'), # CSME 11.8.58.3511_SLM_LP_C_NPDM_PRD > FTPR > FTPR.man
-('9831E6A8BD82EAE593161B3BFB3CD787EF4B8308C5ED0869EC5C29D2812AE07C','8362AC40855AF85779D66ECC0DEBB5D5E807873395807EEB853D235D286D4AB2'), # CSME 11.8.55.3510_SLM_H_DA_PRD > FTPR > FTPR.man
-('E3DFAF8004464C3C77E562679BD177F81FB6D12D88A91CA4BEAFB1C65E724EA1','EE93E0318058FDC1D51906F50A4494B786D2874AB42CD4E5EFC029BBBB4733D8'), # CSME 11.8.55.3510_SLM_LP_C_NPDM_PRD > FTPR > FTPR.man
-('0833D56054E84412DDA84B400D13A13160D4ECEF6ABE407023D0AB502EA2A3EE','2394556989CA959938370811AD3937AAC02354671DB02704404E69CB816AFCF8'), # CSME 11.8.50.3425_SLM_H_DA_PRD > FTPR > FTPR.man
-('31B9DB9372F1C20145D84F1F554A207812A4F7832829565B4E3DE8A929139B8B','A16380E901203139AE2534188E54D98210F29DB3FBB21DF16A375F0401837091'), # CSME 11.8.50.3425_SLM_LP_C_NPDM_PRD > FTPR > FTPR.man
 ('B42458010144CB5708148C31590637372021FCBF21CE079679772FBD2990CF5F','CFB464D442FB477C1642B3C8F60809F764C727509A2112AB921430E2625ECB9B'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > mu_init
 ('89BFFD3CFAA25C0CA3AE4ABBDBFAA06F21566CEE653EF65401A80EAB36EB6F08','3A294E6196783ED22310AA3031706E7F6B774FCAFE479D5AFA1C6433E192652E'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > mu_d0d3
 ('B63D75602385A6CFE56EC8B79481E46074B1E39217F191B3C9AB961CE4A03139','3B3866517F1C3B1F07BA9692A8B1599F5DDAA24BFFB3F704C711F30D1E067288'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > umac_d0
 ('470A0E018AF18F6477029AFE0207307BCD77991272CF23DA741712DAB109C8F8','B570786DAAA91A9A0119BD6F4143160044B054663FB06317650AE77DD6842401'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_init
 ('35C7D3383E6B380C3B07CB41444448EC63E3F219C77E7D99DA19C5BFB856713B','785F395BC28544253332ACB1C5C65CDA7C24662D55DC8AB8F0E56543B865A4C3'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_d0d3
 ('4DCF921DC0A48D2967063969ED1314CB17AA03E86635A366E2750BE43A219D95','058C09ABE1D1AB2B28D1D06153908EDAE8B420967D54EC4F1F99AC0D0101454C'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > umac_d0
-('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSSPS 5 Extension 0x16 Hash)
+('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSME 11.8 SLM Extension 0x3, CSSPS 5 Extension 0x16)
 ]
 	
 # Get MEA Parameters from input
