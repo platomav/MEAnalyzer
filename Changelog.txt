@@ -1,3 +1,17 @@
+v1.88.0
+
+Added CSE File System Intel Config Hash proper check
+Improved BPDT detection at CSE without Layout Table
+Fixed Secondary BPDT PMC Partition detection
+
+r167
+
+CSME 12.0.40.1433_CON_LP_C_PRD_EXTR
+CSME 12.0.40.1433_COR_LP_C_PRD_EXTR-Y
+CSME 11.22.65.1590_SLM_H_BA_PRD_EXTR
+CSME 11.0.22.3001_COR_LP_C_YPDM_PRD_EXTR
+CSTXE 3.1.65.2318_B_PRD_EXTR
+
 v1.86.0
 
 Added CSME 11.8 Slim automatic Hash ignoring
