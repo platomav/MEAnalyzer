@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.88.0'
+title = 'ME Analyzer v1.90.0'
 
 import os
 import re
@@ -77,8 +77,10 @@ def mea_help() :
 	text += "-dbname : Renames input file based on unique DB name\n"
 	text += "-dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers\n"
 	text += "-unp86  : Unpacks all CSE Converged Security Engine firmware\n"
-	text += "-bug86  : Enables pause on error mode during CSE unpacking\n"
-	text += "-ver86  : Enables full verbose mode during CSE unpacking"
+	text += "-bug86  : Enables pausing on error during CSE unpacking\n"
+	text += "-ver86  : Enables full verbose output during CSE unpacking\n"
+	text += "-html   : Writes parsable HTML files during MEA operation\n"
+	text += "-json   : Writes parsable JSON files during MEA operation"
 	
 	print(text)
 	mea_exit(0)
@@ -88,7 +90,7 @@ class MEA_Param :
 
 	def __init__(self, mea_os, source) :
 	
-		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-pdb','-dbname','-mass','-dfpt','-exit','-redir','-ftbl']
+		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-redir','-ftbl']
 		self.win = ['-extr','-msg'] # Windows only
 		
 		if mea_os == 'win32' : self.val = self.all
@@ -107,6 +109,8 @@ class MEA_Param :
 		self.mass_scan = False
 		self.skip_pause = False
 		self.cli_redirect = False
+		self.write_html = False
+		self.write_json = False
 		self.mfs_ftbl = False
 		
 		for i in source :
@@ -121,6 +125,8 @@ class MEA_Param :
 			if i == '-dfpt' : self.fpt_disp = True
 			if i == '-exit' : self.skip_pause = True
 			if i == '-redir' : self.cli_redirect = True
+			if i == '-html' : self.write_html = True
+			if i == '-json' : self.write_json = True
 			if i == '-ftbl' : self.mfs_ftbl = True # Hidden
 			
 			# Windows only options
@@ -572,7 +578,7 @@ class BPDT_Entry(ctypes.LittleEndianStructure) : # (BpdtEntry)
 		pt.add_row(['Split Sub-Partition 1st Part', fvalue[f1]])
 		pt.add_row(['Split Sub-Partition 2nd Part', fvalue[f2]])
 		pt.add_row(['Code Sub-Partition', fvalue[f3]])
-		pt.add_row(['UMA Cachable', fvalue[f4]])
+		pt.add_row(['UMA Cacheable', fvalue[f4]])
 		pt.add_row(['Flags Reserved', '0x%X' % f5])
 		pt.add_row(['Offset', '0x%X' % self.Offset])
 		pt.add_row(['Size', '0x%X' % self.Size])
@@ -3875,9 +3881,10 @@ class RBE_PM_Metadata(ctypes.LittleEndianStructure) : # RBEP > rbe or FTPR > pm 
 		pt.add_row(['Hash', Hash])
 		
 		return pt
-		
+	
 # Unpack Engine CSE firmware
 # noinspection PyUnusedLocal
+# noinspection PyTypeChecker
 def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_chk_fail) :
 	print()
 	rbe_pm_data_d = b''
@@ -3889,7 +3896,6 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	rbe_pm_met_hashes = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
-	ansi_escape = re.compile(r'\x1b[^m]*m') # Generate ANSI Color and Font Escape Character Sequences
 	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'none') # Load Huffman Dictionaries for rbe/pm Decompression
 	
 	# Create main Firmware Extraction Directory
@@ -3908,12 +3914,20 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		
 		with open(cse_lt_fname + '.bin', 'w+b') as cse_lt_file : cse_lt_file.write(reading[cse_lt_off:cse_lt_off + cse_lt_size])
 		with open(cse_lt_fname + '.txt', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write(ansi_escape.sub('', '\n%s' % cse_lt_info))
+		if param.write_html :
+			with open(cse_lt_fname + '.html', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n<br/>\n%s' % pt_html(cse_lt_info))
+		if param.write_json :
+			with open(cse_lt_fname + '.json', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % pt_json(cse_lt_info))
 		
 		pt_dcselt.title = col_y + 'Detected %d Partition(s) at CSE LT [0x%0.6X]' % (len(cse_lt_part_all), cse_lt_off) + col_e
 		print('%s\n' % pt_dcselt) # Local copy with different title for cse_unpack function
 		
 		cse_lt_hdr = ansi_escape.sub('', str(pt_dcselt))
 		with open(cse_lt_fname + '.txt', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % cse_lt_hdr)
+		if param.write_html :
+			with open(cse_lt_fname + '.html', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n<br/>\n%s' % pt_html(pt_dcselt))
+		if param.write_json :
+			with open(cse_lt_fname + '.json', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % pt_json(pt_dcselt))
 		
 		print(col_y + '--> Stored CSE Layout Table [0x%0.6X - 0x%0.6X]\n' % (cse_lt_off, cse_lt_off + cse_lt_size) + col_e)
 		
@@ -3979,10 +3993,18 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		if fpt_romb_exist :
 			fpt_hdr_romb = ansi_escape.sub('', str(fpt_hdr_0_print))
 			with open(fpt_fname + '.txt', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s' % fpt_hdr_romb)
+			if param.write_html :
+				with open(fpt_fname + '.html', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n<br/>\n%s' % pt_html(fpt_hdr_0_print))
+			if param.write_json :
+				with open(fpt_fname + '.json', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s' % pt_json(fpt_hdr_0_print))
 		
 		fpt_hdr_main = ansi_escape.sub('', str(fpt_hdr_1_print))
 		fpt_hdr_part = ansi_escape.sub('', str(pt))
 		with open(fpt_fname + '.txt', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s\n%s' % (fpt_hdr_main, fpt_hdr_part))
+		if param.write_html :
+			with open(fpt_fname + '.html', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n<br/>\n%s\n<br/>\n%s' % (pt_html(fpt_hdr_1_print), pt_html(pt)))
+		if param.write_json :
+			with open(fpt_fname + '.json', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s\n%s' % (pt_json(fpt_hdr_1_print), pt_json(pt)))
 		
 		# Place MFS first to validate FTPR > FTPR.man > 0x00 > Intel Configuration Hash
 		for i in range(len(fpt_part_all)) :
@@ -4018,6 +4040,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							for ext in ext_print[index + 1] :
 								ext_str = ansi_escape.sub('', str(ext))
 								with open(mod_f_path + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
+								if param.write_html :
+									with open(mod_f_path + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
+								if param.write_json :
+									with open(mod_f_path + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
 							
@@ -4063,10 +4089,22 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		if cse_lt_exist : bpdt_fname = os.path.join(mea_dir, fw_name, 'CSE LT Boot x [%d]' % len(bpdt_hdr_all))
 		else : bpdt_fname = os.path.join(mea_dir, fw_name, 'BPDT [%d]' % len(bpdt_hdr_all))
 		
-		# Store Boot Partition Description Table (BPDT/IFWI) Info
+		# Store Boot Partition Description Table (BPDT/IFWI) Info in TXT
 		with open(bpdt_fname + '.txt', 'a', encoding = 'utf-8') as bpdt_file :
 			for hdr in bpdt_hdr_all : bpdt_file.write('\n%s' % ansi_escape.sub('', str(hdr)))
 			bpdt_file.write('\n%s' % ansi_escape.sub('', str(pt)))
+			
+		# Store Boot Partition Description Table (BPDT/IFWI) Info in HTML
+		if param.write_html :
+			with open(bpdt_fname + '.html', 'a', encoding = 'utf-8') as bpdt_file :
+				for hdr in bpdt_hdr_all : bpdt_file.write('\n<br/>\n%s' % pt_html(hdr))
+				bpdt_file.write('\n<br/>\n%s' % pt_html(pt))
+				
+		# Store Boot Partition Description Table (BPDT/IFWI) Info in JSON
+		if param.write_json :
+			with open(bpdt_fname + '.json', 'a', encoding = 'utf-8') as bpdt_file :
+				for hdr in bpdt_hdr_all : bpdt_file.write('\n%s' % pt_json(hdr))
+				bpdt_file.write('\n%s' % pt_json(pt))
 		
 		# Store Boot Partition Descriptor Table (BPDT/IFWI) Data
 		if not cse_lt_exist : # Stored at CSE LT section too
@@ -4108,6 +4146,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							for ext in ext_print[index + 1] :
 								ext_str = ansi_escape.sub('', str(ext))
 								with open(mod_f_path + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
+								if param.write_html :
+									with open(mod_f_path + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
+								if param.write_json :
+									with open(mod_f_path + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
 							
@@ -4196,7 +4238,6 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	ibbp_all = []
 	ibbp_del = []
 	ext_print = []
-	ibbp_bpm = ['IBBL', 'IBB', 'OBB']
 	cpd_ext_hash = []
 	cpd_mod_attr = []
 	cpd_ext_attr = []
@@ -4209,6 +4250,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	iunit_chunk_valid = []
 	intel_cfg_hash_ftpr = []
 	ext32_info = ['UNK', 'XX']
+	fptemp_info = [False, -1, -1]
+	ibbp_bpm = ['IBBL', 'IBB', 'OBB']
 	ext12_info = ['00000000', 'NA', 0, 'NA'] # SKU Capabilities, SKU Type, LBG Support, SKU Platform
 	ext_dnx_val = [-1, False, False] # [DnXVer, AllHashArrValid, AllChunkValid]
 	ext_iunit_val = [False] # [AllChunkValid]
@@ -4263,10 +4306,12 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 		cpd_num = cpd_entry_num_fix(buffer, cpd_offset, cpd_hdr.NumModules)
 		cpd_name = cpd_hdr.PartitionName.decode('utf-8')
 		
-		cpd_valid,cpd_chk_fw,cpd_chk_exp = cpd_chk(buffer[cpd_offset:cpd_offset + 0x10 + cpd_num * 0x18]) # Validate $CPD Checksum
-		
-		if not cpd_valid :
-			cse_anl_err(col_r + 'Error: Wrong $CPD "%s" Checksum 0x%0.2X, expected 0x%0.2X' % (cpd_name, cpd_chk_fw, cpd_chk_exp) + col_e, None)
+		# Validate $CPD Checksum, skip at special _Stage1 mode (Variant/fptemp) to not see duplicate messages
+		if not input_type.endswith('_Stage1') :
+			cpd_valid,cpd_chk_fw,cpd_chk_exp = cpd_chk(buffer[cpd_offset:cpd_offset + 0x10 + cpd_num * 0x18])
+			
+			if not cpd_valid :
+				cse_anl_err(col_r + 'Error: Wrong $CPD "%s" Checksum 0x%0.2X, expected 0x%0.2X' % (cpd_name, cpd_chk_fw, cpd_chk_exp) + col_e, None)
 		
 		# Stage 1: Store $CPD Entry names to detect Partition attributes for MEA
 		for entry in range(0, cpd_num) :
@@ -4277,7 +4322,16 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			cpd_entry_res0 = cpd_entry_hdr.Reserved
 			cpd_entry_offset,cpd_entry_huff,cpd_entry_res1 = cpd_entry_hdr.get_flags()
 			
-			if (cpd_entry_res0,cpd_entry_res1) != (0,0) :
+			# Detect if FTPR Partition is FWUpdate-customized to skip potential $FPT false positive at fptemp module
+			if cpd_entry_name == 'fptemp' and (cpd_entry_offset,cpd_entry_size) != (0,0) and not (cpd_offset + cpd_entry_offset >= file_end
+			or buffer[cpd_offset + cpd_entry_offset:cpd_offset + cpd_entry_offset + cpd_entry_size] == b'\xFF' * cpd_entry_size) : # FWUpdate -save (fptemp not empty)
+				fptemp_info = [True, cpd_offset + cpd_entry_offset, cpd_offset + cpd_entry_offset + cpd_entry_size]
+			
+			# Gathered any info for special _Stage1 mode (cpd_mod_names, fptemp_info)
+			if input_type.endswith('_Stage1') : continue
+			
+			# Check if $CPD Entry Reserved field is zero, skip at special _Stage1 mode
+			if (cpd_entry_res0,cpd_entry_res1) != (0,0) and not input_type.endswith('_Stage1') :
 				cse_anl_err(col_m + 'Warning: Detected $CPD Entry with non-zero Reserved field at %s > %s' % (cpd_name, cpd_entry_name) + col_e, None)
 			
 			cpd_wo_met_info.append([cpd_entry_name,cpd_entry_offset,cpd_entry_size,cpd_entry_huff,cpd_entry_res0,cpd_entry_res1])
@@ -4290,8 +4344,10 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				intel_cfg_hash_ftpr = [get_hash(intel_cfg_data, 0x20), get_hash(intel_cfg_data, 0x30)] # Store FTPR MFS Intel Configuration Hashes
 		
 			# Detect if FTPR Partition is FIT/OEM-customized to skip Hash check at Stages 2 & 4
-			if cpd_entry_name == 'fitc.cfg' and (cpd_entry_offset,cpd_entry_size) != (0,0) : oem_config = True
-			if cpd_entry_name == 'oem.key' and (cpd_entry_offset,cpd_entry_size) != (0,0) : oem_signed = True
+			if cpd_entry_name == 'fitc.cfg' and (cpd_entry_offset,cpd_entry_size) != (0,0) : # FIT OEM Configuration
+				oem_config = True
+			if cpd_entry_name == 'oem.key' and (cpd_entry_offset,cpd_entry_size) != (0,0) : # OEM RSA Signature
+				oem_signed = True
 			
 			# Detect Recovery Image Partition (RCIP)
 			if cpd_name == 'RCIP' :
@@ -4308,12 +4364,15 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					dnx_rcip_off = cpd_offset + dnx_entry_off
 					dnx_rcip_len = cpd_entry_size # RCIP IFWI is uncompressed
 		
-		# Return only $CPD Module Names for Variant detection (after Stage 1, other Stages omitted)
-		if input_type.endswith('_Var') : return cpd_mod_names
+		# Return only $CPD Module Names & fptemp info for special _Stage1 mode
+		if input_type.endswith('_Stage1') : return cpd_mod_names, fptemp_info
 	
 		# Sort $CPD Entry Info based on Offset in ascending order
 		cpd_wo_met_info = sorted(cpd_wo_met_info, key=lambda entry: entry[1])
 		cpd_wo_met_back = cpd_wo_met_info # Backup for adjustments validation
+	
+	# $CPD not found but special _Stage1 mode requires it, return null info
+	elif input_type.endswith('_Stage1') : return cpd_mod_names, fptemp_info
 	
 	# Stage 2: Analyze Manifest & Metadata (must be before Module analysis)
 	for entry in range(0, cpd_num) :
@@ -4584,6 +4643,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				if ext_tag == 0x0 :
 					ext_hdr = get_struct(buffer, cpd_ext_offset, ext_struct_name)
 					intel_cfg_hash_ext = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.IMGDefaultHash))
+					
+					#print(intel_cfg_hash_ext) # Debug/Research
 					
 					# Validate CSME/CSSPS MFS Intel Configuration (Low Level File 6) Hash at Non-Initialized/Non-FWUpdated MFS
 					if intel_cfg_hash_mfs and mfs_found and mfs_parsed_idx and 8 not in mfs_parsed_idx and intel_cfg_hash_ext not in intel_cfg_hash_mfs :
@@ -5032,7 +5093,6 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 	mod_hash_u_ok = False
 	comp = ['Uncompressed','Huffman','LZMA']
 	encr_empty = ['No','Yes']
-	ansi_escape = re.compile(r'\x1b[^m]*m') # Generate ANSI Color and Font Escape Character Sequences
 	
 	pt = ext_table([col_y + 'Name' + col_e, col_y + 'Compression' + col_e, col_y + 'Encryption' + col_e, col_y + 'Offset' + col_e, col_y + 'Compressed' + col_e, col_y + 'Uncompressed' + col_e,
 					col_y + 'Empty' + col_e], True, 1)
@@ -5070,9 +5130,19 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 		
 		os.mkdir(folder_name)
 		
-		# Store Partition $CPD Header & Entry details
+		# Store Partition $CPD Header & Entry details in TXT
 		with open(info_fname, 'a', encoding = 'utf-8') as info_file :
 			info_file.write('\n%s\n%s' % (ansi_escape.sub('', str(cpd_phdr.hdr_print())), ansi_escape.sub('', str(pt))))
+		
+		# Store Partition $CPD Header & Entry details in HTML
+		if param.write_html :
+			with open(info_fname[:-4] + '.html', 'a', encoding = 'utf-8') as info_file :
+				info_file.write('\n<br/>\n%s\n<br/>\n%s' % (pt_html(cpd_phdr.hdr_print()), pt_html(pt)))
+		
+		# Store Partition $CPD Header & Entry details in JSON
+		if param.write_json :
+			with open(info_fname[:-4] + '.json', 'a', encoding = 'utf-8') as info_file :
+				info_file.write('\n%s\n%s' % (pt_json(cpd_phdr.hdr_print()), pt_json(pt)))
 		
 		# Load Huffman Dictionaries for Decompression
 		if param.me11_mod_bug : huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
@@ -5150,9 +5220,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					ext_print_cur_len = len(ext_print) # Current length of Extension Info list
 					for index in range(0, ext_print_cur_len, 2) : # Only Name (index), skip Info (index + 1)
 						if str(ext_print[index]).startswith(mod_name) :
-							ext_print[index + 1] = [ansi_escape.sub('', str(mn2_hdr_print))] + (ext_print[index + 1])
+							ext_print[index + 1] = [mn2_hdr_print] + (ext_print[index + 1])
 							break
-
+					
 					if param.me11_mod_bug and ext_phval[0] :
 						print('\n    EXT: %s' % ext_phval[2]) # Debug
 						print('    MEA: %s' % ext_phval[3]) # Debug
@@ -5437,6 +5507,10 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						for ext in ext_print[index + 1] :
 							ext_str = ansi_escape.sub('', str(ext)) # Ignore Colorama ANSI Escape Character Sequences
 							with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
+							if param.write_html :
+								with open(mod_fname + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
+							if param.write_json :
+								with open(mod_fname + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
 							if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 						break
 						
@@ -5699,7 +5773,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			
 			mfs_files.append([index, file_chunks]) # Store MFS Low Level File Index & Contents
 	
-	if all_mfs_sys[vol_hdr_size + fat_count * 2:] != b'\x00' * fat_trail : # MFS FAT End Trail Contents should be all zeroes
+	if all_mfs_sys[vol_hdr_size + fat_count * 2:] != b'\x00' * fat_trail : # MFS FAT End Trail Contents should be all zeros
 		mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected additional MFS System Buffer contents after FAT ending!' + col_e, 'error', False, False, [])
 	
 	# Parse MFS Low Level Files
@@ -5749,6 +5823,44 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		
 		# Parse MFS Low Level File 6 (Intel Configuration) and 7 (OEM Configuration)
 		elif mfs_file[1] and mfs_file[0] in (6,7) :	
+			
+			'''
+			# Create copy of firmware with clean/unconfigured MFS (Linux only)
+			# MFSTool by Peter Bosch (https://github.com/peterbjornx/meimagetool)
+			if mfs_file[0] == 6 :
+				import subprocess
+				
+				temp_dir = os.path.join(mea_dir, 'temp', '')
+				out_dir = os.path.join(mea_dir, 'output', '')
+				if os.path.isdir(temp_dir) : shutil.rmtree(temp_dir)
+				os.mkdir(temp_dir)
+				if not os.path.isdir(out_dir) : os.mkdir(out_dir)
+				
+				intl_cfg = os.path.join(temp_dir, 'intel.cfg')
+				with open(intl_cfg, 'wb') as o : o.write(mfs_file[1])
+				
+				if mfs_size == 0x40000 : mfs_tmpl = '256K.bin'
+				elif mfs_size == 0x64000 : mfs_tmpl = '400K.bin'
+				elif mfs_size == 0x13E000 : mfs_tmpl = '1272K.bin'
+				
+				clean_mfs_path = os.path.join(mea_dir, 'MFS_INTEL.bin')
+				mfstool_path = os.path.join(mea_dir, 'mfstool')
+				
+				# The temp_dir for MFSTool must not include files other than intel.cfg and fitc.cfg
+				mfstool = subprocess.run([mfstool_path, 'c', clean_mfs_path, mfs_tmpl, temp_dir])
+
+				final = os.path.join(out_dir, os.path.basename(file_in))				
+
+				if os.path.isfile(clean_mfs_path) :
+					with open(clean_mfs_path, 'rb') as mfs_rgn : clean_mfs = mfs_rgn.read()
+					if len(clean_mfs) != mfs_size : input('Error: MFS size mismatch!')
+					new_mfs = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
+					with open(final, 'wb') as o : o.write(new_mfs)
+
+				shutil.rmtree(temp_dir)
+				os.remove(clean_mfs_path)
+			'''
+			
 			mfs_file_name = {6:'Intel Configuration', 7:'OEM Configuration'}
 			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name[mfs_file[0]]) + col_e)
 			if mfs_file[0] == 6 : intel_cfg_hash_mfs = [get_hash(mfs_file[1], 0x20), get_hash(mfs_file[1], 0x30)] # Store MFS Intel Configuration Hashes
@@ -5760,7 +5872,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
 		
 		# Parse MFS Low Level File 8 (Home Directory)
-		elif mfs_file[1] and mfs_file[0] == 8 :
+		elif mfs_file[1] and mfs_file[0] == 8 :	
 			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File 8 (Home Directory) ...' + col_e)
 			mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 8 as Parsed
 			root_folder = os.path.join(mea_dir, mfs_folder, '008 Home Directory', 'home', '') # MFS Home Directory Root/Start folder is called "home"
@@ -6116,14 +6228,17 @@ def Crc16_14(w, crc=0x3FFF) :
 # Write/Print MFS Structures Information
 def mfs_txt(struct_print, folder_path, file_path_wo_ext, mode, is_log) :
 	if param.me11_mod_extr : # Write Text File during CSE Unpacking
-		ansi_escape = re.compile(r'\x1b[^m]*m') # Generate ANSI Color and Font Escape Character Sequences
 		struct_txt = ansi_escape.sub('', str(struct_print)) # Ignore Colorama ANSI Escape Character Sequences
-	
+		
 		os.makedirs(folder_path, exist_ok=True) # Create the Text File's parent Folder, if needed
 		
 		if param.me11_mod_ext and is_log : print('\n%s' % struct_txt) # Print Structure Info
 		
 		with open(file_path_wo_ext + '.txt', mode, encoding = 'utf-8') as txt : txt.write('\n%s' % struct_txt) # Store Structure Info Text File
+		if param.write_html :
+			with open(file_path_wo_ext + '.html', mode, encoding = 'utf-8') as html : html.write('\n<br/>\n%s' % pt_html(struct_print)) # Store Structure Info HTML File
+		if param.write_json :
+			with open(file_path_wo_ext + '.json', mode, encoding = 'utf-8') as html : html.write('\n%s' % pt_json(struct_print)) # Store Structure Info JSON File
 	
 # Write MFS File Contents
 def mfs_write(folder_path, file_path, data) :
@@ -6560,11 +6675,43 @@ def get_struct(input_stream, start_offset, class_name, param_list = None) :
 	ctypes.memmove(ctypes.addressof(structure), struct_data, fit_len)
 	
 	return structure
+	
+# https://stackoverflow.com/a/34301571
+# noinspection PyProtectedMember
+def struct_json(structure) :
+	result = {}
+	
+	def get_value(value) :
+		if (type(value) not in [int, float, bool, str]) and not bool(value) :
+			value = None # Null Pointer (not primitive type, is False)
+		elif hasattr(value, '_length_') and hasattr(value, '_type_') :
+			value = get_array(value) # Probably an Array
+		elif isinstance(value, (bytes, bytearray)) :
+			value = value.decode('utf-8') # Byte
+		elif hasattr(value, '_fields_') :
+			value = struct_json(value) # Probably nested struct
+		
+		return value
+	
+	def get_array(array) :
+		ar = []
+		for value in array :
+			value = get_value(value)
+			ar.append(value)
+		
+		return ar
+	
+	for field in structure._fields_ :
+		value = get_value(getattr(structure, field[0]))
+		result[field[0]] = value
+	
+	return json.dumps(result, indent=4)
 
 # Initialize PrettyTable
 def ext_table(row_col_names,header,padd) :
 	pt = prettytable.PrettyTable(row_col_names)
-	if not param.cli_redirect : pt.set_style(prettytable.BOX_CHARS)
+	if not param.cli_redirect : pt.set_style(prettytable.UNICODE_LINES)
+	pt.xhtml = True
 	pt.header = header # Boolean
 	pt.left_padding_width = padd
 	pt.right_padding_width = padd
@@ -6572,6 +6719,14 @@ def ext_table(row_col_names,header,padd) :
 	pt.vrules = prettytable.ALL
 	
 	return pt
+	
+# Convert PrettyTable Object to HTML String
+def pt_html(pt_obj) :
+	return ansi_escape.sub('', str(pt_obj.get_html_string(format=True, attributes={})))
+	
+# Convert PrettyTable Object to JSON Dictionary
+def pt_json(pt_obj) :
+	return json.dumps(pt_obj.get_json_dict(re_pattern=ansi_escape), indent=4)
 	
 # Detect DB Revision
 def mea_hdr_init() :
@@ -6924,7 +7079,8 @@ def get_variant() :
 	if variant in ['Unknown','TBD1','TBD2','TBD3'] :
 		if variant == 'Unknown' : var_rsa_db = False # TBDx are multi-platform RSA Public Keys
 		
-		cpd_mod_names = ext_anl(reading, '$MN2_Var', start_man_match, file_end, ['CSME', major, minor, hotfix, build], None, [[],'']) # Get CSE $CPD Module Names only
+		# Get CSE $CPD Module Names only for targeted variant detection via special ext_anl _Stage1 mode
+		cpd_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', major, minor, hotfix, build], None, [[],''])
 		
 		if cpd_mod_names :
 			for mod in cpd_mod_names :
@@ -6988,6 +7144,9 @@ def mass_scan(f_path) :
 	input('\nFound %s file(s)\n\nPress enter to start' % len(mass_files))
 	
 	return mass_files
+
+# Colorama ANSI Color/Font Escape Character Sequences Regex
+ansi_escape = re.compile(r'\x1b[^m]*m')
 
 # CSE Extensions 0x00-0x16, 0x18-0x1A, 0x30-0x32
 ext_tag_all = list(range(23)) + list(range(24,27)) + list(range(48,51))
@@ -7380,8 +7539,10 @@ for file_in in source :
 	man_match_ranges = []
 	init_man_match = [0,0]
 	eng_size_text = ['', False]
-	ftbl_entry_dict = {}
+	msg_dict = {}
+	msg_entries = {}
 	ftbl_blob_dict = {}
+	ftbl_entry_dict = {}
 	vcn = -1
 	svn = -1
 	pvbit = -1
@@ -7470,7 +7631,7 @@ for file_in in source :
 		pr_man_10 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00\x01\x01\x10.\x50\x4D\x43\x50', re.DOTALL)).search(reading[:0x10]) # $CPD PMCP detection
 		pr_man_11 = (reading[end_man_match - 0x38:end_man_match - 0x31]) # bup_rcv (CSSPS 5.0.3 +)
 		
-		#break # Force MEA to accept any $MAN/$MN2 (Debug)
+		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		if any(p in (pr_man_0, pr_man_1, pr_man_2 + pr_man_3, pr_man_2 + pr_man_6 + pr_man_7, pr_man_4, pr_man_5, pr_man_6 + pr_man_7, pr_man_11) \
 		for p in (b'FTPR', b'OPR\x00', b'BRINGUP', b'EpsRecovery', b'EpsFirmware', b'OP$MMEBUP\x00\x00\x00\x00', b'$MMEBUP$MMX', b'bup_rcv')) \
@@ -7516,6 +7677,10 @@ for file_in in source :
 				ftbl_blob_dict['%0.2X' % tbl.Dictionary] = ftbl_entry_dict # Create File Table Blob Dictionary
 					
 				with open('FileTable_%s_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(ftbl_pt))
+				if param.write_html :
+					with open('FileTable_%s_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(ftbl_pt))
+				if param.write_json :
+					with open('FileTable_%s_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(ftbl_pt))
 		
 			o_dict = json.dumps(ftbl_blob_dict, indent=4, sort_keys=True)
 			with open('FileTable_%s.dat' % os.path.basename(file_in), 'w') as o : o.write(o_dict)
@@ -7620,7 +7785,16 @@ for file_in in source :
 		fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading[me_fd_start:me_fd_start + me_fd_size]))
 	else :
 		# FD with Engine region not found or multiple FD detected, scan entire file (could lead to false positives)
-		fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
+		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
+		
+		# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
+		man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', 0, 0, 0, 0], None, [[],''])
+		fptemp_exists = True if man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0] else False # Detect if CSE FTPR > fptemp module exists
+		
+		# Adjust $FPT matches, ignore known CSE false positives
+		for fpt_match in fpt_matches_init :
+			if fptemp_exists and fptemp_info[2] > fpt_match.start() >= fptemp_info[1] : pass # CSE FTPR > fptemp
+			else : fpt_matches.append(fpt_match)
 	
 	# Store Initial Manifest Offset for CSSPS EXTR RSA Signatures Hash
 	init_man_match = [start_man_match,end_man_match]
@@ -9430,6 +9604,12 @@ for file_in in source :
 		
 		print(msg_pt)
 		
+		if param.write_html :
+			with open('%s.html' % os.path.basename(file_in), 'w') as o : o.write('\n<br/>\n%s' % pt_html(msg_pt))
+		
+		if param.write_json :
+			with open('%s.json' % os.path.basename(file_in), 'w') as o : o.write('\n%s' % pt_json(msg_pt))
+		
 		if pmcp_found :
 			msg_pmc_pt = ext_table(['Field', 'Value'], False, 1)
 			msg_pmc_pt.title = 'Power Management Controller'
@@ -9449,6 +9629,12 @@ for file_in in source :
 				msg_pmc_pt.add_row(['Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
 			
 			print(msg_pmc_pt)
+			
+			if param.write_html :
+				with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<br/>\n%s' % pt_html(msg_pmc_pt))
+				
+			if param.write_json :
+				with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % pt_json(msg_pmc_pt))
 	
 	# Print Messages which must be at the end of analysis
 	if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
@@ -9462,9 +9648,17 @@ for file_in in source :
 	if fd_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Descriptors detected!' % fd_count + col_e, True])
 	
 	# Print Error/Warning/Note Messages
-	for i in range(len(err_stor)) : print('\n' + err_stor[i][0])
-	for i in range(len(warn_stor)) : print('\n' + warn_stor[i][0])
-	for i in range(len(note_stor)) : print('\n' + note_stor[i][0])
+	msg_stor = err_stor + warn_stor + note_stor
+	for msg_idx in range(len(msg_stor)) :
+		print('\n' + msg_stor[msg_idx][0])
+		if param.write_html :
+			with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_stor[msg_idx][0])))
+		if param.write_json :
+			msg_entries['Entry %0.4d' % msg_idx] = ansi_escape.sub('', str(msg_stor[msg_idx][0]))
+	
+	if param.write_json :
+		msg_dict['Messages'] = msg_entries
+		with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % json.dumps(msg_dict, indent=4))
 	
 	# Close input and copy it in case of messages
 	if not param.extr_mea : copy_on_msg()

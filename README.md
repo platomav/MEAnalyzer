@@ -66,8 +66,10 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -dbname : Renames input file based on unique DB name
 * -dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers
 * -unp86  : Unpacks all CSE Converged Security Engine firmware
-* -bug86  : Enables pause on error mode during CSE unpacking
-* -ver86  : Enables full verbose mode during CSE unpacking
+* -bug86  : Enables pausing on error during CSE unpacking
+* -ver86  : Enables full verbose output during CSE unpacking
+* -html   : Writes parsable HTML files during MEA operation
+* -json   : Writes parsable JSON files during MEA operation
 
 #### **B3. ME Analyzer Error Control**
 
@@ -93,9 +95,9 @@ To run ME Analyzer's python script, you need to have the following 3rd party Pyt
 
 > pip3 install crccheck
 
-* [PTable](https://github.com/platomav/PTable/tree/boxchar)
+* [PLTable](https://github.com/platomav/PLTable/)
 
-> pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
+> pip3 install pltable
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
@@ -117,9 +119,9 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 
 > pip3 install crccheck
 
-5. Use pip to install PTable:
+5. Use pip to install PLTable:
 
-> pip3 install https://github.com/platomav/PTable/archive/boxchar.zip
+> pip3 install pltable
 
 6. Build/Freeze/Compile ME Analyzer:
 

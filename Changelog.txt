@@ -1,3 +1,20 @@
+v1.90.0
+
+Added JSON files creation during operation (-json)
+Added HTML files creation during operation (-html)
+Fixed CSE Manifest info storing bug while unpacking
+Fixed $FPT detection at CSE with FTPR fptemp module
+Changed PTable dependency to PLTable, get from pip
+
+r168
+
+CSME 12.0.40.1433_CON_H_BA_PRD_EXTR
+CSME 12.0.40.1433_COR_H_BA_PRD_EXTR-Y
+CSME 11.8.50.3470_CON_LP_C_YPDM_PRD_RGN
+CSTXE 4.0.20.1308_B_PRD_EXTR
+SPS 02.03.00.019_PRD_REC
+SPS 02.03.00.019_RO_PRD_OPR
+
 v1.88.0
 
 Added CSE File System Intel Config Hash proper check
