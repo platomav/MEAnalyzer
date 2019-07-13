@@ -60,7 +60,6 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -?      : Displays help & usage screen
 * -skip   : Skips welcome & options screen
 * -exit   : Skips Press enter to exit prompt
-* -redir  : Enables console redirection support
 * -mass   : Scans all files of a given directory
 * -pdb    : Writes input file DB entry to text file
 * -dbname : Renames input file based on unique DB name
@@ -81,7 +80,7 @@ ME Analyzer consists of three files, the executable (MEA.exe or MEA) and the dat
 
 #### **C1. Compatibility**
 
-ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python 3.6 support. Windows users who plan to use the already built/frozen/compiled binary must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
+ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python >= 3.6 support. Windows users who plan to use the already built/frozen/compiled binary must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
 
 #### **C2. Code Prerequisites**
 

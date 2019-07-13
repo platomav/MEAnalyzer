@@ -1,3 +1,12 @@
+v1.91.0
+
+Added proper Windows redirection (removed -redir parameter)
+Added duplicate check when copying files with messages
+
+r169
+
+CSME 12.0.31.1416_CON_H_BA_PRD_RGN
+
 v1.90.0
 
 Added JSON files creation during operation (-json)
