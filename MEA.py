@@ -6,10 +6,11 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.90.0'
+title = 'ME Analyzer v1.91.0'
 
 import os
 import re
+import io
 import sys
 import lzma
 import zlib
@@ -56,6 +57,14 @@ except :
 	if ' -exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
 	sys.exit(1)
+	
+# Fix Windows UTF-8 redirection
+if mea_os == 'win32' :
+	if mea_py >= (3,7) :
+		sys.stdout.reconfigure(encoding='utf-8')
+	else :
+		sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors=sys.stdout.errors,
+		newline=sys.stdout.newlines, line_buffering=sys.stdout.line_buffering, write_through=sys.stdout.write_through)
 
 # Set ctypes Structure types
 char = ctypes.c_char
@@ -71,7 +80,6 @@ def mea_help() :
 	text += "-?      : Displays help & usage screen\n"
 	text += "-skip   : Skips welcome & options screen\n"
 	text += "-exit   : Skips Press enter to exit prompt\n"
-	text += "-redir  : Enables console redirection support\n"
 	text += "-mass   : Scans all files of a given directory\n"
 	text += "-pdb    : Writes input file DB entry to text file\n"
 	text += "-dbname : Renames input file based on unique DB name\n"
@@ -90,7 +98,7 @@ class MEA_Param :
 
 	def __init__(self, mea_os, source) :
 	
-		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-redir','-ftbl']
+		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-ftbl']
 		self.win = ['-extr','-msg'] # Windows only
 		
 		if mea_os == 'win32' : self.val = self.all
@@ -108,7 +116,6 @@ class MEA_Param :
 		self.give_db_name = False
 		self.mass_scan = False
 		self.skip_pause = False
-		self.cli_redirect = False
 		self.write_html = False
 		self.write_json = False
 		self.mfs_ftbl = False
@@ -124,7 +131,6 @@ class MEA_Param :
 			if i == '-mass' : self.mass_scan = True
 			if i == '-dfpt' : self.fpt_disp = True
 			if i == '-exit' : self.skip_pause = True
-			if i == '-redir' : self.cli_redirect = True
 			if i == '-html' : self.write_html = True
 			if i == '-json' : self.write_json = True
 			if i == '-ftbl' : self.mfs_ftbl = True # Hidden
@@ -134,9 +140,7 @@ class MEA_Param :
 				if i == '-extr' : self.extr_mea = True # Hidden
 				if i == '-msg' : self.print_msg = True # Hidden
 			
-		if self.extr_mea or self.print_msg or self.mass_scan or self.db_print_new or self.cli_redirect : self.skip_intro = True
-		if self.extr_mea or self.print_msg : self.cli_redirect = True
-		if self.cli_redirect : self.skip_pause = True
+		if self.extr_mea or self.print_msg or self.mass_scan or self.db_print_new : self.skip_intro = True
 		
 # Engine Structures
 class FPT_Pre_Header(ctypes.LittleEndianStructure) : # (ROM_BYPASS)
@@ -6710,7 +6714,7 @@ def struct_json(structure) :
 # Initialize PrettyTable
 def ext_table(row_col_names,header,padd) :
 	pt = prettytable.PrettyTable(row_col_names)
-	if not param.cli_redirect : pt.set_style(prettytable.UNICODE_LINES)
+	pt.set_style(prettytable.UNICODE_LINES)
 	pt.xhtml = True
 	pt.header = header # Boolean
 	pt.left_padding_width = padd
@@ -6813,6 +6817,9 @@ def mc_chk32(data) :
 	
 	return -chk32 & 0xFFFFFFFF # Return 0
 	
+def adler32(data) :
+	return zlib.adler32(data) & 0xFFFFFFFF
+	
 # Copy input file if there are worthy Notes, Warnings or Errors
 # Must be called at the end of analysis to gather any generated messages
 def copy_on_msg() :
@@ -6832,7 +6839,12 @@ def copy_on_msg() :
 		
 		if not os.path.isdir(check_dir) : os.mkdir(check_dir)
 		
-		if os.path.isfile(check_name) : check_name += '_%d' % cur_count
+		# Check if same file already exists
+		if os.path.isfile(check_name) :
+			with open(check_name, 'br') as file :
+				if adler32(file.read()) == adler32(reading) : return
+			
+			check_name += '_%d' % cur_count
 		
 		shutil.copyfile(file_in, check_name)
 
