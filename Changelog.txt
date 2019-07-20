@@ -1,3 +1,13 @@
+v1.92.0
+
+Added robust PMC Release detection based on RSA Key
+Improved Manifest $MN2 parsing during CSE analysis
+
+r170
+
+CSME 11.22.70.1595_SLM_H_BA_PRD_EXTR
+CSME 11.8.65.3606_CON_H_DA_PRD_EXTR
+
 v1.91.0
 
 Added proper Windows redirection (removed -redir parameter)

@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.91.0'
+title = 'ME Analyzer v1.92.0'
 
 import os
 import re
@@ -4224,6 +4224,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	dnx_version = -1
 	dnx_rcip_off = -1
 	dnx_rcip_len = -1
+	end_man_match = -1
 	start_man_match = -1
 	dnx_hash_arr_off = -1
 	iunit_chunk_start = -1
@@ -4267,6 +4268,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	
 	if input_type.startswith('$MN2') :
 		start_man_match = input_offset
+		end_man_match = start_man_match + 0x5 # .$MN2
 		
 		# Scan backwards for $CPD (max $CPD size = 0x2000, .$MN2 Tag starts at 0x1B, works with both RGN --> $FPT & UPD --> 0x0)
 		for offset in range(start_man_match + 2, start_man_match + 2 - 0x201D, -4) : # Search from MN2 (no .$) to find CPD (no $) at 1, before loop break at 0
@@ -4294,10 +4296,18 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			mn2_date = '%0.4X-%0.2X-%0.2X' % (mn2_hdr.Year,mn2_hdr.Month,mn2_hdr.Day)
 			mn2_hdr_print = mn2_hdr.hdr_print_cse()
 			
+			mn2_rsa_block_off = end_man_match + 0x60 # RSA Block Offset
+			mn2_rsa_key_len = mn2_hdr.PublicKeySize * 4 # RSA Key/Signature Length
+			mn2_rsa_exp_len = mn2_hdr.ExponentSize * 4 # RSA Exponent Length
+			mn2_rsa_key = buffer[mn2_rsa_block_off:mn2_rsa_block_off + mn2_rsa_key_len] # RSA Public Key
+			mn2_rsa_key_hash = get_hash(mn2_rsa_key, 0x20) # SHA-256 of RSA Public Key
+			mn2_rsa_sig = buffer[mn2_rsa_block_off + mn2_rsa_key_len + mn2_rsa_exp_len:mn2_rsa_block_off + mn2_rsa_key_len * 2 + mn2_rsa_exp_len] # RSA Signature
+			mn2_rsa_sig_hash = get_hash(mn2_rsa_sig, 0x20) # SHA-256 of RSA Signature
+			
 			mn2_flags_pvbit,mn2_flags_reserved,mn2_flags_pre,mn2_flags_debug = mn2_hdr.get_flags()
-			mn2_rsa_sig = buffer[start_man_match - 0x1B + 0x184:start_man_match - 0x1B + 0x284] # Read $MN2 RSA Signature
-			mn2_rsa_sig_hash = get_hash(mn2_rsa_sig, 0x20) # Generate $MN2 RSA Signature SHA-256 hash
-			cpd_mn2_info = [mn2_hdr.Major, mn2_hdr.Minor, mn2_hdr.Hotfix, mn2_hdr.Build, ['Production','Debug'][mn2_flags_debug], mn2_rsa_sig_hash, mn2_date, mn2_hdr.SVN]
+			
+			cpd_mn2_info = [mn2_hdr.Major, mn2_hdr.Minor, mn2_hdr.Hotfix, mn2_hdr.Build, ['Production','Debug'][mn2_flags_debug],
+							mn2_rsa_key_hash, mn2_rsa_sig_hash, mn2_date, mn2_hdr.SVN]
 		
 			if param.me11_mod_extr : mn2_sigs = rsa_sig_val(mn2_hdr, buffer, start_man_match - 0x1B) # For each Partition
 		else :
@@ -6312,7 +6322,7 @@ def pmc_anl(mn2_info) :
 	pch_sku_old = {0: 'H', 2: 'LP'}
 	pch_rev_val = {0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 7: 'H', 8: 'I', 9: 'J'}
 	
-	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Compatibility-Maintenance, Build, Release, RSA Sig Hash, Date, SVN]
+	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Compatibility-Maintenance, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN]
 	
 	if variant == 'PMCICP' or (variant,major) in [('CSME',13)] :
 		pmc_platform = 'ICP'
@@ -6357,16 +6367,19 @@ def pmc_anl(mn2_info) :
 	pmc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
 	pmc_mn2_signed_db = 'PRD' if pmc_mn2_signed == 'Production' else 'PRE'
 	
+	# Fix Release of PRE firmware which are wrongly reported as PRD
+	pmc_mn2_signed, pmc_mn2_signed_db = release_fix(pmc_mn2_signed, pmc_mn2_signed_db, mn2_info[5])
+	
 	if pmc_platform in ('CNP','ICP') :
 		if mn2_info[0] < 130 :
 			pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
-			pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], mn2_info[6], pmc_mn2_signed_db, mn2_info[5])
+			pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
 		else :
 			pmc_fw_ver = '%s.%s.%0.2d.%0.4d' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
-			pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], pmc_mn2_signed_db, mn2_info[5])
+			pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], pmc_mn2_signed_db, mn2_info[6])
 	else :
 		pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
-		pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_rev[0], mn2_info[6], pmc_mn2_signed_db, mn2_info[5])
+		pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_rev[0], mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
 	
 	# Search DB for PMC firmware
 	fw_db = db_open()
@@ -6377,7 +6390,7 @@ def pmc_anl(mn2_info) :
 		note_stor.append([col_g + 'Note: This PMC %s firmware was not found at the database, please report it!' % pmc_platform + col_e, True])
 	fw_db.close()
 	
-	return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmcp_upd_found, pmc_platform, mn2_info[6], mn2_info[7]
+	return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmcp_upd_found, pmc_platform, mn2_info[7], mn2_info[8]
 
 # CSE Huffman Dictionary Loader by IllegalArgument
 # Dictionaries by Dmitry Sklyarov & IllegalArgument
@@ -6829,7 +6842,7 @@ def copy_on_msg() :
 	for message in (err_stor + warn_stor + note_stor) :
 		if message[1] : copy = True
 	
-	#if err_stor or warn_stor or note_stor : copy = True # Copy on any message (Debug)
+	#if err_stor or warn_stor or note_stor : copy = True # Copy on any message (Debug/Research)
 	
 	# At least one message needs a file copy
 	if copy :
@@ -7027,6 +7040,20 @@ def rsa_sig_val(man_hdr_struct, input_stream, check_start) :
 			return [True, 0, 0, False, check_start, man_hdr_struct] # "Valid"/Empty RSA block, no validation crash
 		else :
 			return [False, 0, 0, True, check_start, man_hdr_struct] # RSA block validation check crashed, debugging required
+	
+# Fix early PRE firmware which are wrongly reported as PRD
+def release_fix(release, rel_db, rsa_key_hash) :
+	rsa_pre_keys = [
+	'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7',
+	'86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894',
+	'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76'
+	]
+	
+	if release == 'Production' and rsa_key_hash in rsa_pre_keys :
+		release = 'Pre-Production'
+		rel_db = 'PRE'
+	
+	return release, rel_db
 	
 # Search DB for manual CSE values
 def db_skl(variant) :
@@ -9070,11 +9097,8 @@ for file_in in source :
 		
 		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
 		
-		# Early firmware are reported as PRD even though they are PRE
-		if release == 'Production' and \
-		rsa_key_hash in ['86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894','C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7'] :
-			release = 'Pre-Production'
-			rel_db = 'PRE'
+		# Fix Release of PRE firmware which are wrongly reported as PRD
+		release, rel_db = release_fix(release, rel_db, rsa_key_hash)
 		
 		if major == 11 :
 			
@@ -9181,7 +9205,7 @@ for file_in in source :
 			
 			# Detected stitched PMC firmware
 			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 				
 				# Verify FTPR & PMC compatibility (PCH & SKU)
 				if pmc_pch_gen < 300 or pmc_fw_rel == 0 :
@@ -9219,7 +9243,7 @@ for file_in in source :
 			
 			# Detected stitched PMC firmware
 			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 				
 				# Verify FTPR & PMC compatibility (PCH & SKU)
 				if pmc_mn2_signed != release or pmc_pch_gen not in (400,130) or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
@@ -9302,10 +9326,8 @@ for file_in in source :
 		
 		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
 		
-		# Early firmware are reported as PRD even though they are PRE
-		if release == 'Production' and rsa_key_hash == 'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7' :
-			release = 'Pre-Production'
-			rel_db = 'PRE'
+		# Fix Release of PRE firmware which are wrongly reported as PRD
+		release, rel_db = release_fix(release, rel_db, rsa_key_hash)
 			
 		if major == 3 :
 			
@@ -9342,7 +9364,7 @@ for file_in in source :
 		
 		# Detected stitched PMC firmware
 		if pmcp_found :				
-			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 			
 			if pmc_mn2_signed != release or pmc_platform != platform or (sku_stp != 'NaN' and pmc_pch_rev != sku_stp) :
 				warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
@@ -9429,7 +9451,7 @@ for file_in in source :
 		elif major == 5 :
 			# Detected stitched PMC firmware
 			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
 				
 				# Verify OPR & PMC compatibility
 				if pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != 'H' :
@@ -9447,10 +9469,12 @@ for file_in in source :
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,\
 		oem_config,oem_signed,cpd_mn2_info,ext_iunit_val = ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None, [[],'']) # Detect CSE Attributes
 		
-		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(cpd_mn2_info)
+		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(cpd_mn2_info)
 		
 		sku = pmc_pch_sku
 		sku_stp = pmc_pch_rev[0]
+		release = pmc_mn2_signed
+		rel_db = pmc_mn2_signed_db
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
