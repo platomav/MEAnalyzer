@@ -39,7 +39,7 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (
 - Features command line parameters to enhance functionality & assist research
 - Features user friendly messages & proper handling of unexpected code errors
 - Shows colored text to signify the importance of notes, warnings & errors
-- Open Source project licensed under GNU GPL v3, comment assisted code
+- Open Source project under permissive license, comment assisted code
 
 #### **A2. Engine Firmware Repository Database**
 
@@ -80,7 +80,7 @@ ME Analyzer consists of three files, the executable (MEA.exe or MEA) and the dat
 
 #### **C1. Compatibility**
 
-ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python >= 3.6 support. Windows users who plan to use the already built/frozen/compiled binary must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
+ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python >= 3.7 support. Windows users who plan to use the already built/frozen/compiled binary must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
 
 #### **C2. Code Prerequisites**
 
@@ -102,7 +102,7 @@ To run ME Analyzer's python script, you need to have the following 3rd party Pyt
 
 PyInstaller can build/freeze/compile ME Analyzer at all three supported platforms, it is simple to run and gets updated often.
 
-1. Make sure Python 3.6.0 or newer is installed:
+1. Make sure Python 3.7.0 or newer is installed:
 
 > python --version
 

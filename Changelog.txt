@@ -1,3 +1,9 @@
+v1.93.0
+
+ME Analyzer is now licensed under BSD+Patent
+ME Analyzer now requires Python 3.7 or newer
+Improved CSE Extensions 3, 22 and $FPT, BPDT
+
 v1.92.0
 
 Added robust PMC Release detection based on RSA Key

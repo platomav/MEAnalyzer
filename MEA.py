@@ -6,11 +6,10 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.92.0'
+title = 'ME Analyzer v1.93.0'
 
 import os
 import re
-import io
 import sys
 import lzma
 import zlib
@@ -44,27 +43,22 @@ elif mea_os.startswith('linux') or mea_os == 'darwin' :
 	cl_wipe = 'clear'
 else :
 	print(col_r + '\nError: Unsupported platform "%s"!\n' % mea_os + col_e)
-	if ' -exit' not in sys.argv : input('Press enter to exit')
+	if '-exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
 	sys.exit(1)
 
 # Detect Python version
 mea_py = sys.version_info
 try :
-	assert mea_py >= (3,6)
+	assert mea_py >= (3,7)
 except :
-	print(col_r + '\nError: Python >= 3.6 required, not %d.%d!\n' % (mea_py[0],mea_py[1]) + col_e)
-	if ' -exit' not in sys.argv : input('Press enter to exit')
+	print(col_r + '\nError: Python >= 3.7 required, not %d.%d!\n' % (mea_py[0],mea_py[1]) + col_e)
+	if '-exit' not in sys.argv : input('Press enter to exit')
 	colorama.deinit()
 	sys.exit(1)
 	
-# Fix Windows UTF-8 redirection
-if mea_os == 'win32' :
-	if mea_py >= (3,7) :
-		sys.stdout.reconfigure(encoding='utf-8')
-	else :
-		sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors=sys.stdout.errors,
-		newline=sys.stdout.newlines, line_buffering=sys.stdout.line_buffering, write_through=sys.stdout.write_through)
+# Fix Windows Unicode console redirection
+if mea_os == 'win32' : sys.stdout.reconfigure(encoding='utf-8')
 
 # Set ctypes Structure types
 char = ctypes.c_char
@@ -290,7 +284,7 @@ class FPT_Entry(ctypes.LittleEndianStructure) : # (FPT_ENTRY)
 	]
 	
 	def hdr_print_cse(self) :
-		f1,f2,f3,f4,f5,f6 = self.get_flags()
+		f1,f2,f3,f4,f5,f6,f7 = self.get_flags()
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -302,11 +296,12 @@ class FPT_Entry(ctypes.LittleEndianStructure) : # (FPT_ENTRY)
 		pt.add_row(['Reserved 2', '0x%X' % self.MaxTokens])
 		pt.add_row(['Reserved 3', '0x%X' % self.ScratchSectors])
 		pt.add_row(['Type', ['Code','Data'][f1]])
-		pt.add_row(['Reserved 4', '0x%X' % f2])
-		pt.add_row(['BWL 0', '0x%X' % f3])
-		pt.add_row(['BWL 1', '0x%X' % f4])
-		pt.add_row(['Reserved 5', '0x%X' % f5])
-		pt.add_row(['Entry Valid', 'No' if f6 == 0xFF else 'Yes'])
+		pt.add_row(['Copy To DRAM Cache', ['No','Yes'][f2]])
+		pt.add_row(['Reserved 4', '0x%X' % f3])
+		pt.add_row(['Built With Length 0', '0x%X' % f4])
+		pt.add_row(['Built With Length 1', '0x%X' % f5])
+		pt.add_row(['Reserved 5', '0x%X' % f6])
+		pt.add_row(['Entry Valid', 'No' if f7 == 0xFF else 'Yes'])
 		
 		return pt
 	
@@ -314,14 +309,16 @@ class FPT_Entry(ctypes.LittleEndianStructure) : # (FPT_ENTRY)
 		flags = FPT_Entry_GetFlags()
 		flags.asbytes = self.Flags
 		
-		return flags.b.Type, flags.b.Reserved0, flags.b.BWL0, flags.b.BWL1, flags.b.Reserved1, flags.b.EntryValid
+		return flags.b.Type, flags.b.CopyToDramCache, flags.b.Reserved0, flags.b.BuiltWithLength0, flags.b.BuiltWithLength1, \
+			   flags.b.Reserved1, flags.b.EntryValid
 
 class FPT_Entry_Flags(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('Type', uint32_t, 7), # (PARTITION_TYPES)
-		('Reserved0', uint32_t, 8),
-		('BWL0', uint32_t, 1),
-		('BWL1', uint32_t, 1),
+		('CopyToDramCache', uint32_t, 1),
+		('Reserved0', uint32_t, 7),
+		('BuiltWithLength0', uint32_t, 1),
+		('BuiltWithLength1', uint32_t, 1),
 		('Reserved1', uint32_t, 7),
 		('EntryValid', uint32_t, 8)
 	]
@@ -1974,7 +1971,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - Partition Information (M
 		('DataFormatMinor',	uint16_t),		# 0x14 dword (0-15 Major, 16-31 Minor)
 		('DataFormatMajor',	uint16_t),		# 0x16 dword (0-15 Major, 16-31 Minor)
 		('InstanceID', 		uint32_t),  	# 0x3C
-		('Flags', 			uint32_t),  	# 0x40 Support multiple instances Y/N (for independently updated WCOD/LOCL partitions with multiple instances)
+		('Flags', 			uint32_t),  	# 0x40 Used at CSE_Ext_16 as well, remember to change both!
 		('Reserved', 		uint32_t*4),  	# 0x44
 		('Unknown', 		uint32_t),  	# 0x54 Unknown (>= 11.6.0.1109, 1 CSSPS, 3 CSME)
 		# 0x58
@@ -1987,6 +1984,9 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - Partition Information (M
 	# must not be verified at FIT/OEM-customized images because they're not applicable anymore.
 	
 	def ext_print(self) :
+		fvalue = ['No','Yes']
+		f1,f2,f3,f4,f5,f6,f7,f8,f9 = self.get_flags()
+		
 		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
 		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
 		
@@ -2002,11 +2002,45 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - Partition Information (M
 		pt.add_row(['Partition Version', '0x%X' % self.PartitionVer])
 		pt.add_row(['Data Format Version', '%d.%d' % (self.DataFormatMajor, self.DataFormatMinor)])
 		pt.add_row(['Instance ID', '0x%0.8X' % self.InstanceID])
-		pt.add_row(['Flags', '0x%X' % self.Flags])
-		pt.add_row(['Reserved', '0x0' if Reserved in ('00' * 16,'FF' * 16) else Reserved])
+		pt.add_row(['Support Multiple Instances', fvalue[f1]])
+		pt.add_row(['Support API Version Based Update', fvalue[f2]])
+		pt.add_row(['Action On Update', '0x%X' % f3])
+		pt.add_row(['Obey Full Update Rules', fvalue[f4]])
+		pt.add_row(['IFR Enable Only', fvalue[f5]])
+		pt.add_row(['Allow Cross Point Update', fvalue[f6]])
+		pt.add_row(['Allow Cross Hotfix Update', fvalue[f7]])
+		pt.add_row(['Partial Update Only', fvalue[f8]])
+		pt.add_row(['Flags Reserved', '0x%X' % f9])
+		pt.add_row(['Reserved', '0x%s' % Reserved])
 		pt.add_row(['Unknown', '0x%X' % self.Unknown])
 		
 		return pt
+		
+	def get_flags(self) :
+		flags = CSE_Ext_03_GetFlags()
+		flags.asbytes = self.Flags
+		
+		return flags.b.SupportMultipleInstances, flags.b.SupportApiVersionBasedUpdate, flags.b.ActionOnUpdate, flags.b.ObeyFullUpdateRules,\
+		       flags.b.IfrEnableOnly, flags.b.AllowCrossPointUpdate, flags.b.AllowCrossHotfixUpdate, flags.b.PartialUpdateOnly, flags.b.Reserved
+	
+class CSE_Ext_03_Flags(ctypes.LittleEndianStructure):
+	_fields_ = [
+		('SupportMultipleInstances', uint32_t, 1), # For independently updated WCOD/LOCL partitions with multiple instances
+		('SupportApiVersionBasedUpdate', uint32_t, 1),
+		('ActionOnUpdate', uint32_t, 2),
+		('ObeyFullUpdateRules', uint32_t, 1),
+		('IfrEnableOnly', uint32_t, 1),
+		('AllowCrossPointUpdate', uint32_t, 1),
+		('AllowCrossHotfixUpdate', uint32_t, 1),
+		('PartialUpdateOnly', uint32_t, 1),
+		('Reserved', uint32_t, 23)
+	]
+
+class CSE_Ext_03_GetFlags(ctypes.Union):
+	_fields_ = [
+		('b', CSE_Ext_03_Flags),
+		('asbytes', uint32_t)
+	]
 
 # noinspection PyTypeChecker
 class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # R1 - Module Information (MANIFEST_MODULE_INFO_EXT)
@@ -2036,7 +2070,7 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # R1 - Module Information (
 		
 		return pt
 
-class CSE_Ext_04(ctypes.LittleEndianStructure) : # R1 - Shared Library (SHARED_LIB_EXTENSION)
+class CSE_Ext_04(ctypes.LittleEndianStructure) : # R1 - Shared Library Attributes (SHARED_LIB_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2052,7 +2086,7 @@ class CSE_Ext_04(ctypes.LittleEndianStructure) : # R1 - Shared Library (SHARED_L
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 4, Shared Library' + col_e
+		pt.title = col_y + 'Extension 4, Shared Library Attributes' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Context Size', '0x%X' % self.ContextSize])
@@ -2064,7 +2098,7 @@ class CSE_Ext_04(ctypes.LittleEndianStructure) : # R1 - Shared Library (SHARED_L
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_05(ctypes.LittleEndianStructure) : # R1 - Process Manifest (MAN_PROCESS_EXTENSION)
+class CSE_Ext_05(ctypes.LittleEndianStructure) : # R1 - Process Attributes (MAN_PROCESS_EXTENSION)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2094,7 +2128,7 @@ class CSE_Ext_05(ctypes.LittleEndianStructure) : # R1 - Process Manifest (MAN_PR
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 5, Process Manifest' + col_e
+		pt.title = col_y + 'Extension 5, Process Attributes' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Fault Tolerant', f1value[f1]])
@@ -2161,7 +2195,7 @@ class CSE_Ext_05_GetFlags(ctypes.Union):
 		('asbytes', uint32_t)
 	]
 
-class CSE_Ext_06(ctypes.LittleEndianStructure) : # R1 - Threads (Threads)
+class CSE_Ext_06(ctypes.LittleEndianStructure) : # R1 - Thread Attributes (Threads)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2172,7 +2206,7 @@ class CSE_Ext_06(ctypes.LittleEndianStructure) : # R1 - Threads (Threads)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 6, Threads' + col_e
+		pt.title = col_y + 'Extension 6, Thread Attributes' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		
@@ -2240,7 +2274,7 @@ class CSE_Ext_06_GetSchedulPolicy(ctypes.Union):
 		('asbytes', uint32_t)
 	]
 
-class CSE_Ext_07(ctypes.LittleEndianStructure) : # R1 - Device IDs (DeviceIds)
+class CSE_Ext_07(ctypes.LittleEndianStructure) : # R1 - Device Types (DeviceIds)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2251,7 +2285,7 @@ class CSE_Ext_07(ctypes.LittleEndianStructure) : # R1 - Device IDs (DeviceIds)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 7, Device IDs' + col_e
+		pt.title = col_y + 'Extension 7, Device Types' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		
@@ -2706,7 +2740,7 @@ class CSE_Ext_0E_GetFlags(ctypes.Union):
 	]
 
 # noinspection PyTypeChecker
-class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Info (SIGNED_PACKAGE_INFO_EXT)
+class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Information (SIGNED_PACKAGE_INFO_EXT)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2835,7 +2869,7 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in XML, Reverse Engineered)
+class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID (iUnit/IUNP, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -2850,7 +2884,7 @@ class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in XML
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 16, Imaging Unit (iUnit/Camera)' + col_e
+		pt.title = col_y + 'Extension 16, Anti-Cloning SKU ID' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Revision', '%d' % self.Revision])
@@ -2859,7 +2893,7 @@ class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in XML
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in XML, Reverse Engineered)
+class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID Chunk (iUnit/IUNP, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Chunk',			uint32_t),		# 0x00
@@ -2881,7 +2915,7 @@ class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 16, Chunk' + col_e
+		pt.title = col_y + 'Extension 16, Anti-Cloning SKU ID Chunk' + col_e
 		pt.add_row(['Number', '%d' % self.Chunk])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Date', Date])
@@ -2893,7 +2927,7 @@ class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - iUnit (IUNP) (not in
 		return pt
 
 # noinspection PyTypeChecker
-class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP) (not in XML, Reverse Engineered)
+class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
@@ -2927,12 +2961,12 @@ class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP) (not in XML,
 		return pt
 		
 # noinspection PyTypeChecker
-class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Unknown FTPR (not in XML, Reverse Engineered)
+class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Isolated Memory Region Information (FTPR, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
-		("ModuleCount",		uint32_t),		# 0x08
+		("ModuleCount",		uint32_t),		# 0x08 Region Count
 		("Reserved",		uint32_t*4),	# 0x0C
 		# 0x1C
 	]
@@ -2942,7 +2976,7 @@ class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Unknown FTPR (not in XML
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 18, Unknown (FTPR)' + col_e
+		pt.title = col_y + 'Extension 18, Isolated Memory Region Information' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Module Count', '%d' % self.ModuleCount])
@@ -2975,7 +3009,7 @@ class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # R1 - (not in XML, Reverse
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 18, Entry' + col_e
+		pt.title = col_y + 'Extension 18, Isolated Memory Region' + col_e
 		pt.add_row(['Unknown 00_04', '0x%X' % self.Unknown00_04])
 		pt.add_row(['Unknown 04_08', '0x%X' % self.Unknown04_08])
 		pt.add_row(['Unknown 08_0C', '0x%X' % self.Unknown08_0C])
@@ -3350,7 +3384,7 @@ class CSE_Ext_15(ctypes.LittleEndianStructure) : # R1 - Unlock/Secure Token UTOK
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 21, Secure Token' + col_e
+		pt.title = col_y + 'Extension 21, Unlock/Secure Token' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Extension Version', '%d' % self.ExtVersion])
@@ -3487,7 +3521,7 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		('DataFormatMinor',	uint16_t),		# 0x14 dword (0-15 Major, 16-31 Minor)
 		('DataFormatMajor',	uint16_t),		# 0x16 dword (0-15 Major, 16-31 Minor)
 		('InstanceID',		uint32_t),		# 0x18
-		('Flags',			uint32_t),		# 0x1C Support multiple instances Y/N (for independently updated WCOD/LOCL partitions with multiple instances)
+		('Flags',			uint32_t),		# 0x1C Used at CSE_Ext_03 as well, remember to change both!
 		('HashAlgorithm',	uint8_t),		# 0x20 0 Reserved, 1 SHA-1, 2 SHA-256
 		('HashSize',		uint8_t*3),		# 0x21
 		('Hash',			uint32_t*8),	# 0x24 Complete original/RGN partition covering everything except for the Manifest ($CPD - $MN2 + Data)
@@ -3500,6 +3534,9 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 	# must not be verified at FIT/OEM-customized images because they're not applicable anymore.
 	
 	def ext_print(self) :
+		fvalue = ['No','Yes']
+		f1,f2,f3,f4,f5,f6,f7,f8,f9 = self.get_flags()
+		
 		HashSize = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HashSize))
 		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
 		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
@@ -3514,13 +3551,28 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		pt.add_row(['Partition Version', '0x%X' % self.PartitionVer])
 		pt.add_row(['Data Format Version', '%d.%d' % (self.DataFormatMajor, self.DataFormatMinor)])
 		pt.add_row(['Instance ID', '0x%0.8X' % self.InstanceID])
-		pt.add_row(['Flags', '0x%X' % self.Flags])
+		pt.add_row(['Support Multiple Instances', fvalue[f1]])
+		pt.add_row(['Support API Version Based Update', fvalue[f2]])
+		pt.add_row(['Action On Update', '0x%X' % f3])
+		pt.add_row(['Obey Full Update Rules', fvalue[f4]])
+		pt.add_row(['IFR Enable Only', fvalue[f5]])
+		pt.add_row(['Allow Cross Point Update', fvalue[f6]])
+		pt.add_row(['Allow Cross Hotfix Update', fvalue[f7]])
+		pt.add_row(['Partial Update Only', fvalue[f8]])
+		pt.add_row(['Flags Reserved', '0x%X' % f9])
 		pt.add_row(['Hash Type', ['Reserved','SHA-1','SHA-256'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % int(HashSize, 16)])
 		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Reserved', '0x%X' % int(Reserved, 16)])
 		
 		return pt
+	
+	def get_flags(self) :
+		flags = CSE_Ext_16_GetFlags()
+		flags.asbytes = self.Flags
+		
+		return flags.b.SupportMultipleInstances, flags.b.SupportApiVersionBasedUpdate, flags.b.ActionOnUpdate, flags.b.ObeyFullUpdateRules,\
+		       flags.b.IfrEnableOnly, flags.b.AllowCrossPointUpdate, flags.b.AllowCrossHotfixUpdate, flags.b.PartialUpdateOnly, flags.b.Reserved
 
 # noinspection PyTypeChecker
 class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Information (IFWI_PARTITION_MANIFEST_EXTENSION)
@@ -3534,7 +3586,7 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		('DataFormatMinor',	uint16_t),		# 0x14 dword (0-15 Major, 16-31 Minor)
 		('DataFormatMajor',	uint16_t),		# 0x16 dword (0-15 Major, 16-31 Minor)
 		('InstanceID',		uint32_t),		# 0x18
-		('Flags',			uint32_t),		# 0x1C Support multiple instances Y/N (for independently updated WCOD/LOCL partitions with multiple instances)
+		('Flags',			uint32_t),		# 0x1C
 		('HashAlgorithm',	uint8_t),		# 0x20 0 Reserved, 1 SHA-1, 2 SHA-256, 3 SHA-384
 		('HashSize',		uint8_t*3),		# 0x21
 		('Hash',			uint32_t*12),	# 0x24 Complete original/RGN partition covering everything except for the Manifest ($CPD - $MN2 + Data)
@@ -3547,6 +3599,9 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 	# must not be verified at FIT/OEM-customized images because they're not applicable anymore.
 	
 	def ext_print(self) :
+		fvalue = ['No','Yes']
+		f1,f2,f3,f4,f5,f6,f7,f8,f9 = self.get_flags()
+		
 		HashSize = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HashSize))
 		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
 		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
@@ -3561,13 +3616,47 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		pt.add_row(['Partition Version', '0x%X' % self.PartitionVer])
 		pt.add_row(['Data Format Version', '%d.%d' % (self.DataFormatMajor, self.DataFormatMinor)])
 		pt.add_row(['Instance ID', '0x%0.8X' % self.InstanceID])
-		pt.add_row(['Flags', '0x%X' % self.Flags])
+		pt.add_row(['Support Multiple Instances', fvalue[f1]])
+		pt.add_row(['Support API Version Based Update', fvalue[f2]])
+		pt.add_row(['Action On Update', '0x%X' % f3])
+		pt.add_row(['Obey Full Update Rules', fvalue[f4]])
+		pt.add_row(['IFR Enable Only', fvalue[f5]])
+		pt.add_row(['Allow Cross Point Update', fvalue[f6]])
+		pt.add_row(['Allow Cross Hotfix Update', fvalue[f7]])
+		pt.add_row(['Partial Update Only', fvalue[f8]])
+		pt.add_row(['Flags Reserved', '0x%X' % f9])
 		pt.add_row(['Hash Type', ['Reserved','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % int(HashSize, 16)])
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Reserved', '0x%X' % int(Reserved, 16)])
 		
 		return pt
+		
+	def get_flags(self) :
+		flags = CSE_Ext_16_GetFlags()
+		flags.asbytes = self.Flags
+		
+		return flags.b.SupportMultipleInstances, flags.b.SupportApiVersionBasedUpdate, flags.b.ActionOnUpdate, flags.b.ObeyFullUpdateRules,\
+		       flags.b.IfrEnableOnly, flags.b.AllowCrossPointUpdate, flags.b.AllowCrossHotfixUpdate, flags.b.PartialUpdateOnly, flags.b.Reserved
+	
+class CSE_Ext_16_Flags(ctypes.LittleEndianStructure):
+	_fields_ = [
+		('SupportMultipleInstances', uint32_t, 1), # For independently updated WCOD/LOCL partitions with multiple instances
+		('SupportApiVersionBasedUpdate', uint32_t, 1),
+		('ActionOnUpdate', uint32_t, 2),
+		('ObeyFullUpdateRules', uint32_t, 1),
+		('IfrEnableOnly', uint32_t, 1),
+		('AllowCrossPointUpdate', uint32_t, 1),
+		('AllowCrossHotfixUpdate', uint32_t, 1),
+		('PartialUpdateOnly', uint32_t, 1),
+		('Reserved', uint32_t, 23)
+	]
+
+class CSE_Ext_16_GetFlags(ctypes.Union):
+	_fields_ = [
+		('b', CSE_Ext_16_Flags),
+		('asbytes', uint32_t)
+	]
 		
 # noinspection PyTypeChecker
 class CSE_Ext_18(ctypes.LittleEndianStructure) : # R1 - USB Type C IO Manageability (TCSS_METADATA_EXT)
@@ -7362,11 +7451,13 @@ bpdt_dict = {
 			13 : 'UFS GPP LUN', # UFS GPP LUN Partition
 			14 : 'PMCP', # PMC Partition
 			15 : 'IUNP', # IUnit Partition
-			16 : 'NVM Config', # NVM Configuration
+			16 : 'NVMC', # NVM Configuration
 			17 : 'UEP', # Unified Emulation Partition
 			18 : 'WCOD', # CSE-WCOD Partition
 			19 : 'LOCL', # CSE-LOCL Partition
 			20 : 'OEMP', # OEM KM Partition
+			21 : 'FITC', # Defaults/FITC.cfg
+			22 : 'PAVP', # Protected Audio Video Path
 			23 : 'IOMP', # USB Type C IO Manageability Partition (UIOM)
 			24 : 'NPHY', # USB Type C MG Partition (NPHY = MGPP)
 			25 : 'TBTP', # USB Type C Thunderbolt Partition (TBT)
@@ -7942,7 +8033,7 @@ for file_in in source :
 			
 			fpt_entry = get_struct(reading, fpt_step, FPT_Entry)
 			
-			p_type,p_reserved0,p_bwl0,p_bwl1,p_reserved1,p_valid = fpt_entry.get_flags()
+			p_type,p_dram,p_reserved0,p_bwl0,p_bwl1,p_reserved1,p_valid = fpt_entry.get_flags()
 			
 			p_name = fpt_entry.Name
 			p_owner = fpt_entry.Owner
