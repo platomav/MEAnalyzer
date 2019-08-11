@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.93.0'
+title = 'ME Analyzer v1.94.0'
 
 import os
 import re
@@ -1361,7 +1361,7 @@ class MFS_Home_Record_Access(ctypes.LittleEndianStructure):
 		('Encryption', uint16_t, 1),
 		('AntiReplay', uint16_t, 1),
 		('Unknown0', uint16_t, 1),
-		('KeyType', uint16_t, 1), # 0 Intel, 1 OEM
+		('KeyType', uint16_t, 1), # 0 Intel, 1 Other
 		('RecordType', uint16_t, 1), # 0 File, 1 Folder
 		('Unknown1', uint16_t, 1)
 	]
@@ -3989,7 +3989,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	rbe_pm_met_hashes = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
-	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'none') # Load Huffman Dictionaries for rbe/pm Decompression
+	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
 	
 	# Create main Firmware Extraction Directory
 	fw_name = 'Unpacked_' + os.path.basename(file_in)
@@ -4542,10 +4542,10 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				hdr_rev_tag = '' # CSE Extension Header Revision Tag
 				mod_rev_tag = '' # CSE Extension Module Revision Tag
 				
-				if (variant,major) == ('CSME',14) :
-					if ext_tag in ext_tag_rev_hdr_csme14 : hdr_rev_tag = ext_tag_rev_hdr_csme14[ext_tag]
-					if ext_tag in ext_tag_rev_mod_csme14 : mod_rev_tag = ext_tag_rev_mod_csme14[ext_tag]
-				elif (variant,major) == ('CSME',13) or ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018)) or dnx_version == 2 :
+				if (variant,major) == ('CSME',15) :
+					if ext_tag in ext_tag_rev_hdr_csme15 : hdr_rev_tag = ext_tag_rev_hdr_csme15[ext_tag]
+					if ext_tag in ext_tag_rev_mod_csme15 : mod_rev_tag = ext_tag_rev_mod_csme15[ext_tag]
+				elif (variant,major) in [('CSME',13), ('CSME',14)] or ((variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018)) or dnx_version == 2 :
 					if ext_tag in ext_tag_rev_hdr_csme12 : hdr_rev_tag = ext_tag_rev_hdr_csme12[ext_tag]
 					if ext_tag in ext_tag_rev_mod_csme12 : mod_rev_tag = ext_tag_rev_mod_csme12[ext_tag]
 				elif (variant,major,minor) == ('CSSPS',5,0) and hotfix in (0,1,2,3) :
@@ -4850,7 +4850,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					
 					fw_0C_cse,fw_0C_sku1,fw_0C_lbg,fw_0C_m3,fw_0C_m0,fw_0C_sku2,fw_0C_sicl,fw_0C_res2 = ext_hdr.get_flags()
 					
-					ext12_info = ['%0.8X' % ext_hdr.FWSKUCaps, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2]
+					ext12_info = [ext_hdr.FWSKUCaps, fw_0C_sku1, fw_0C_lbg, fw_0C_sku2]
 				
 				elif ext_tag == 0xF :
 					ext_hdr = get_struct(buffer, cpd_ext_offset, ext_struct_name)
@@ -5248,8 +5248,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 				info_file.write('\n%s\n%s' % (pt_json(cpd_phdr.hdr_print()), pt_json(pt)))
 		
 		# Load Huffman Dictionaries for Decompression
-		if param.me11_mod_bug : huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
-		else : huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'none')
+		huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
 		
 		# Parse all Modules based on their Metadata
 		for mod in cpd_all_attr :
@@ -5645,7 +5644,6 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		mfsb_buffer = mfs_buffer_init[ctypes.sizeof(mfsb_hdr):] # MFS Backup Buffer without Header
 		mfsb_crc32 = mfsb_hdr.CRC32 # Intel CRC-32 of MFS Backup Buffer
 		mea_crc32 = ~zlib.crc32(mfsb_buffer, -1) & 0xFFFFFFFF # MEA CRC-32 of MFS Backup Buffer
-		#mea_crc32 = ~crccheck.crc.Crc32.calc(mfsb_buffer, 0) & 0xFFFFFFFF # MEA CRC-32 of MFS Backup Buffer (crccheck has CRC32 initvalue bug)
 		mfsb_patterns = re.compile(br'\x01\x03\x02\x04').finditer(mfsb_buffer) # Each MFS Backup Chunk ends with 0x01030204
 		mfsb_end = re.compile(br'\xFF{32}').search(mfsb_buffer).start() # MFS Backup Buffer ends where enough Padding (0xFF) is found
 		
@@ -5687,10 +5685,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	
 	# Set MFS Integrity Table Structure Size
 	if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4)] : sec_hdr_size = 0x34
+	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] : sec_hdr_size = 0x28
 	else : sec_hdr_size = 0x28
 	
 	# Set MFS Config Record Structure Size
 	if (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : config_rec_size = 0x1C
+	elif (variant,major) in [('CSME',13),('CSME',14)] : config_rec_size = 0xC
 	else : config_rec_size = 0xC
 	
 	# Sort MFS System & Data Pages
@@ -5942,9 +5942,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 				intl_cfg = os.path.join(temp_dir, 'intel.cfg')
 				with open(intl_cfg, 'wb') as o : o.write(mfs_file[1])
 				
-				if mfs_size == 0x40000 : mfs_tmpl = '256K.bin'
-				elif mfs_size == 0x64000 : mfs_tmpl = '400K.bin'
-				elif mfs_size == 0x13E000 : mfs_tmpl = '1272K.bin'
+				mfs_tmpl = {0x40000 : '256K.bin', 0x64000 : '400K.bin', 0x13E000 : '1272K.bin'}[mfs_size]
 				
 				clean_mfs_path = os.path.join(mea_dir, 'MFS_INTEL.bin')
 				mfstool_path = os.path.join(mea_dir, 'mfstool')
@@ -6302,8 +6300,8 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			# Unreliable for CSME ~< 11.0.0.1140 @ 2015-05-19 (always 80 --> SPT/KBP-LP A)
 			pass
 	
-	# Detect Actual PCH Stepping(s) for CSME 12-13 & CSSPS 5
-	elif (variant,major) in [('CSME',12),('CSME',13),('CSSPS',5)] :
+	# Detect Actual PCH Stepping(s) for CSME 12-14 & CSSPS 5
+	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] :
 		if mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x01) \
 		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25) :
 			# Bitfield for CSME >=~ 12.0.0.1058 @ 2018-01-25 (0011 = --BA, 0110 = -CB-)
@@ -6413,12 +6411,24 @@ def pmc_anl(mn2_info) :
 	
 	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Compatibility-Maintenance, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN]
 	
-	if variant == 'PMCICP' or (variant,major) in [('CSME',13)] :
+	if variant == 'PMCCMP' or (variant,major) in [('CSME',14)] :
+		pmc_platform = 'CMP'
+		
+		if mn2_info[0] == 140 :
+			# 140.2.01.1009 = CMP + H + PCH Compatibility A + PMC Maintenance 1 + PMC Revision 1009
+			if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 1 LP, 2 H, 3 V (?)
+			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[2] // 10], mn2_info[2] % 10) # 21 = PCH C PMC 1
+		
+		# Check if PMCCMP firmware is the latest
+		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCMP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
+		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
+	
+	elif variant == 'PMCICP' or (variant,major) in [('CSME',13)] :
 		pmc_platform = 'ICP'
 		
 		if mn2_info[0] in (400,130) :
 			# 400.1.30.1063 = ICP + LP + PCH Compatibility D + PMC Maintenance 0 + PMC Revision 1063
-			if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 1 LP, 2 H
+			if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 1 LP, 2 H, 3 N (?)
 			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[2] // 10], mn2_info[2] % 10) # 21 = PCH C PMC 1
 		
 		# Check if PMCICP firmware is the latest
@@ -6459,7 +6469,7 @@ def pmc_anl(mn2_info) :
 	# Fix Release of PRE firmware which are wrongly reported as PRD
 	pmc_mn2_signed, pmc_mn2_signed_db = release_fix(pmc_mn2_signed, pmc_mn2_signed_db, mn2_info[5])
 	
-	if pmc_platform in ('CNP','ICP') :
+	if pmc_platform in ('CNP','ICP','CMP') :
 		if mn2_info[0] < 130 :
 			pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 			pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
@@ -6493,7 +6503,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
 	
 	# Check if Huffman dictionary version is supported
 	if (cse_variant, cse_major) in [('CSME', 11), ('CSSPS', 4)] : dict_version = 11
-	elif (cse_variant, cse_major) in [('CSME', 12), ('CSME', 13), ('CSSPS', 5)] : dict_version = 12
+	elif (cse_variant, cse_major) in [('CSME', 12), ('CSME', 13), ('CSME', 14), ('CSSPS', 5)] : dict_version = 12
 	else :
 		# CSTXE & PMC firmware do not use Huffman compression, skip error message
 		if cse_variant != 'CSTXE' and not cse_variant.startswith('PMC') and verbosity in ['all','error'] :
@@ -6907,6 +6917,7 @@ def get_hash(data, hash_size) :
 	if hash_size == 0x10 : return md5(data)
 	elif hash_size == 0x14 : return sha_1(data)
 	elif hash_size == 0x20 : return sha_256(data)
+	elif hash_size == 0x30 : return sha_384(data)
 	else : return sha_384(data)
 	
 # Validate CPU Microcode Checksum
@@ -7115,7 +7126,10 @@ def rsa_sig_val(man_hdr_struct, input_stream, check_start) :
 		elif (man_tag,man_key_size) == ('$MN2',0x100) : # SHA-256
 			rsa_hash = hashlib.sha256()
 			dec_hash = dec_sign[-64:] # 256-bit
-		else : # SHA-384 ($MN2,0x180)
+		elif (man_tag,man_key_size) == ('$MN2',0x180) : # SHA-384
+			rsa_hash = hashlib.sha384()
+			dec_hash = dec_sign[-96:] # 384-bit
+		else :
 			rsa_hash = hashlib.sha384()
 			dec_hash = dec_sign[-96:] # 384-bit
 	
@@ -7195,8 +7209,9 @@ def get_variant() :
 	fw_db.close()
 	
 	# Variant DB RSA Public Key not found, manual known correction
-	if variant == 'TBD3' and major in (12,13) : variant = 'CSME'
-	elif variant == 'TBD3' and major == 300 : variant = 'PMCCNP'
+	if variant == 'TBD4' and major == 300 : variant = 'PMCCNP'
+	elif variant == 'TBD4' and major == 140 : variant = 'PMCCMP'
+	elif variant == 'TBD3' and major in (12,13,14) : variant = 'CSME'
 	elif variant == 'TBD3' and major in (400,130) : variant = 'PMCICP'
 	elif variant == 'TBD3' and major in (3,4) : variant = 'CSTXE'
 	elif variant == 'TBD1' and major == 11 : variant = 'CSME'
@@ -7220,6 +7235,9 @@ def get_variant() :
 					break
 				elif mod == 'PMCC000' and major in (400,130) : # 0 ICP
 					variant = 'PMCICP'
+					break
+				elif mod == 'PMCC000' and major == 140 : # 0 CMP
+					variant = 'PMCCMP'
 					break
 				elif mod == 'PMCC000' and major <= 300 : # 0 CNP
 					variant = 'PMCCNP'
@@ -7279,17 +7297,17 @@ ansi_escape = re.compile(r'\x1b[^m]*m')
 # CSE Extensions 0x00-0x16, 0x18-0x1A, 0x30-0x32
 ext_tag_all = list(range(23)) + list(range(24,27)) + list(range(48,51))
 
-# CSME 12-13 Revised Extensions
+# CSME 12-14 Revised Extensions
 ext_tag_rev_hdr_csme12 = {0x14:'_R2'}
 
-# CSME 12-13 Revised Extension Modules
+# CSME 12-14 Revised Extension Modules
 ext_tag_rev_mod_csme12 = {0x1:'_R2', 0xD:'_R2'}
 
-# CSME 14 Revised Extensions
-ext_tag_rev_hdr_csme14 = {0xA:'_R2', 0x14:'_R3', 0x16:'_R2'}
+# CSME 15 (?) Revised Extensions
+ext_tag_rev_hdr_csme15 = {0xA:'_R2', 0x14:'_R3', 0x16:'_R2'}
 
-# CSME 14 Revised Extension Modules
-ext_tag_rev_mod_csme14 = {0xF:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
+# CSME 15 (?) Revised Extension Modules
+ext_tag_rev_mod_csme15 = {0xF:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
 # CSSPS 5 Revised Extensions
 ext_tag_rev_hdr_cssps5 = {}
@@ -9179,7 +9197,7 @@ for file_in in source :
 		# Detect SKU Platform via Extension 0xC Attributes
 		if fw_0C_sku2 == 0 : pos_sku_ext = 'H' # Halo
 		elif fw_0C_sku2 == 1 : pos_sku_ext = 'LP' # Low Power
-		elif fw_0C_sku2 == 2 : pos_sku_ext = 'N' # ???
+		elif fw_0C_sku2 == 2 : pos_sku_ext = 'N' # Maybe V for Value ???
 		
 		# Detect SKU Platform via MFS Intel PCH Initialization Table
 		if pch_init_final and '-LP' in pch_init_final[-1][0] : pos_sku_tbl = 'LP'
@@ -9203,7 +9221,7 @@ for file_in in source :
 			if pos_sku_ext == 'Invalid' and sku == 'NaN' :
 				for mod in cpd_mod_attr :
 					if mod[0] == 'kernel' :
-						huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'none')
+						huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
 						ker_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 						
 						# 0F22D88D65F85B5E5DC355B8 (56 & AA for H, 60 & A0 for LP)
@@ -9254,7 +9272,7 @@ for file_in in source :
 				if sku_pdm not in ['NPDM','YPDM'] :
 					for mod in cpd_mod_attr :
 						if mod[0] == 'bup' :
-							huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'none')
+							huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
 							bup_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 							
 							if bup_decomp != b'' :
@@ -9285,9 +9303,9 @@ for file_in in source :
 				sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
 				
 				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				if sku_result == 'H' and fw_0C_sku0 in ('3111BED0','3111BFD0','7DF7FEDF','7DF7FFDF','11009A40') : sku_result = 'LP'
-				elif sku_result == 'LP' and fw_0C_sku0 in ('3111BDD0','7DF7FDDF','11009940') : sku_result = 'H'
-				elif sku_result == 'H' : warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+				if sku_result == 'H' :
+					sku_result = ['H','H','LP','LP'][int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
+					warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
 			
 			sku = sku_init + ' ' + sku_result
 			
@@ -9319,13 +9337,10 @@ for file_in in source :
 			else :
 				sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
 				
-				warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
-				
 				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				if sku_result != 'LP' and fw_0C_sku0 in ('3131BED0','') : sku_result = 'LP'
-				elif sku_result != 'N' and fw_0C_sku0 in ('','') : sku_result = 'N'
-				elif sku_result != 'H' and fw_0C_sku0 in ('','') : sku_result = 'H'
-				#elif sku_result == 'H' : warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+				if sku_result == 'H' :
+					sku_result = ['H','H','LP','H'][int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
+					warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
 			
 			sku = sku_init + ' ' + sku_result
 			
@@ -9344,6 +9359,39 @@ for file_in in source :
 			
 			# Adjust PCH Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'ICP' # Ice Point
+			
+		elif major == 14 :
+			
+			# Detect SKU Platform, prefer DB over Extension
+			if sku != 'NaN' :
+				sku_result = db_sku_chk # SKU Platform retrieved from DB (Override)
+			elif pos_sku_tbl != 'Unknown' :
+				sku_result = pos_sku_tbl # SKU Platform retrieved from MFS (Best)
+			else :
+				sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
+				
+				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
+				if sku_result == 'H' :
+					sku_result = ['H','H','LP','H'][int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
+					warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+			
+			sku = sku_init + ' ' + sku_result
+			
+			# Set PCH/SoC Stepping, if not found at DB
+			if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
+			
+			# Detected stitched PMC firmware
+			if pmcp_found :
+				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn = pmc_anl(pmc_mn2_ver)
+				
+				# Verify FTPR & PMC compatibility (PCH & SKU)
+				if pmc_mn2_signed != release or pmc_pch_gen != 140 or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
+					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
+			
+			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
+			
+			# Adjust PCH Platform via Minor version
+			if minor == 0 and not pch_init_final : platform = 'CMP' # Comet Point
 	
 	elif variant == 'TXE' : # Trusted Execution Engine
 		
@@ -9569,7 +9617,7 @@ for file_in in source :
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
-		if (platform,major) in [('CNP',300),('ICP',400),('ICP',130)] : hotfix = '%0.2d' % hotfix
+		if (platform,major) in [('CNP',300),('ICP',400),('ICP',130),('CMP',140)] : hotfix = '%0.2d' % hotfix
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PMC firmware size
 		
@@ -9605,7 +9653,7 @@ for file_in in source :
 	elif variant == 'SPS' :
 		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
-	elif (variant,major) in [('PMCCNP',300),('PMCICP',400),('PMCICP',130)] : # PMC CNP A/B, PMC ICP
+	elif (variant,major) in [('PMCCNP',300),('PMCICP',400),('PMCICP',130),('PMCCMP',140)] : # PMC CNP A/B, ICP, CMP
 		name_db = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db)
 	elif variant.startswith('PMC') : # PMC APL A/B, BXT C, GLK A/B, CNP A
@@ -9646,7 +9694,7 @@ for file_in in source :
 	
 	# Check if firmware is updated, Production only
 	if release == 'Production' and not wcod_found : # Does not display if firmware is non-Production or Partial Update
-		if variant in ['ME','CSME','TXE','CSTXE','PMCCNP'] : # CS(SPS) excluded
+		if variant in ['ME','CSME','TXE','CSTXE','PMCCNP','PMCCMP'] : # CS(SPS) excluded
 			if upd_found : upd_rslt = col_r + 'No' + col_e
 			elif not upd_found : upd_rslt = col_g + 'Yes' + col_e
 	
@@ -9679,7 +9727,7 @@ for file_in in source :
 		msg_pt.add_row(['Type', fw_type])
 		
 		if (variant == 'CSTXE' and 'Unknown' not in sku) or ((variant,sku) == ('SPS','NaN')) or (variant.startswith('PMC')
-		and variant != 'PMCCNP' and variant != 'PMCICP') or wcod_found :
+		and variant != 'PMCCNP' and variant != 'PMCICP' and variant != 'PMCCMP') or wcod_found :
 			pass
 		else :
 			msg_pt.add_row(['SKU', sku])
@@ -9745,7 +9793,7 @@ for file_in in source :
 			msg_pmc_pt.add_row(['Version', pmc_fw_ver])
 			msg_pmc_pt.add_row(['Release', pmc_mn2_signed + ', Engineering ' if pmc_fw_rel >= 7000 else pmc_mn2_signed])
 			msg_pmc_pt.add_row(['Type', 'Independent'])
-			if variant in ('PMCCNP','PMCICP') or (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) :
+			if variant in ('PMCCNP','PMCICP','PMCCMP') or (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) :
 				msg_pmc_pt.add_row(['Chipset SKU', pmc_pch_sku])
 			msg_pmc_pt.add_row(['Chipset Stepping', pmc_pch_rev[0]])
 			msg_pmc_pt.add_row(['Security Version Number', pmc_svn])
