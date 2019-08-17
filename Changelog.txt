@@ -1,3 +1,10 @@
+r173
+
+CSME 12.0.35.1427_COR_H_BA_PRD_RGN
+CSME 12.0.34.1425_COR_H_BA_PRD_RGN
+CSTXE 3.1.70.2325_B_PRD_EXTR
+PMC APL_0.1.0.0_B_2019-02-04_PRD
+
 v1.94.0
 
 Added firmware support for future platforms
