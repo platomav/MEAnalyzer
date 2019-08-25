@@ -17,12 +17,12 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (
 
 #### **A1. ME Analyzer Features**
 
-- Supports all Engine firmware Families (CS)ME 2-12, (CS)TXE 0-4, (CS)SPS 1-5
+- Supports all Engine firmware Families (CS)ME 2-14, (CS)TXE 0-4, (CS)SPS 1-5
 - Supports all types of firmware images (Engine Regions, SPI/BIOS etc)
 - Detection of Family, Version, SKU, Date, Revision, Platform etc info
 - Detection of Production, Pre-Production, ROM-Bypass etc Releases
 - Detection of Region (Stock/clean or Extracted/dirty), Update etc Types
-- Detection of Security Version Number (SVN), Version Control Number (VCN) & PV
+- Detection of Security Version Numbers (SVN), Version Control Number (VCN)
 - Detection of Power Management Controller (PMC) firmware Version, SKU etc
 - Detection of whether the imported Engine firmware is updated or not
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)

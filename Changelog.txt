@@ -1,3 +1,15 @@
+v1.95.0
+
+Added CSE Extension 23 initial detection
+Added CSE FPF Anti-Rollback SVN detection
+Added PMC Production Ready (PV) detection
+
+r174
+
+CSME 12.0.40.1433_CON_H_BA_PRD_RGN
+CSME 12.0.40.1433_COR_LP_C_PRD_RGN
+CSME 11.22.67.1622_SLM_H_BA_PRD_EXTR
+
 r173
 
 CSME 12.0.35.1427_COR_H_BA_PRD_RGN
