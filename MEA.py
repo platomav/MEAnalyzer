@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.95.0'
+title = 'ME Analyzer v1.96.0'
 
 import os
 import re
@@ -409,7 +409,7 @@ class CSE_Layout_Table_17(ctypes.LittleEndianStructure) : # IFWI 1.7 (CseLayoutT
 	]
 	
 	# Used at Lake Field (LKF) IFWI 1.7 platform
-	# When CSE Pointer Redundancy is set, the entire structure is duplicated
+	# When CSE Pointer Redundancy is set, the entire (?) structure is duplicated
 	
 	def hdr_print(self) :
 		f1,f2 = self.get_flags()
@@ -465,11 +465,11 @@ class CSE_Layout_Table_17_GetFlags(ctypes.Union):
 class BPDT_Header_1(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.6 & 2.0 (PrimaryBootPartition, SecondaryBootPartition, PrimaryBootPartitionNC, BootPartitionLayout)
 	_pack_ = 1
 	_fields_ = [
-		('Signature',		uint32_t),		# 0x00 AA550000 Boot, AA55AA00 Recovery
+		('Signature',		uint32_t),		# 0x00 AA550000 Boot/Green, AA55AA00 Recovery/Yellow
 		('DescCount',		uint16_t),		# 0x04 Minimum 6 Entries
 		('BPDTVersion',		uint16_t),		# 0x06 1 IFWI 1.6 & 2.0, 2 IFWI 1.7
 		('Reserved',		uint16_t),		# 0x08
-		('Checksum',		uint16_t),		# 0x0A From BPDT up to and including S-BPDT
+		('Checksum',		uint16_t),		# 0x0A
 		('IFWIVersion',		uint32_t),		# 0x0C Unique mark from build server
 		('FitMajor',		uint16_t),		# 0x10
 		('FitMinor',		uint16_t),		# 0x12
@@ -478,7 +478,11 @@ class BPDT_Header_1(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 		# 0x18 (0x200 <= Header + Entries <= 0x1000)
 	]
 	
-	# Used at APL/CNP/GLK IFWI 1.6 & 2.0 platforms
+	# Used at IFWI 1.6 (CNP/ICP/CMP) & IFWI 2.0 (APL/GLK) platforms
+	
+	# XOR Checksum of the redundant block (from the beginning of the BPDT structure, up to and including the S-BPDT) such that
+	# the XOR Checksum of the redundant block including Checksum field is 0. If no redundancy is supported, Checksum field is 0
+	
 	# https://github.com/coreboot/coreboot/blob/master/util/cbfstool/ifwitool.c
 	
 	def hdr_print(self) :
@@ -502,7 +506,7 @@ class BPDT_Header_1(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 class BPDT_Header_2(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.7 (PrimaryBootPartition, PrimaryBootPartitionNC)
 	_pack_ = 1
 	_fields_ = [
-		('Signature',		uint32_t),		# 0x00 AA550000 Boot, AA55AA00 Recovery
+		('Signature',		uint32_t),		# 0x00 AA550000 Boot/Green, AA55AA00 Recovery/Yellow
 		('DescCount',		uint16_t),		# 0x04 Minimum 6 Entries
 		('BPDTVersion',		uint8_t),		# 0x06 1 IFWI 1.6 & 2.0, 2 IFWI 1.7
 		('BPDTConfig',		uint8_t),		# 0x07 0 BPDT Redundancy Support, 1-7 Reserved
@@ -515,7 +519,7 @@ class BPDT_Header_2(ctypes.LittleEndianStructure) : # Boot Partition Descriptor 
 		# 0x18 (0x200 <= Header + Entries <= 0x1000)
 	]
 	
-	# Used at Lake Field (LKF) IFWI 1.7 platform
+	# Used at IFWI 1.7 (LKF) platforms
 	
 	def hdr_print(self) :
 		bpdt_ver = {1 : '1.6 & 2.0', 2 : '1.7'}
@@ -708,7 +712,7 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
 		pt.add_row(['Unique Build Tag', '0x%X' % self.InternalInfo])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
-		pt.add_row(['Security Version Number', '%d' % self.SVN])
+		pt.add_row(['TCB Security Version Number', '%d' % self.SVN])
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
 		pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
 		pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
@@ -790,7 +794,7 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
 		pt.add_row(['Unique Build Tag', '0x%X' % self.InternalInfo])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
-		pt.add_row(['Security Version Number', '%d' % self.SVN])
+		pt.add_row(['TCB Security Version Number', '%d' % self.SVN])
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
 		pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
 		pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
@@ -2766,7 +2770,7 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
 		pt.add_row(['Hash Usages', ', '.join(map(str, hash_usages))])
-		pt.add_row(['Anti-Rollback Security Version Number', '%d' % self.ARBSVN])
+		pt.add_row(['ARB Security Version Number', '%d' % self.ARBSVN])
 		pt.add_row(['Reserved', Reserved])
 		
 		return pt
@@ -4877,7 +4881,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					ext_hdr = get_struct(buffer, cpd_ext_offset, ext_struct_name)
 					if ext_pname == '' : ext_pname = ext_hdr.PartitionName.decode('utf-8') # Partition Name (prefer CSE_Ext_03)
 					if vcn == -1 : vcn = ext_hdr.VCN # Version Control Number (prefer CSE_Ext_03)
-					arb_svn = ext_hdr.ARBSVN # FPF Anti-Rollback Security Version Number
+					arb_svn = ext_hdr.ARBSVN # FPF Anti-Rollback (ARB) Security Version Number
 					CSE_Ext_0F_length = ctypes.sizeof(ext_struct_name)
 					cpd_mod_offset = cpd_ext_offset + CSE_Ext_0F_length
 					CSE_Ext_0F_Mod_length = ctypes.sizeof(ext_struct_mod)
@@ -5651,6 +5655,22 @@ def cse_anl_err(ext_err_msg, checked_hashes) :
 		if copy_file and param.me11_mod_bug : input('\n%s' % ext_err_msg)
 		else : print('\n%s' % ext_err_msg)
 
+# Get CSE File System Attributes & Configuration State
+def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final) :
+	try :
+		if mfs_found and not param.me11_mod_extr :
+			# Get CSE File System Attributes
+			mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant)
+			
+			# CSE File System exists, determine its Configuration State
+			if 8 in mfs_parsed_idx : mfs_state = 'Initialized'
+			elif 7 in mfs_parsed_idx : mfs_state = 'Configured'
+	except :
+		# CSE File System analysis failed, maybe corrupted
+		mfs_state = col_r + 'Error' + col_e
+		
+	return mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final
+
 # Analyze & Extract CSE File Systems
 # noinspection PyUnusedLocal
 def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
@@ -5849,7 +5869,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	# Parse MFS System Volume Structure
 	if not all_chunks_dict :
 		mfs_anl_msg(col_r + 'Error: MFS final System Area Buffer is empty!' + col_e, 'error', False, False, [])
-		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info # The final System Area Buffer must not be empty
+		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final # The final System Area Buffer must not be empty
 	vol_hdr = get_struct(all_chunks_dict[0], 0, MFS_Volume_Header) # System Volume is at the LAST Index 0 Chunk (the dictionary does that automatically)
 	if param.me11_mod_extr :
 		print('\n%s' % vol_hdr.mfs_print()) # Print System Volume Structure Info during CSE Unpacking
@@ -6049,7 +6069,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS Low Level File %d which has not been parsed!' % (mfs_file[0]) + col_e, 'error', False, False, [])
 			mfs_file_path = os.path.join(mfs_folder, '%0.3d.bin' % mfs_file[0])
 			mfs_write(mfs_folder, mfs_file_path, mfs_file[1]) # Store MFS Low Level File
-			
+		
+	# Remember to also update any prior function return statements
 	return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final
 
 # Parse all MFS Home Directory Records Recursively
@@ -6305,7 +6326,7 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 	
 # Analyze MFS Intel Configuration > PCH Initialization Table
 def mphytbl(mfs_file, rec_data, pch_init_info) :
-	pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual PCH SKU Platform (CNP-H, TGP-LP etc)
+	pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual PCH SKU Platform (CNP-H, ICP-LP etc)
 	pch_init_stp = rec_data[3] & 0xF # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
 	pch_init_rev = rec_data[2] # PCH Initialization Table Revision
 	pch_true_stp = '' # Actual PCH Stepping(s) (A, B, C etc)
@@ -6515,6 +6536,11 @@ def pmc_anl(mn2_info) :
 	
 	return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmcp_upd_found, pmc_platform, \
 		   mn2_info[7], mn2_info[8], mn2_info[9]
+		   
+# Verify CSE FTPR/OPR & stitched PMC compatibility (PCH/SoC & SKU)
+def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_gen_list, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
+	if pmc_mn2_signed != release or pmc_pch_gen not in pmc_gen_list or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
+		warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
 
 # CSE Huffman Dictionary Loader by IllegalArgument
 # Dictionaries by Dmitry Sklyarov & IllegalArgument
@@ -6756,6 +6782,9 @@ def cpd_chk(cpd_data) :
 		cpd_chk_file = cpd_data[0xB]
 		cpd_sum = sum(cpd_data) - cpd_chk_file
 		cpd_chk_calc = (0x100 - cpd_sum & 0xFF) & 0xFF
+	elif get_cpd(cpd_data, 0).__name__ == 'CPD_Header_R2' :
+		cpd_chk_file = int.from_bytes(cpd_data[0x10:0x14], 'little')
+		cpd_chk_calc = zlib.crc32(cpd_data) & 0xFFFFFFFF
 	else :
 		cpd_chk_file = int.from_bytes(cpd_data[0x10:0x14], 'little')
 		cpd_chk_calc = zlib.crc32(cpd_data) & 0xFFFFFFFF
@@ -7183,8 +7212,8 @@ def release_fix(release, rel_db, rsa_key_hash) :
 	
 	return release, rel_db
 	
-# Search DB for manual CSE values
-def db_skl(variant) :
+# Search DB for manual CSE SKU values
+def get_cse_db(variant) :
 	db_sku_chk = 'NaN'
 	sku = 'NaN'
 	sku_stp = 'NaN'
@@ -7208,7 +7237,29 @@ def db_skl(variant) :
 
 	return db_sku_chk, sku, sku_stp, sku_pdm
 
-# Store CSE DB SKU and check Latest version
+# Get CSME 12+ Final SKU, SKU Platform, SKU Stepping
+def get_csme_sku(sku_init, fw_0C_sku0, fw_0C_list, sku, sku_stp, db_sku_chk, pos_sku_tbl, pos_sku_ext, pch_init_final) :
+	# Detect SKU Platform, prefer DB over Extension
+	if sku != 'NaN' :
+		sku_result = db_sku_chk # SKU Platform retrieved from DB (Override)
+	elif pos_sku_tbl != 'Unknown' :
+		sku_result = pos_sku_tbl # SKU Platform retrieved from MFS (Best)
+	else :
+		sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
+		
+		# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
+		if sku_result == 'H' :
+			sku_result = fw_0C_list[int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
+			warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+	
+	sku = sku_init + ' ' + sku_result
+	
+	# Set PCH/SoC Stepping, if not found at DB
+	if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
+	
+	return sku, sku_result, sku_stp
+
+# Get CSE DB SKU and check for Latest status
 def sku_db_upd_cse(sku_type, sku_plat, sku_stp, upd_found, stp_only = False) :
 	if sku_stp == 'NaN' : sku_db = '%s%sX' % (sku_type if stp_only else sku_type + '_', sku_plat if stp_only else sku_plat + '_')
 	else : sku_db = '%s%s' % (sku_type if stp_only else sku_type + '_', sku_plat if stp_only else sku_plat + '_') + sku_stp
@@ -7328,10 +7379,10 @@ ext_tag_rev_hdr_csme12 = {0x14:'_R2'}
 # CSME 12-14 Revised Extension Modules
 ext_tag_rev_mod_csme12 = {0x1:'_R2', 0xD:'_R2'}
 
-# CSME 15 (?) Revised Extensions
+# CSME 15 Revised Extensions
 ext_tag_rev_hdr_csme15 = {0xA:'_R2', 0x14:'_R3', 0x16:'_R2'}
 
-# CSME 15 (?) Revised Extension Modules
+# CSME 15 Revised Extension Modules
 ext_tag_rev_mod_csme15 = {0xF:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
 # CSSPS 5 Revised Extensions
@@ -7646,6 +7697,7 @@ for file_in in source :
 	no_man_text = 'NaN'
 	variant = 'Unknown'
 	variant_p = 'Unknown'
+	sku_result = 'Unknown'
 	pmc_date = 'Unknown'
 	me7_blist_1 = 'Empty'
 	me7_blist_2 = 'Empty'
@@ -7680,7 +7732,6 @@ for file_in in source :
 	fw_type_fix = False
 	is_patsburg = False
 	can_search_db = True
-	fpt_chk_null = False
 	fpt_chk_fail = False
 	cse_lt_exist = False
 	sps_opr_found = False
@@ -7694,6 +7745,7 @@ for file_in in source :
 	fd_bios_rgn_exist = False
 	fd_devexp_rgn_exist = False
 	rgn_over_extr_found = False
+	mfs_info = []
 	err_stor = []
 	note_stor = []
 	warn_stor = []
@@ -7760,6 +7812,7 @@ for file_in in source :
 	me_fd_start = -1
 	me_fd_size = -1
 	pmc_fw_rel = -1
+	pmc_pch_gen = -1
 	fpt_part_num = -1
 	fpt_chk_byte = -1
 	fpt_chk_start = -1
@@ -8450,31 +8503,6 @@ for file_in in source :
 		# Multiple Backup $FPT header bypass at SPS1/SPS4 (DFLT/FPTB)
 		if variant == 'CSSPS' or (variant,major) == ('SPS',1) and fpt_count % 2 == 0 : fpt_count /= 2
 		
-		# Check $FPT Checksum validity
-		fpt_chk_file = '0x%0.2X' % fpt_hdr.HeaderChecksum
-		chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_start + fpt_length]) - fpt_chk_byte
-		fpt_chk_calc = '0x%0.2X' % ((0x100 - chk_sum & 0xFF) & 0xFF)
-		if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
-		
-		# CSME12+, CSTXE and CSSPS 5+ EXTR checksum from FIT is a placeholder (0x00), ignore
-		if ((variant == 'CSME' and major >= 12) or variant == 'CSTXE' or (variant == 'CSSPS' and major >= 5)) and fpt_chk_file == '0x00' :
-			fpt_chk_null = True
-			fpt_chk_fail = False
-		
-		# Warn when $FPT Checksum is wrong
-		if fpt_chk_fail : warn_stor.append([col_m + 'Warning: Wrong $FPT Checksum %s, expected %s!' % (fpt_chk_file,fpt_chk_calc) + col_e, True])
-		
-		# Check SPS3 $FPT Checksum validity (from Lordkag's UEFIStrip)
-		if variant == 'SPS' and major == 3 :
-			sps3_chk_start = fpt_start + 0x30
-			sps3_chk_end = sps3_chk_start + fpt_part_num * 0x20
-			fpt_chk16 = sum(bytearray(reading[sps3_chk_start:sps3_chk_end])) & 0xFFFF
-			sps3_chk16 = ~fpt_chk16 & 0xFFFF
-			sps3_chk16_file = '0x%0.4X' % int.from_bytes(reading[sps3_chk_end:sps3_chk_end + 0x2], 'little')
-			sps3_chk16_calc = '0x%0.4X' % sps3_chk16
-			if sps3_chk16_calc != sps3_chk16_file:
-				warn_stor.append([col_m + 'Warning: Wrong $FPT SPS3 Checksum %s, expected %s!' % (sps3_chk16_file,sps3_chk16_calc) + col_e, True])
-		
 		# Last/Uncharted partition scanning inspired by Lordkag's UEFIStrip
 		# ME2-ME6 don't have size for last partition, scan its submodules
 		if p_end_last == p_max_size :
@@ -8738,8 +8766,12 @@ for file_in in source :
 				# Check 2, FOVD partition
 				if not fovd_clean('new') : fw_type = 'Region, Extracted'
 				
-				# Check 3, CSTXE FIT temporarily/placeholder $FPT Header and Checksum
+				# Check 3, CSTXE FIT placeholder $FPT Header entries
 				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] == b'\xFF' * 0x24 : fw_type = 'Region, Extracted'
+				
+				# Check 4, CSME 13+ FWUpdate EXTR has placeholder $FPT ROM-Bypass Vectors 0-3 (0xFF instead of 0x00 padding)
+				# If not enough (should be OK), MEA could further check if FTUP is empty and/or if PMCP & PCHC exist or not
+				if variant == 'CSME' and major >= 13 and reading[fpt_start:fpt_start + 0x10] == b'\xFF' * 0x10 : fw_type = 'Region, Extracted'
 			else :
 				# Get FIT/FITC version used to build the image
 				fitc_ver_found = True
@@ -8751,6 +8783,31 @@ for file_in in source :
 				
 	else :
 		fw_type = 'Update' # No Region detected, Update
+	
+	# Verify $FPT Checksums (must be after Firmware Type detection)
+	if rgn_exist :
+		# Check $FPT Checksum-8
+		fpt_chk_file = '0x%0.2X' % fpt_hdr.HeaderChecksum
+		fpt_chk_sum = sum(reading[fpt_start + fpt_chk_start:fpt_start + fpt_chk_start + fpt_length]) - fpt_chk_byte
+		fpt_chk_calc = '0x%0.2X' % ((0x100 - fpt_chk_sum & 0xFF) & 0xFF)
+		if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
+		
+		# CSME 12+, CSTXE and CSSPS 5+ EXTR $FPT Checksum is usually wrong (0x00 placeholder or same as in RGN), ignore
+		if fw_type == 'Region, Extracted' and ((variant == 'CSME' and major >= 12) or variant == 'CSTXE' or (variant == 'CSSPS' and major >= 5)) :
+			fpt_chk_fail = False
+		
+		# Warn when $FPT Checksum is wrong
+		if fpt_chk_fail : warn_stor.append([col_m + 'Warning: Wrong $FPT Checksum %s, expected %s!' % (fpt_chk_file,fpt_chk_calc) + col_e, True])
+		
+		# Check SPS 3 extra $FPT Checksum-16 (from Lordkag's UEFIStrip)
+		if variant == 'SPS' and major == 3 :
+			sps3_chk_start = fpt_start + 0x30
+			sps3_chk_end = sps3_chk_start + fpt_part_num * 0x20
+			sps3_chk16_file = '0x%0.4X' % int.from_bytes(reading[sps3_chk_end:sps3_chk_end + 0x2], 'little')
+			sps3_chk16_sum = sum(bytearray(reading[sps3_chk_start:sps3_chk_end])) & 0xFFFF
+			sps3_chk16_calc = '0x%0.4X' % (~sps3_chk16_sum & 0xFFFF)
+			if sps3_chk16_calc != sps3_chk16_file:
+				warn_stor.append([col_m + 'Warning: Wrong $FPT SPS3 Checksum %s, expected %s!' % (sps3_chk16_file,sps3_chk16_calc) + col_e, True])
 	
 	# Check for Fujitsu UMEM ME Region (RGN/$FPT or UPD/$MN2)
 	if (fd_me_rgn_exist and reading[me_fd_start:me_fd_start + 0x4] == b'\x55\x4D\xC9\x4D') or (reading[:0x4] == b'\x55\x4D\xC9\x4D') :
@@ -9185,29 +9242,23 @@ for file_in in source :
 			if minor == 0 : platform = 'WPT-LP'
 	
 	elif variant == 'CSME' : # Converged Security Management Engine
-		# Firmware Extraction for all CSME
+		
+		# Firmware Unpacking for all CSME
 		if param.me11_mod_extr :
 			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 			continue # Next input file
 		
-		# Set CSE File System Configuration State (must be before ext_anl)
-		try :
-			if mfs_found and not param.me11_mod_extr :
-				mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant) # Get MFS Attributes
-				
-				# MFS exists, determine its state
-				if 8 in mfs_parsed_idx : mfs_state = 'Initialized'
-				elif 7 in mfs_parsed_idx : mfs_state = 'Configured'
-		except :
-			# MFS analysis failed, maybe corrupted
-			mfs_state = col_r + 'Error' + col_e
-			
+		# Get CSE File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
+		
+		# Get CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs]) # Get CSE Attributes (must be after MFS)
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
 		
-		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured' # MFS missing, determine state via FTPR > fitc.cfg (must be after ext_anl)
+		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
+		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured'
 		
-		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
+		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
 		# Set SKU Type via Extension 0xC Attributes
 		if fw_0C_sku1 == 0 : # 0 Corporate/Intel (1272K MFS)
@@ -9233,10 +9284,14 @@ for file_in in source :
 		elif pch_init_final and '-H' in pch_init_final[-1][0] : pos_sku_tbl = 'H'
 		elif pch_init_final and '-N' in pch_init_final[-1][0] : pos_sku_tbl = 'N'
 		
-		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
+		db_sku_chk,sku,sku_stp,sku_pdm = get_cse_db(variant) # Get CSE SKU info from DB
 		
 		# Fix Release of PRE firmware which are wrongly reported as PRD
 		release, rel_db = release_fix(release, rel_db, rsa_key_hash)
+		
+		# Detected stitched PMC firmware
+		if pmcp_found :
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
 		
 		if major == 11 :
 			
@@ -9278,12 +9333,9 @@ for file_in in source :
 			# Store final SKU result (CSME 11 only)
 			if ' LP' in sku : sku_result = 'LP'
 			elif ' H' in sku : sku_result = 'H'
-			else : sku_result = 'UNK'
 			
 			# Set PCH/SoC Stepping, if not found at DB
 			if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
-			
-			sku_db, upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
 			
 			# Adjust PCH Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'SPT' # Sunrise Point
@@ -9291,7 +9343,7 @@ for file_in in source :
 			elif minor in [10,11] and not pch_init_final : platform = 'BSF' # Basin Falls
 			elif minor in [20,21,22] and not pch_init_final : platform = 'LBG' # Lewisburg
 			
-			if minor in [0,5,6,7,10,20,21] : upd_found = True
+			if minor in [0,5,6,7,10,20,21] : upd_found = True # INTEL-SA-00086
 			
 			# Power Down Mitigation (PDM) is a SPT-LP C erratum, first fixed at ~11.0.0.1183
 			# Hardcoded in FTPR > BUP, Huffman decompression required to detect NPDM or YPDM
@@ -9323,104 +9375,44 @@ for file_in in source :
 		
 		elif major == 12 :
 			
-			# Detect SKU Platform, prefer DB over Extension
-			if sku != 'NaN' :
-				sku_result = db_sku_chk # SKU Platform retrieved from DB (Override)
-			elif pos_sku_tbl != 'Unknown' :
-				sku_result = pos_sku_tbl # SKU Platform retrieved from MFS (Best)
-			else :
-				sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
-				
-				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				if sku_result == 'H' :
-					sku_result = ['H','H','LP','LP'][int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
-					warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+			# Get Final SKU, SKU Platform, SKU Stepping
+			sku,sku_result,sku_stp = get_csme_sku(sku_init, fw_0C_sku0, ['H','H','LP','LP'], sku, sku_stp, db_sku_chk, pos_sku_tbl, pos_sku_ext, pch_init_final)
 			
-			sku = sku_init + ' ' + sku_result
+			# Verify PMC compatibility
+			if pmcp_found and pmc_pch_gen == 300 : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [300], pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
 			
-			# Set PCH/SoC Stepping, if not found at DB
-			if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
-			
-			# Detected stitched PMC firmware
-			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
-				
-				# Verify FTPR & PMC compatibility (PCH & SKU)
-				if pmc_pch_gen < 300 or pmc_fw_rel == 0 :
-					pass # Old CNP 300-series PMC versioning
-				elif pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
-					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
-			
-			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
-			
-			# Adjust PCH Platform via Minor version
+			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'CNP' # Cannon Point
 			
 		elif major == 13 :
 			
-			# Detect SKU Platform, prefer DB over Extension
-			if sku != 'NaN' :
-				sku_result = db_sku_chk # SKU Platform retrieved from DB (Override)
-			elif pos_sku_tbl != 'Unknown' :
-				sku_result = pos_sku_tbl # SKU Platform retrieved from MFS (Best)
-			else :
-				sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
-				
-				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				if sku_result == 'H' :
-					sku_result = ['H','H','LP','H'][int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
-					warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+			# Get Final SKU, SKU Platform, SKU Stepping
+			sku,sku_result,sku_stp = get_csme_sku(sku_init, fw_0C_sku0, ['H','H','LP','H'], sku, sku_stp, db_sku_chk, pos_sku_tbl, pos_sku_ext, pch_init_final)
 			
-			sku = sku_init + ' ' + sku_result
+			# Verify PMC compatibility
+			if pmcp_found : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [400,130], pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
 			
-			# Set PCH/SoC Stepping, if not found at DB
-			if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
-			
-			# Detected stitched PMC firmware
-			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
-				
-				# Verify FTPR & PMC compatibility (PCH & SKU)
-				if pmc_mn2_signed != release or pmc_pch_gen not in (400,130) or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
-					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
-			
-			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
-			
-			# Adjust PCH Platform via Minor version
+			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'ICP' # Ice Point
 			
 		elif major == 14 :
 			
-			# Detect SKU Platform, prefer DB over Extension
-			if sku != 'NaN' :
-				sku_result = db_sku_chk # SKU Platform retrieved from DB (Override)
-			elif pos_sku_tbl != 'Unknown' :
-				sku_result = pos_sku_tbl # SKU Platform retrieved from MFS (Best)
-			else :
-				sku_result = pos_sku_ext # SKU Platform "retrieved" from Extension 12 (Worst, always 0/H, STOP regressing Intel!)
-				
-				# Since Extension 12 is completely unreliable (thx Intel), try to manually guess based on SKU Capabilities
-				if sku_result == 'H' :
-					sku_result = ['H','H','LP','H'][int('{0:032b}'.format(fw_0C_sku0)[22:24], 2)]
-					warn_stor.append([col_m + 'Warning: The detected SKU Platform may be unreliable!' + col_e, True])
+			# Get Final SKU, SKU Platform, SKU Stepping
+			sku,sku_result,sku_stp = get_csme_sku(sku_init, fw_0C_sku0, ['H','H','LP','H'], sku, sku_stp, db_sku_chk, pos_sku_tbl, pos_sku_ext, pch_init_final)
 			
-			sku = sku_init + ' ' + sku_result
+			# Verify PMC compatibility
+			if pmcp_found : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [140], pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
 			
-			# Set PCH/SoC Stepping, if not found at DB
-			if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
-			
-			# Detected stitched PMC firmware
-			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
-				
-				# Verify FTPR & PMC compatibility (PCH & SKU)
-				if pmc_mn2_signed != release or pmc_pch_gen != 140 or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
-					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
-			
-			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False) # Store DB SKU and check Latest version
-			
-			# Adjust PCH Platform via Minor version
+			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'CMP' # Comet Point
+			
+		elif major == 15 :
+			
+			# Adjust PCH/SoC Platform via Minor version
+			if minor == 0 and not pch_init_final : platform = 'TGP' # Tiger Point
+			
+		# Get DB SKU and check for Latest status (must be after CSME 11 due to INTEL-SA-00086)
+		sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
 	
 	elif variant == 'TXE' : # Trusted Execution Engine
 		
@@ -9468,35 +9460,33 @@ for file_in in source :
 		if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 	
 	elif variant == 'CSTXE' : # Converged Security Trusted Execution Engine
-		# Firmware Extraction for all CSTXE
+		
+		# Firmware Unpacking for all CSTXE
 		if param.me11_mod_extr :
 			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 			continue # Next input file
 		
-		# Set CSE File System Configuration State (must be before ext_anl)
-		try :
-			if mfs_found and not param.me11_mod_extr :
-				mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant) # Get MFS Attributes
-				
-				# MFS exists, determine its state
-				if 8 in mfs_parsed_idx : mfs_state = 'Initialized'
-				elif 7 in mfs_parsed_idx : mfs_state = 'Configured'
-		except :
-			# MFS analysis failed, maybe corrupted
-			mfs_state = col_r + 'Error' + col_e
+		# Get CSE File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
 		
+		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs]) # Detect CSE Attributes (must be after MFS)
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
 		
-		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured' # MFS missing, determine via FTPR > fitc.cfg (must be after ext_anl)
+		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
+		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured'
 		
-		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
+		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
-		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
+		db_sku_chk,sku,sku_stp,sku_pdm = get_cse_db(variant) # Get CSE SKU info from DB
 		
 		# Fix Release of PRE firmware which are wrongly reported as PRD
 		release, rel_db = release_fix(release, rel_db, rsa_key_hash)
-			
+		
+		# Detected stitched PMC firmware
+		if pmcp_found :				
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
+		
 		if major == 3 :
 			
 			if minor in [0,1] :
@@ -9506,18 +9496,18 @@ for file_in in source :
 					if release == 'Production' : sku_stp = 'B' # PRD
 					else : sku_stp = 'A' # PRE, BYP
 					
-				platform = 'APL'
+				platform = 'APL' # Apollo Lake
 				
-			elif minor in [2,3] :
+			elif minor == 2 :
 				
 				# Adjust SoC Stepping if not from DB
 				if sku_stp == 'NaN' :
 					if release == 'Production' : sku_stp = 'C' # PRD (Joule_C0-X64-Release)
 					else : sku_stp = 'A' # PRE, BYP
 					
-				platform = 'BXT' # Joule (Broxton)
+				platform = 'BXT' # Broxton (Joule)
 					
-			if minor in [0,2] : upd_found = True # INTEL-SA-00086
+			if minor == 0 : upd_found = True # INTEL-SA-00086
 			
 		elif major == 4 :
 			
@@ -9531,13 +9521,10 @@ for file_in in source :
 				platform = 'GLK'
 		
 		# Detected stitched PMC firmware
-		if pmcp_found :				
-			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
+		if pmcp_found : pmc_chk(pmc_mn2_signed, release, -1, [-1], 'N/A', 'N/A', sku_stp, pmc_pch_rev, pmc_platform)
 			
-			if pmc_mn2_signed != release or pmc_platform != platform or (sku_stp != 'NaN' and pmc_pch_rev != sku_stp) :
-				warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
-			
-		sku_db, upd_found = sku_db_upd_cse('', '', sku_stp, upd_found, True) # Store DB SKU and check Latest version
+		# Get DB SKU and check for Latest status (must be after CSTXE 3 due to INTEL-SA-00086)
+		sku_db,upd_found = sku_db_upd_cse('', '', sku_stp, upd_found, True)
 			
 	elif variant == 'SPS' : # Server Platform Services
 		
@@ -9567,31 +9554,24 @@ for file_in in source :
 
 	elif variant == 'CSSPS' : # Converged Security Server Platform Services
 		
-		# Firmware Extraction for all CSSPS
+		# Firmware Unpacking for all CSSPS
 		if param.me11_mod_extr :
 			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 			continue # Next input file
 		
-		# Set CSE File System Configuration State (must be before ext_anl)
-		try :
-			if mfs_found and not param.me11_mod_extr :
-				mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant) # Get MFS Attributes
-				
-				# MFS exists, determine its state
-				if 8 in mfs_parsed_idx : mfs_state = 'Initialized'
-				elif 7 in mfs_parsed_idx : mfs_state = 'Configured'
-		except :
-			# MFS analysis failed, maybe corrupted
-			mfs_state = col_r + 'Error' + col_e
+		# Get CSE File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
 		
+		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs]) # Detect CSE Attributes (must be after MFS)
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
 		
-		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured' # MFS missing, determine via FTPR > fitc.cfg (must be after ext_anl)
+		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
+		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured'
 		
-		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # SKU Capabilities, SKU Type, HEDT Support, SKU Platform
+		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
-		db_sku_chk,sku,sku_stp,sku_pdm = db_skl(variant) # Retrieve SKU & Rev from DB
+		db_sku_chk,sku,sku_stp,sku_pdm = get_cse_db(variant) # Get CSE SKU info from DB
 		
 		# Set PCH/SoC Stepping, if not found at DB
 		if sku_stp == 'NaN' and pch_init_final : sku_stp = pch_init_final[-1][1]
@@ -9613,29 +9593,30 @@ for file_in in source :
 		elif pch_init_final : platform = pch_init_final[0][0] # Chipset Platform via MFS Intel PCH Initialization Table
 		else : platform = 'Unknown' # Chipset Platform is Unknown
 		
+		# Detected stitched PMC firmware
+		if pmcp_found :
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
+		
 		if major == 4 :
-			if platform == 'Unknown' : platform = 'SPT-H'
+			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
 		
 		elif major == 5 :
-			# Detected stitched PMC firmware
-			if pmcp_found :
-				pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
-				
-				# Verify OPR & PMC compatibility
-				if pmc_mn2_signed != release or pmc_pch_gen != 300 or pmc_pch_sku != 'H' :
-					warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
+			
+			# Verify PMC compatibility
+			if pmcp_found : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [300], pmc_pch_sku, 'H', sku_stp, pmc_pch_rev, pmc_platform) 
 					
-			if platform == 'Unknown' : platform = 'CNP-H'
+			if platform == 'Unknown' : platform = 'CNP-H' # Cannon Point
 	
 	elif variant.startswith('PMC') : # Power Management Controller
 		
-		# Firmware Extraction for all PMC
+		# Firmware Unpacking for all PMC
 		if param.me11_mod_extr :
 			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail)
 			continue # Next input file
 		
+		# Detect CSE Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None, [[],'']) # Detect CSE Attributes
+		= ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None, [[],''])
 		
 		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(cpd_mn2_info)
 		
@@ -9646,7 +9627,7 @@ for file_in in source :
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
-		if (platform,major) in [('CNP',300),('ICP',400),('ICP',130),('CMP',140)] : hotfix = '%0.2d' % hotfix
+		if major >= 130 : hotfix = '%0.2d' % hotfix
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PMC firmware size
 		
@@ -9682,12 +9663,12 @@ for file_in in source :
 	elif variant == 'SPS' :
 		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
-	elif (variant,major) in [('PMCCNP',300),('PMCICP',400),('PMCICP',130),('PMCCMP',140)] : # PMC CNP A/B, ICP, CMP
-		name_db = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db)
-	elif variant.startswith('PMC') : # PMC APL A/B, BXT C, GLK A/B, CNP A
+	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCCNP')) and major < 130 : # PMC APL A/B, BXT C, GLK A/B, CNP A
 		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db)
+	elif variant.startswith('PMC') : # PMC CNP A/B, ICP, CMP
+		name_db = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
+		name_db_p = '%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db)
 	elif variant == 'CSME' and major >= 12 and type_db == 'EXTR' and sku_db.startswith('COR') :
 		name_db = '%s_%s_%s_%s-%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, ['N','Y'][int(fwu_iup_exist)], rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s-%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, ['N','Y'][int(fwu_iup_exist)])
@@ -9723,7 +9704,7 @@ for file_in in source :
 	
 	# Check if firmware is updated, Production only
 	if release == 'Production' and not wcod_found : # Does not display if firmware is non-Production or Partial Update
-		if variant in ['ME','CSME','TXE','CSTXE','PMCCNP','PMCCMP'] : # CS(SPS) excluded
+		if not variant.startswith(('SPS','CSSPS','PMCAPL','PMCBXT','PMCGLK')) : # (CS)SPS and old PMC excluded
 			if upd_found : upd_rslt = col_r + 'No' + col_e
 			elif not upd_found : upd_rslt = col_g + 'Yes' + col_e
 	
@@ -9755,8 +9736,8 @@ for file_in in source :
 		msg_pt.add_row(['Release', release + ', Engineering ' if build >= 7000 else release])
 		msg_pt.add_row(['Type', fw_type])
 		
-		if (variant == 'CSTXE' and 'Unknown' not in sku) or ((variant,sku) == ('SPS','NaN')) or (variant.startswith('PMC')
-		and variant != 'PMCCNP' and variant != 'PMCICP' and variant != 'PMCCMP') or wcod_found :
+		if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') or wcod_found \
+		or variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) :
 			pass
 		else :
 			msg_pt.add_row(['SKU', sku])
@@ -9824,7 +9805,7 @@ for file_in in source :
 			msg_pmc_pt.add_row(['Version', pmc_fw_ver])
 			msg_pmc_pt.add_row(['Release', pmc_mn2_signed + ', Engineering ' if pmc_fw_rel >= 7000 else pmc_mn2_signed])
 			msg_pmc_pt.add_row(['Type', 'Independent'])
-			if variant in ('PMCCNP','PMCICP','PMCCMP') or (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) :
+			if (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) or not pmc_platform.startswith(('APL','BXT','GLK')) :
 				msg_pmc_pt.add_row(['Chipset SKU', pmc_pch_sku])
 			msg_pmc_pt.add_row(['Chipset Stepping', pmc_pch_rev[0]])
 			msg_pmc_pt.add_row(['TCB Security Version Number', pmc_svn])

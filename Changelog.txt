@@ -1,3 +1,18 @@
+v1.96.0
+
+Fixed PMC ICP Latest status display
+Fixed CSTXE 3.2 Latest status display
+Fixed CSME 13 & 14 RGN/EXTR detection
+Various CSE code cleanup improvements
+
+r175
+
+CSME 14.0.0.1061_CON_LP_X_PRD_RGN
+CSME 13.0.0.1085_CON_LP_X_PRD_EXTR
+CSME 12.0.45.1509_CON_H_BA_PRD_EXTR
+CSME 11.8.65.3606_CON_H_DA_PRD_RGN
+PMC ICP_130.1.30.1040_LP_D_PRD
+
 v1.95.0
 
 Added CSE Extension 23 initial detection
