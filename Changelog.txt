@@ -1,3 +1,8 @@
+v1.96.2
+
+Fixed CSME 11 SKU detection bug
+Fixed Flash Descriptor detection
+
 v1.96.0
 
 Fixed PMC ICP Latest status display

@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.96.0'
+title = 'ME Analyzer v1.96.2'
 
 import os
 import re
@@ -7042,6 +7042,7 @@ def check_upd(key) :
 def spi_fd_init() :
 	# Search for Flash Descriptor pattern (PCH/ICH)
 	fd_match = list(re.compile(br'\x5A\xA5\xF0\x0F.{172}\xFF{16}', re.DOTALL).finditer(reading)) # Z¥π. + [0xAC] + 0xFF * 16 detection
+	fd_count = len(fd_match)
 	
 	# Detected Flash Descriptor, use first but notify if more exist
 	if fd_match :
@@ -7055,7 +7056,11 @@ def spi_fd_init() :
 			start_substruct = 0x0
 			end_substruct = 0xBC - 0x10 # 0xBC for [0xAC] + 0xFF * 16 sanity check, 0x10 extra before ICH FD Regions
 		
-		return True, fd_match[0].start() - start_substruct, fd_match[0].end() - end_substruct, len(fd_match)
+		# Do not notify for OEM Backup Flash Descriptors within the chosen/first Flash Descriptor
+		for match in fd_match[1:] :
+			if fd_match[0].start() < match.start() <= fd_match[0].start() + 0x1000 : fd_count -= 1
+		
+		return True, fd_match[0].start() - start_substruct, fd_match[0].end() - end_substruct, fd_count
 	
 	else :
 		return False, 0, 0, 0
@@ -7499,7 +7504,7 @@ key_dict = {
 			8 : 'USB Type C TBT', # USB Type C Thunderbolt
 			9 : 'WCOD', # Wireless Microcode
 			10 : 'LOCL', # AMT Localization
-			11 : 'Unlock Token',
+			11 : 'Intel Unlock Token',
 			13 : 'USB Type C D-PHY',
 			14 : 'PCH Configuration',
 			16 : 'Intel ISI',
@@ -7515,7 +7520,7 @@ key_dict = {
 			40 : 'OEM SMIP', # Signed Master Image Profile
 			41 : 'ISH Main', # Integrated Sensor Hub
 			42 : 'ISH BUP',
-			43 : 'OEM Debug Token',
+			43 : 'OEM Unlock Token',
 			44 : 'OEM Life Cycle',
 			45 : 'OEM Key',
 			46 : 'SilentLake VMM',
@@ -9343,6 +9348,9 @@ for file_in in source :
 			elif minor in [10,11] and not pch_init_final : platform = 'BSF' # Basin Falls
 			elif minor in [20,21,22] and not pch_init_final : platform = 'LBG' # Lewisburg
 			
+			# Get DB SKU and check for Latest status (must be before sku_pdm)
+			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
+			
 			if minor in [0,5,6,7,10,20,21] : upd_found = True # INTEL-SA-00086
 			
 			# Power Down Mitigation (PDM) is a SPT-LP C erratum, first fixed at ~11.0.0.1183
@@ -9371,7 +9379,7 @@ for file_in in source :
 				elif sku_pdm == 'UPDM2' : pdm_status = 'Unknown 2'
 				else : pdm_status = 'Unknown'
 				
-				sku_db += '_%s' % sku_pdm
+				sku_db += '_%s' % sku_pdm # Must be after sku_db_upd_cse
 		
 		elif major == 12 :
 			
@@ -9380,6 +9388,9 @@ for file_in in source :
 			
 			# Verify PMC compatibility
 			if pmcp_found and pmc_pch_gen == 300 : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [300], pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
+			
+			# Get DB SKU and check for Latest status
+			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
 			
 			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'CNP' # Cannon Point
@@ -9392,6 +9403,9 @@ for file_in in source :
 			# Verify PMC compatibility
 			if pmcp_found : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [400,130], pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
 			
+			# Get DB SKU and check for Latest status
+			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
+			
 			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'ICP' # Ice Point
 			
@@ -9403,6 +9417,9 @@ for file_in in source :
 			# Verify PMC compatibility
 			if pmcp_found : pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, [140], pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
 			
+			# Get DB SKU and check for Latest status
+			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
+			
 			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'CMP' # Comet Point
 			
@@ -9410,9 +9427,6 @@ for file_in in source :
 			
 			# Adjust PCH/SoC Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'TGP' # Tiger Point
-			
-		# Get DB SKU and check for Latest status (must be after CSME 11 due to INTEL-SA-00086)
-		sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
 	
 	elif variant == 'TXE' : # Trusted Execution Engine
 		
