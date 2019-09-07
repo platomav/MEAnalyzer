@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.96.2'
+title = 'ME Analyzer v1.96.3'
 
 import os
 import re
@@ -6444,8 +6444,8 @@ def pch_init_anl(pch_init_info) :
 	
 # Analyze CSE PMC firmware
 def pmc_anl(mn2_info) :
-	pmc_pch_sku = 'N/A'
-	pmc_pch_rev = 'N/A'
+	pmc_pch_sku = 'Unknown'
+	pmc_pch_rev = 'Unknown'
 	pmc_platform = 'Unknown'
 	pmcp_upd_found = False
 	pch_sku_val = {1: 'LP', 2: 'H'}
@@ -6492,7 +6492,8 @@ def pmc_anl(mn2_info) :
 			# CSME < 12.0.0.1033 --> 01.7.0.1022 = PCH Stepping A1 + PMC Hotfix 7 + PCH-H + PMC Build 1022 (Guess)
 			# CSME < 12.0.0.1033 --> 10.0.2.1021 = PCH Stepping B0 + PMC Hotfix 0 + PCH-LP + PMC Build 1021 (Guess)
 			if mn2_info[2] in pch_sku_old : pmc_pch_sku = pch_sku_old[mn2_info[2]] # 0 H, 2 LP
-			pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[0] // 10], mn2_info[0] % 10) # 00 = PCH A0, 10 = PCH B0, 21 = PCH C1 etc
+			try : pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[0] // 10], mn2_info[0] % 10) # 00 = PCH A0, 10 = PCH B0, 21 = PCH C1 etc
+			except : pass # Do not crash at any weird alpha CNP A Major/PCH numbers such as 3232 or similar 
 		
 		# Check if PMCCNP firmware is the latest
 		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCNP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
@@ -6515,7 +6516,7 @@ def pmc_anl(mn2_info) :
 	pmc_mn2_signed, pmc_mn2_signed_db = release_fix(pmc_mn2_signed, pmc_mn2_signed_db, mn2_info[5])
 	
 	if pmc_platform in ('CNP','ICP','CMP') :
-		if mn2_info[0] < 130 :
+		if mn2_info[0] < 130 or mn2_info[0] == 3232 :
 			pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 			pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform, pmc_fw_ver, pmc_pch_sku, pmc_pch_rev[0], mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
 		else :
@@ -7104,6 +7105,10 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 def fw_ver(major,minor,hotfix,build) :
 	if variant in ['SPS','CSSPS'] :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
+	elif variant.startswith('PMCCNP') and (major < 130 or major == 3232) :
+		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
+	elif variant.startswith('PMC') :
+		version = '%s.%s.%s.%s' % (major, minor, '{0:02d}'.format(hotfix), build)
 	else :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
 	
@@ -7290,7 +7295,7 @@ def get_variant() :
 	fw_db.close()
 	
 	# Variant DB RSA Public Key not found, manual known correction
-	if variant == 'TBD4' and major == 300 : variant = 'PMCCNP'
+	if variant == 'TBD4' and major in (300,3232) : variant = 'PMCCNP'
 	elif variant == 'TBD4' and major == 140 : variant = 'PMCCMP'
 	elif variant == 'TBD3' and major in (12,13,14) : variant = 'CSME'
 	elif variant == 'TBD3' and major in (400,130) : variant = 'PMCICP'
@@ -7314,14 +7319,14 @@ def get_variant() :
 				elif mod in ['bup_rcv', 'sku_mgr'] :
 					variant = 'CSSPS'
 					break
+				elif mod == 'PMCC000' and (major in (300,3232) or major < 130) : # 0 CNP
+					variant = 'PMCCNP'
+					break
 				elif mod == 'PMCC000' and major in (400,130) : # 0 ICP
 					variant = 'PMCICP'
 					break
 				elif mod == 'PMCC000' and major == 140 : # 0 CMP
 					variant = 'PMCCMP'
-					break
-				elif mod == 'PMCC000' and major <= 300 : # 0 CNP
-					variant = 'PMCCNP'
 					break
 				elif mod == 'PMCC002' : # 2 APL A
 					variant = 'PMCAPLA'
@@ -9641,7 +9646,6 @@ for file_in in source :
 		sku_db = '%s_%s' % (sku, sku_stp)
 		platform = pmc_platform
 		fw_type = 'Independent'
-		if major >= 130 : hotfix = '%0.2d' % hotfix
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PMC firmware size
 		
@@ -9677,9 +9681,12 @@ for file_in in source :
 	elif variant == 'SPS' :
 		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
-	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCCNP')) and major < 130 : # PMC APL A/B, BXT C, GLK A/B, CNP A
+	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
 		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db)
+	elif variant.startswith('PMCCNP') and (major < 130 or major == 3232) : # PMC CNP A
+		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, date, rel_db, rsa_sig_hash)
+		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, date, rel_db)
 	elif variant.startswith('PMC') : # PMC CNP A/B, ICP, CMP
 		name_db = '%s_%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s' % (pmc_platform, fw_ver(major,minor,hotfix,build), sku_db, rel_db)

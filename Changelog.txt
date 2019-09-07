@@ -1,3 +1,11 @@
+v1.96.3
+
+Fixed early PMC CNP detection
+
+r176
+
+Improvements
+
 v1.96.2
 
 Fixed CSME 11 SKU detection bug

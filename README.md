@@ -128,6 +128,10 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 
 At dist folder you should find the final MEA executable
 
+#### **C4. Anti-Virus False Positives**
+
+Some Anti-Virus software may claim that the built/frozen/compiled MEA executable contains viruses. Any such detections are false positives, usually of PyInstaller. You can switch to a better Anti-Virus software, report the false positive to their support, add the MEA executable to the exclusions, build/freeze/compile MEA yourself or use the Python script directly.
+
 ## **D. Pictures**
 
 **Note:** Some pictures are outdated and depict older ME Analyzer versions.
