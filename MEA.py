@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2019 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.96.3'
+title = 'ME Analyzer v1.96.4'
 
 import os
 import re
@@ -6443,20 +6443,40 @@ def pch_init_anl(pch_init_info) :
 	return pch_init_final
 	
 # Analyze CSE PMC firmware
-def pmc_anl(mn2_info) :
+def pmc_anl(mn2_info, cpd_mod_info) :
+	pmc_variant = 'Unknown'
 	pmc_pch_sku = 'Unknown'
 	pmc_pch_rev = 'Unknown'
 	pmc_platform = 'Unknown'
 	pmcp_upd_found = False
 	pch_sku_val = {1: 'LP', 2: 'H'}
 	pch_sku_old = {0: 'H', 2: 'LP'}
+	pmc_variants = {2: 'PMCAPLA', 3: 'PMCAPLB', 4: 'PMCGLKA', 5: 'PMCBXTC', 6: 'PMCGLKB'}
 	pch_rev_val = {0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E', 5: 'F', 6: 'G', 7: 'H', 8: 'I', 9: 'J'}
 	
 	# mn2_info = [Major/PCH, Minor/SKU, Hotfix/Compatibility-Maintenance, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit]
 	
 	# $MN2 Manifest SVN = CSE_Ext_0F ARBSVN. The value is used for Anti-Rollback (ARB) and not Trusted Computing Base (TCB) purposes.
 	
-	if variant == 'PMCCMP' or (variant,major) in [('CSME',14)] :
+	# Detect PMC Variant from $CPD Module Names and/or Major Version
+	for mod in cpd_mod_info :
+		if mod[0].startswith('PMCC00') :
+			pmcc_version = int(mod[0][-1], 16) # PMCC006 = PMC GLK B etc
+			
+			# Remember to also adjust get_variant for PMC Variants
+			
+			if pmcc_version in pmc_variants :
+				pmc_variant = pmc_variants[pmcc_version]
+			elif pmcc_version == 0 and (mn2_info[0] in (300,3232) or mn2_info[0] < 130) : # 0 CNP
+				pmc_variant = 'PMCCNP'
+			elif pmcc_version == 0 and mn2_info[0] in (400,130) : # 0 ICP
+				pmc_variant = 'PMCICP'
+			elif pmcc_version == 0 and mn2_info[0] == 140 : # 0 CMP
+				pmc_variant = 'PMCCMP'
+			
+			break # Found PMC Code Module, skip the rest
+	
+	if pmc_variant == 'PMCCMP' :
 		pmc_platform = 'CMP'
 		
 		if mn2_info[0] == 140 :
@@ -6468,7 +6488,7 @@ def pmc_anl(mn2_info) :
 		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCMP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
 		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
 	
-	elif variant == 'PMCICP' or (variant,major) in [('CSME',13)] :
+	elif pmc_variant == 'PMCICP' :
 		pmc_platform = 'ICP'
 		
 		if mn2_info[0] in (400,130) :
@@ -6480,7 +6500,7 @@ def pmc_anl(mn2_info) :
 		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCICP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
 		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
 	
-	elif variant == 'PMCCNP' or (variant,major) in [('CSME',12),('CSSPS',5)] :
+	elif pmc_variant == 'PMCCNP' :
 		pmc_platform = 'CNP'
 		
 		if mn2_info[0] == 300 :
@@ -6499,15 +6519,9 @@ def pmc_anl(mn2_info) :
 		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCCNP_%s_%s' % (pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
 		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
 			
-	elif variant.startswith('PMCAPL') or (variant == 'CSTXE' and major == 3 and minor in [0,1]) :
-		pmc_platform = 'APL'
-		pmc_pch_rev = sku_stp if variant == 'CSTXE' else variant[-1]
-	elif variant.startswith('PMCBXT') or (variant == 'CSTXE' and major == 3 and minor == 2) :
-		pmc_platform = 'BXT'
-		pmc_pch_rev = sku_stp if variant == 'CSTXE' else variant[-1]
-	elif variant.startswith('PMCGLK') or (variant == 'CSTXE' and major == 4) :
-		pmc_platform = 'GLK'
-		pmc_pch_rev = sku_stp if variant == 'CSTXE' else variant[-1]
+	elif pmc_variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) :
+		pmc_platform = pmc_variant[3:6]
+		pmc_pch_rev = pmc_variant[-1]
 	
 	pmc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
 	pmc_mn2_signed_db = 'PRD' if pmc_mn2_signed == 'Production' else 'PRE'
@@ -7105,6 +7119,8 @@ def spi_fd(action,start_fd_match,end_fd_match) :
 def fw_ver(major,minor,hotfix,build) :
 	if variant in ['SPS','CSSPS'] :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
+	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) :
+		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
 	elif variant.startswith('PMCCNP') and (major < 130 or major == 3232) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
 	elif variant.startswith('PMC') :
@@ -7310,6 +7326,8 @@ def get_variant() :
 		
 		# Get CSE $CPD Module Names only for targeted variant detection via special ext_anl _Stage1 mode
 		cpd_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', major, minor, hotfix, build], None, [[],''])
+		
+		# Remember to also adjust pmc_anl for PMC Variants
 		
 		if cpd_mod_names :
 			for mod in cpd_mod_names :
@@ -7727,6 +7745,7 @@ for file_in in source :
 	bpdt_hdr = None
 	byp_match = None
 	pmc_mn2_ver = None
+	pmc_mod_attr = None
 	fpt_pre_hdr = None
 	mfs_parsed_idx = None
 	intel_cfg_hash_mfs = None
@@ -8211,7 +8230,7 @@ for file_in in source :
 				pmcp_fwu_found = True # CSME12+ FWUpdate tool requires PMC
 				pmcp_size = p_size
 				
-				x0,x1,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['CSME', -1, -1, -1, -1], None, [[],''])
+				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['CSME', -1, -1, -1, -1], None, [[],''])
 				
 			# Detect if firmware has CSE File System Partition
 			if p_name in ('MFS','AFSP') and not p_empty :
@@ -8348,8 +8367,8 @@ for file_in in source :
 				pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
 				pmcp_size = p_size
 				
-				x0,x1,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['CSME', -1, -1, -1, -1], None, [[],''])
-			
+				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['CSME', -1, -1, -1, -1], None, [[],''])				
+				
 			# Detect if IFWI Primary has CSE File System Partition (Not POR, just in case)
 			if p_name in ('MFS','AFSP') and not p_empty :
 				mfs_found = True
@@ -8409,7 +8428,7 @@ for file_in in source :
 						pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
 						pmcp_size = s_p_size
 						
-						x0,x1,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['CSME', -1, -1, -1, -1], None, [[],''])
+						x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['CSME', -1, -1, -1, -1], None, [[],''])
 					
 					# Detect if IFWI Secondary has CSE File System Partition (Not POR, just in case)
 					if s_p_name in ('MFS','AFSP') and not s_p_empty :
@@ -9301,7 +9320,7 @@ for file_in in source :
 		
 		# Detected stitched PMC firmware
 		if pmcp_found :
-			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver, pmc_mod_attr)
 		
 		if major == 11 :
 			
@@ -9504,7 +9523,7 @@ for file_in in source :
 		
 		# Detected stitched PMC firmware
 		if pmcp_found :				
-			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver, pmc_mod_attr)
 		
 		if major == 3 :
 			
@@ -9614,7 +9633,7 @@ for file_in in source :
 		
 		# Detected stitched PMC firmware
 		if pmcp_found :
-			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver)
+			pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(pmc_mn2_ver, pmc_mod_attr)
 		
 		if major == 4 :
 			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
@@ -9637,7 +9656,7 @@ for file_in in source :
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
 		= ext_anl(reading, '$CPD', 0, file_end, ['NaN', -1, -1, -1, -1], None, [[],''])
 		
-		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(cpd_mn2_info)
+		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(cpd_mn2_info, cpd_mod_attr)
 		
 		sku = pmc_pch_sku
 		sku_stp = pmc_pch_rev[0]
