@@ -39,7 +39,7 @@ col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
 mea_os = sys.platform
 if mea_os == 'win32' :
 	cl_wipe = 'cls'
-elif mea_os.startswith('linux') or mea_os == 'darwin' :
+elif mea_os.startswith('linux') or mea_os.startswith('freebsd') or mea_os == 'darwin' :
 	cl_wipe = 'clear'
 else :
 	print(col_r + '\nError: Unsupported platform "%s"!\n' % mea_os + col_e)
