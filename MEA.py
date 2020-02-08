@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.100.0'
+title = 'ME Analyzer v1.101.0'
 
 import os
 import re
@@ -4531,7 +4531,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	rbe_pm_met_hashes = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
-	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
+	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
 	
 	# Create main Firmware Extraction Directory
 	fw_name = 'Unpacked_' + os.path.basename(file_in)
@@ -5818,7 +5818,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 				info_file.write('\n%s\n%s' % (pt_json(cpd_phdr.hdr_print()), pt_json(pt)))
 		
 		# Load Huffman Dictionaries for Decompression
-		huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
+		huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error')
 		
 		# Parse all Modules based on their Metadata
 		for mod in cpd_all_attr :
@@ -6903,8 +6903,9 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 	
 	# Detect Actual PCH Stepping(s) for CSME 12-14 & CSSPS 5
 	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] :
-		if mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x01) \
-		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25) :
+		if (mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x01)
+		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25)) \
+		and (variant,major,minor) != ('CSME',14,5) :
 			# Bitfield for CSME >=~ 12.0.0.1058 @ 2018-01-25 (0011 = --BA, 0110 = -CB-)
 			for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else ''
 		else :
@@ -7132,7 +7133,7 @@ def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_gen_list, pmc_pch_sku, sku
 # CSE Huffman Dictionary Loader by IllegalArgument
 # Dictionaries by Dmitry Sklyarov & IllegalArgument
 # Message Verbosity: All | Error | None
-def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
+def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 	HUFFMAN_SHAPE = []
 	HUFFMAN_SYMBOLS = {}
 	HUFFMAN_UNKNOWNS = {}
@@ -7140,8 +7141,8 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, verbosity) :
 	huffman_dict = os.path.join(mea_dir, 'Huffman.dat')
 	
 	# Check if Huffman dictionary version is supported
-	if (cse_variant, cse_major) in [('CSME', 11), ('CSSPS', 4)] : dict_version = 11
-	elif (cse_variant, cse_major) in [('CSME', 12), ('CSME', 13), ('CSME', 14), ('CSME', 15), ('CSSPS', 5)] : dict_version = 12
+	if (cse_variant,cse_major) in [('CSME',11),('CSSPS',4)] or (cse_variant,cse_major,cse_minor) in [('CSME',14,5)] : dict_version = 11
+	elif (cse_variant,cse_major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15),('CSSPS',5)] : dict_version = 12
 	else :
 		# CSTXE & PMC firmware do not use Huffman compression, skip error message
 		if cse_variant != 'CSTXE' and not cse_variant.startswith('PMC') and verbosity in ['all','error'] :
@@ -9980,7 +9981,7 @@ for file_in in source :
 			if pos_sku_ext == 'Invalid' and sku == 'NaN' :
 				for mod in cpd_mod_attr :
 					if mod[0] == 'kernel' :
-						huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
+						huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error')
 						ker_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 						
 						# 0F22D88D65F85B5E5DC355B8 (56 & AA for H, 60 & A0 for LP)
@@ -10031,7 +10032,7 @@ for file_in in source :
 				if sku_pdm not in ['NPDM','YPDM'] :
 					for mod in cpd_mod_attr :
 						if mod[0] == 'bup' :
-							huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, 'error')
+							huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error')
 							bup_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 							
 							if bup_decomp != b'' :
