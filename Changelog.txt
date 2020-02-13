@@ -1,3 +1,15 @@
+v1.104.0
+
+Added CSME 13-14 Chipset Platform/Stepping detection
+Added CSTXE PDR Partition unpacking support
+Improved support for future platforms
+Applied various fixes & improvements
+
+r186
+
+SPS 03.00.07.060_DE_PRD_REC
+SPS 03.00.07.060_DE_PRD_OPR
+
 v1.101.0
 
 Added support for future platform
