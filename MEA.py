@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.101.0'
+title = 'ME Analyzer v1.104.0'
 
 import os
 import re
@@ -2828,7 +2828,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 		
 		for usage_bit in range(len(usage_bits)) :
 			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown')
+				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
 				
 		return hash_usages
 		
@@ -2880,7 +2880,7 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 		
 		for usage_bit in range(len(usage_bits)) :
 			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown')
+				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
 				
 		return hash_usages
 	
@@ -2937,7 +2937,7 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		
 		for usage_bit in range(len(usage_bits)) :
 			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown')
+				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
 				
 		return hash_usages
 		
@@ -3003,7 +3003,7 @@ class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Inform
 		
 		for usage_bit in range(len(usage_bits)) :
 			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown')
+				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
 				
 		return hash_usages
 
@@ -4522,15 +4522,16 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	print()
 	rbe_pm_data_d = b''
 	vol_ftbl_id = -0x1
-	config_rec_size = 0x1C
 	mfs_parsed_idx = None
 	fpt_hdr_0_print = None
 	intel_cfg_hash_mfs = None
+	pch_init_final = []
 	cpd_match_ranges = []
 	rbe_pm_met_valid = []
 	rbe_pm_met_hashes = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
+	config_rec_size = get_cfg_rec_size(variant,major)
 	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
 	
 	# Create main Firmware Extraction Directory
@@ -4674,7 +4675,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				print(col_y + '\n--> Stored $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_type, part_name, part_start, part_end) + col_e)
 				
 				if part[0] in [b'UTOK',b'STKN'] :
-					ext_print = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], part_name, [[],'']) # Retrieve & Store UTOK/STKN Extension Info
+					ext_print = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], part_name, [[],''], [[],-1,-1]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
 					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -4710,7 +4711,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 					
 				# Store RBEP > rbe and FTPR > pm "Metadata" within Module for Module w/o Metadata Hash validation
 				if part[0] in [b'FTPR',b'RBEP'] :
-					x0,rbe_pm_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14 = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
+					x0,rbe_pm_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15 = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build], None,
+																						[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 					
 					for mod in rbe_pm_mod_attr :
 						if mod[0] in ['rbe','pm'] :
@@ -4784,7 +4786,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name, part_start, part_end) + col_e)
 				
 				if part[0] in ['UTOK'] :
-					ext_print = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], part_name, [[],'']) # Retrieve & Store UTOK/STKN Extension Info
+					ext_print = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], part_name, [[],''], [[],-1,-1]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
 					for index in range(0, len(ext_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -4820,7 +4822,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 					
 				# Store RBEP > rbe and FTPR > pm "Metadata" within Module for Module w/o Metadata Hash validation
 				if part[0] in ['FTPR','RBEP'] :
-					x0,rbe_pm_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14 = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
+					x0,rbe_pm_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15 = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build], None,
+																						[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 					
 					for mod in rbe_pm_mod_attr :
 						if mod[0] in ['rbe','pm'] :
@@ -4843,8 +4846,16 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	for cpdrange in cpd_match_ranges :
 		(start_cpd_emod, end_cpd_emod) = cpdrange.span()
 		
-		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,ext12_info,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12,ext_iunit_val,x14 \
-		= ext_anl(reading, '$CPD', start_cpd_emod, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
+		# Store any Platform Data (PDR) Flash Descriptor Regions with Code Partition Directory ($CPD) structure (not in $FPT or BPDT)
+		if fd_pdr_rgn_exist and reading[start_cpd_emod + 0xC:start_cpd_emod + 0x10] == b'PDRP' :
+			mod_f_path = os.path.join(mea_dir, fw_name, 'PDRP 0000 [0x%0.6X].bin' % start_cpd_emod) # Start offset covers any cases with multiple PDR (not POR, just in case)
+			with open(mod_f_path, 'w+b') as part_file : part_file.write(reading[start_cpd_emod:start_cpd_emod + pdr_fd_size])
+			
+			print(col_y + '\n--> Stored Flash Descriptor Region "PDRP 0000" [0x%0.6X - 0x%0.6X]' % (start_cpd_emod, start_cpd_emod + pdr_fd_size) + col_e)
+		
+		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,ext12_info,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12,ext_iunit_val,x14,x15 \
+		= ext_anl(reading, '$CPD', start_cpd_emod, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		[pch_init_final,config_rec_size,vol_ftbl_id])
 		
 		rbe_pm_met_valid = mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val,
 						   rbe_pm_met_hashes, rbe_pm_met_valid, ext12_info, vol_ftbl_id, config_rec_size)
@@ -4856,7 +4867,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	
 # Analyze CSE Extensions
 # noinspection PyUnusedLocal
-def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man_name, mfs_idx_cfg) :
+def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man_name, mfs_idx_cfg, pch_init_input) :
 	vcn = -1
 	in_id = 0
 	cpd_num = 0
@@ -4914,6 +4925,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	variant,major,minor,hotfix,build = ftpr_var_ver
 	anl_major,anl_minor,anl_hotfix,anl_build = ftpr_var_ver[1:]
 	mfs_parsed_idx,intel_cfg_hash_mfs = mfs_idx_cfg
+	pch_init_final,config_rec_size,vol_ftbl_id = pch_init_input
 	buffer_len = len(buffer)
 	
 	if input_type.startswith('$MN2') :
@@ -5011,12 +5023,20 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				intel_cfg_ftpr = True # Detected FTPR > intl.cfg module
 				intel_cfg_data = buffer[cpd_offset + cpd_entry_offset:cpd_offset + cpd_entry_offset + cpd_entry_size] # FTPR > intl.cfg Contents
 				intel_cfg_hash_ftpr = [get_hash(intel_cfg_data, 0x20), get_hash(intel_cfg_data, 0x30)] # Store FTPR MFS Intel Configuration Hashes
+				
+				# For Platform/Stepping analysis via the Chipset Initialization Table, prefer the FTPR Low Level File 6 (intl.cfg)
+				# instead of the one from MFS, when possible (i.e. MFS & FTPR) or necessary (i.e. FTPR only, MFS empty).
+				if not param.me11_mod_extr :
+					try :
+						intel_cfg_folder = os.path.join(mea_dir, 'intl.cfg_placeholder', '') # Not used here, placeholder value for mfs_cfg_anl to work
+						pch_init_info = mfs_cfg_anl(6, intel_cfg_data, intel_cfg_folder, intel_cfg_folder, config_rec_size, [], vol_ftbl_id) # Parse MFS Configuration Records
+						pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
+					except :
+						cse_anl_err(col_r + 'Error: Failed to analyze MFS Low Level File 6 (Intel Configuration) at %s > %s' % (cpd_name, cpd_entry_name) + col_e, None)
 		
 			# Detect if FTPR Partition is FIT/OEM-customized to skip Hash check at Stages 2 & 4
-			if cpd_entry_name == 'fitc.cfg' and (cpd_entry_offset,cpd_entry_size) != (0,0) : # FIT OEM Configuration
-				oem_config = True
-			if cpd_entry_name == 'oem.key' and (cpd_entry_offset,cpd_entry_size) != (0,0) : # OEM RSA Signature
-				oem_signed = True
+			if cpd_entry_name == 'fitc.cfg' and (cpd_entry_offset,cpd_entry_size) != (0,0) : oem_config = True # FIT OEM Configuration
+			if cpd_entry_name == 'oem.key' and (cpd_entry_offset,cpd_entry_size) != (0,0) : oem_signed = True # OEM RSA Signature
 			
 			# Detect Recovery Image Partition (RCIP)
 			if cpd_name == 'RCIP' :
@@ -5755,7 +5775,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					
 		for mod_index in ibbp_del : del cpd_mod_attr[mod_index] # Delete missing Module's Attributes
 	
-	return cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn
+	return cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final
 
 # Analyze & Store CSE Modules
 def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val, rbe_pm_met_hashes, rbe_pm_met_valid, ext12_info, vol_ftbl_id, config_rec_size) :
@@ -5764,7 +5784,8 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 	mea_hash_u = 0
 	mod_hash_u_ok = False
 	comp = ['Uncompressed','Huffman','LZMA']
-	encr_empty = ['None','AES-CBC','AES-CTR']
+	encr_type = ['None','AES-CBC','AES-CTR']
+	is_empty = ['No','Yes']
 	
 	pt = ext_table([col_y + 'Name' + col_e, col_y + 'Compression' + col_e, col_y + 'Encryption' + col_e, col_y + 'Offset' + col_e, col_y + 'Compressed' + col_e, col_y + 'Uncompressed' + col_e,
 					col_y + 'Empty' + col_e], True, 1)
@@ -5776,7 +5797,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 		
 		# Store Module details
 		for mod in cpd_all_attr :
-			pt.add_row([mod[0],comp[mod[1]],encr_empty[mod[2]],'0x%0.6X' % mod[3],'0x%0.6X' % mod[4],'0x%0.6X' % mod[5],encr_empty[mod[6]]])
+			pt.add_row([mod[0],comp[mod[1]],encr_type[mod[2]],'0x%0.6X' % mod[3],'0x%0.6X' % mod[4],'0x%0.6X' % mod[5],is_empty[mod[6]]])
 		
 		# Parent Partition Attributes (same for all cpd_all_attr list instance entries)
 		cpd_pname = cpd_all_attr[0][8] # $CPD Name
@@ -5932,7 +5953,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 				
 				# Key
 				elif '.key' in mod_name :
-					ext_print = ext_anl(mod_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], mod_name, [[],'']) # Retrieve & Store Key Extension Info
+					ext_print = ext_anl(mod_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], mod_name, [[],''], [[],-1,-1]) # Retrieve & Store Key Extension Info
 					
 				# MFS Configuration
 				elif mod_name in ('intl.cfg','fitc.cfg') :
@@ -6206,22 +6227,38 @@ def cse_anl_err(ext_err_msg, checked_hashes) :
 		if copy_file and param.me11_mod_bug : input('\n%s' % ext_err_msg)
 		else : print('\n%s' % ext_err_msg)
 
+# Get CSE File System Integrity Table Structure Size
+def get_sec_hdr_size(variant,major) :
+	if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4)] : sec_hdr_size = 0x34
+	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] : sec_hdr_size = 0x28
+	else : sec_hdr_size = 0x28
+	
+	return sec_hdr_size
+	
+# Get CSE File System Configuration Record Structure Size
+def get_cfg_rec_size(variant,major) :
+	if (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : config_rec_size = 0x1C
+	elif (variant,major) in [('CSME',13),('CSME',14),('CSME',15)] : config_rec_size = 0xC
+	else : config_rec_size = 0xC
+	
+	return config_rec_size
+
 # Get CSE File System Attributes & Configuration State
 def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final) :
-	vol_ftbl_id = -1
-	config_rec_size = -1
+	vol_ftbl_id = -0x1
+	config_rec_size = get_cfg_rec_size(variant,major) # Get CSE File System Configuration Record Structure Size
 	
-	try :
-		if mfs_found and not param.me11_mod_extr :
+	if mfs_found and not param.me11_mod_extr :
+		try :
 			# Get CSE File System Attributes
 			mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant)
 			
 			# CSE File System exists, determine its Configuration State
 			if 8 in mfs_parsed_idx : mfs_state = 'Initialized'
 			elif 7 in mfs_parsed_idx : mfs_state = 'Configured'
-	except :
-		# CSE File System analysis failed, maybe corrupted
-		mfs_state = col_r + 'Error' + col_e
+		except :
+			# CSE File System analysis failed, maybe corrupted
+			mfs_state = col_r + 'Error' + col_e
 		
 	return mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size
 
@@ -6244,8 +6281,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		mfsb_end = re.compile(br'\xFF{32}').search(mfsb_buffer).start() # MFS Backup Buffer ends where enough Padding (0xFF) is found
 		
 		if mfsb_crc32 != mea_crc32 : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS Backup Header CRC-32 0x%0.8X is INVALID, expected 0x%0.8X!' 
-									 % (mfsb_crc32, mea_crc32) + col_e, 'error', False, False, [])
-		else : mfs_tmp_page = mfs_anl_msg(col_g + 'MFS Backup Header CRC-32 is VALID' + col_e, '', False, False, [])
+									 % (mfsb_crc32, mea_crc32) + col_e, 'error', True, False, False, [])
+		else : mfs_tmp_page = mfs_anl_msg(col_g + 'MFS Backup Header CRC-32 is VALID' + col_e, '', True, False, False, [])
 		
 		data_start = 0 # Starting Offset of each MFS Backup Chunk
 		mfs_buffer_init = b'' # Actual MFS Buffer from converted MFS Backup state
@@ -6280,15 +6317,9 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	chunks_max_sys = sys_count * ((page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_size)) # MFS Maximum System Chunks Count
 	chunks_max_dat = dat_count * ((page_size - page_hdr_size) // (index_size_dat + chunk_size)) # MFS Maximum Data Chunks Count (= Actual)
 	
-	# Set MFS Integrity Table Structure Size
-	if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4)] : sec_hdr_size = 0x34
-	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] : sec_hdr_size = 0x28
-	else : sec_hdr_size = 0x28
+	sec_hdr_size = get_sec_hdr_size(variant,major) # Get CSE File System Integrity Table Structure Size
 	
-	# Set MFS Config Record Structure Size
-	if (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : config_rec_size = 0x1C
-	elif (variant,major) in [('CSME',13),('CSME',14),('CSME',15)] : config_rec_size = 0xC
-	else : config_rec_size = 0xC
+	config_rec_size = get_cfg_rec_size(variant,major) # Get CSE File System Configuration Record Structure Size
 	
 	# Sort MFS System & Data Pages
 	for page_index in range(page_count) :
@@ -6336,9 +6367,9 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		# Verify System/Data/Scratch Page CRC-8
 		if page_hdr_crc8_mea != page_hdr_crc8_int :
 			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS %s Page %d Header CRC-8 0x%0.2X is INVALID, expected 0x%0.2X!' 
-						   % (page_type, page_number, page_hdr_crc8_int, page_hdr_crc8_mea) + col_e, 'error', True, False, mfs_tmp_page)
+						   % (page_type, page_number, page_hdr_crc8_int, page_hdr_crc8_mea) + col_e, 'error', True, True, False, mfs_tmp_page)
 		else :
-			mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d Header CRC-8 is VALID' % (page_type, page_number) + col_e, '', True, False, mfs_tmp_page)
+			mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d Header CRC-8 is VALID' % (page_type, page_number) + col_e, '', True, True, False, mfs_tmp_page)
 		
 		if page_tag != 0xAA557887 : continue # Skip Scratch Page after CRC-8 check
 		
@@ -6373,12 +6404,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 				
 				if chunk_crc16_mea != chunk_crc16_int :
 					mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS %s Page %d > Chunk %d CRC-16 0x%0.4X is INVALID, expected 0x%0.4X!' 
-								   % (page_type, page_number, chunk_index, chunk_crc16_int, chunk_crc16_mea) + col_e, 'error', True, True, mfs_tmp_page)
+								   % (page_type, page_number, chunk_index, chunk_crc16_int, chunk_crc16_mea) + col_e, 'error', True, True, True, mfs_tmp_page)
 				else :
-					chunk_healthy += 1 #mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, mfs_tmp_page)
+					chunk_healthy += 1 #mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, True, mfs_tmp_page)
 			
 			if chunk_used_count and chunk_used_count == chunk_healthy :
-				mfs_tmp_page = mfs_anl_msg(col_g + 'All MFS %s Page %d Chunks (%d) CRC-16 are VALID' % (page_type, page_number, chunk_used_count) + col_e, '', True, True, mfs_tmp_page)
+				mfs_tmp_page = mfs_anl_msg(col_g + 'All MFS %s Page %d Chunks (%d) CRC-16 are VALID' % (page_type, page_number, chunk_used_count) + col_e, '', True, True, True, mfs_tmp_page)
 		
 		# MFS Data Page
 		elif page_type == 'Data' :
@@ -6403,12 +6434,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 					
 					if chunk_crc16_mea != chunk_crc16_int :
 						mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS %s Page %d > Chunk %d CRC-16 0x%0.4X is INVALID, expected 0x%0.4X!' 
-									   % (page_type, page_number, chunk_index, chunk_crc16_int, chunk_crc16_mea) + col_e, 'error', True, True, mfs_tmp_page)
+									   % (page_type, page_number, chunk_index, chunk_crc16_int, chunk_crc16_mea) + col_e, 'error', True, True, True, mfs_tmp_page)
 					else :
-						chunk_healthy += 1 #mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, mfs_tmp_page)
+						chunk_healthy += 1 #mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, True, mfs_tmp_page)
 			
 			if chunk_used_count and chunk_used_count == chunk_healthy :
-				mfs_tmp_page = mfs_anl_msg(col_g + 'All MFS %s Page %d Chunks (%d) CRC-16 are VALID' % (page_type, page_number, chunk_used_count) + col_e, '', True, True, mfs_tmp_page)
+				mfs_tmp_page = mfs_anl_msg(col_g + 'All MFS %s Page %d Chunks (%d) CRC-16 are VALID' % (page_type, page_number, chunk_used_count) + col_e, '', True, True, True, mfs_tmp_page)
 	
 	# Print/Store MFS Page Records during CSE Unpacking
 	if param.me11_mod_extr :
@@ -6426,7 +6457,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	
 	# Parse MFS System Volume Structure
 	if not all_chunks_dict :
-		mfs_anl_msg(col_r + 'Error: MFS final System Area Buffer is empty!' + col_e, 'error', False, False, [])
+		mfs_anl_msg(col_r + 'Error: MFS final System Area Buffer is empty!' + col_e, 'error', True, False, False, [])
 		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, -0x1, config_rec_size # The final System Area Buffer must not be empty
 	vol_hdr = get_struct(all_chunks_dict[0], 0, MFS_Volume_Header) # System Volume is at the LAST Index 0 Chunk (the dictionary does that automatically)
 	if param.me11_mod_extr :
@@ -6437,8 +6468,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 	vol_total_size = vol_hdr.VolumeSize # Size of MFS System & Data Volume via Volume
 	mea_total_size = chunks_count_sys * (chunk_size - 2) + chunks_max_dat * (chunk_size - 2) # Size of MFS System & Data Volume via MEA
 	
-	if vol_total_size != mea_total_size : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS System Volume Size missmatch!' + col_e, 'error', False, False, [])
-	else : mfs_tmp_page = mfs_anl_msg(col_g + 'MFS System Volume Size is VALID' + col_e, '', False, False, [])
+	if vol_total_size != mea_total_size : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS System Volume Size missmatch!' + col_e, 'error', True, False, False, [])
+	else : mfs_tmp_page = mfs_anl_msg(col_g + 'MFS System Volume Size is VALID' + col_e, '', True, False, False, [])
 	
 	# Parse MFS File Allocation Table
 	fat_count = vol_file_rec + chunks_max_dat # MFS FAT Value Count (Low Level Files + their Data Chunks)
@@ -6455,13 +6486,13 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			while True :
 				# Data FAT Values (Low Level File Chunks) start after Volume FAT Values (Low Level File Numbers/1st Chunk)
 				if fat_value < vol_file_rec :
-					mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS File %d > FAT Value %d less than Volume Files Count %d!' % (index,fat_value,vol_file_rec) + col_e, 'error', False, False, [])
+					mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS File %d > FAT Value %d less than Volume Files Count %d!' % (index,fat_value,vol_file_rec) + col_e, 'error', True, False, False, [])
 					break # Critical error while parsing Used File FAT Value
 				
 				# Data Page Chunks start after System Page Chunks and their Volume FAT Values
 				file_chunk_index = chunks_count_sys + fat_value - vol_file_rec # Determine File Chunk Index for MFS Chunk Index & Data Dictionary use
 				if file_chunk_index not in all_chunks_dict : # The File Chunk index/key must exist at the MFS Chunk Index & Data Dictionary
-					mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS File %d > Chunk %d not in Total Chunk Index/Data Area!' % (index,file_chunk_index) + col_e, 'error', False, False, [])
+					mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS File %d > Chunk %d not in Total Chunk Index/Data Area!' % (index,file_chunk_index) + col_e, 'error', True, False, False, [])
 					break # Critical error while parsing Used File FAT Value
 				
 				file_chunk = all_chunks_dict[file_chunk_index] # Get File Chunk contents from the MFS Chunk Index & Data Dictionary
@@ -6477,7 +6508,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			mfs_files.append([index, file_chunks]) # Store MFS Low Level File Index & Contents
 	
 	if all_mfs_sys[vol_hdr_size + fat_count * 2:] != b'\x00' * fat_trail : # MFS FAT End Trail Contents should be all zeros
-		mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected additional MFS System Buffer contents after FAT ending!' + col_e, 'error', False, False, [])
+		mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected additional MFS System Buffer contents after FAT ending!' + col_e, 'error', True, False, False, [])
 	
 	# Parse MFS Low Level Files
 	for mfs_file in mfs_files :
@@ -6581,11 +6612,11 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			
 			# Detect MFS Home Directory Record Size
 			home_rec_patt = list(re.compile(br'\x2E[\x00\xAA]{10}').finditer(mfs_file[1][:])) # Find the first Current (.) & Parent (..) directory markers
-			if len(home_rec_patt) < 2 : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown Home Directory Record Structure!' + col_e, 'error', False, False, [])
+			if len(home_rec_patt) < 2 : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown Home Directory Record Structure!' + col_e, 'error', True, False, False, [])
 			home_rec_size = home_rec_patt[1].start() - home_rec_patt[0].start() - 1 # Determine MFS Home Directory Record Size via pattern offset difference
 			file_8_data = mfs_file[1][:-sec_hdr_size] # MFS Home Directory Root/Start (Low Level File 8) Contents
 			if divmod(len(file_8_data), home_rec_size)[1] != 0 :
-				mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown Home Directory Record or Integrity Size!' + col_e, 'error', False, False, [])
+				mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected unknown Home Directory Record or Integrity Size!' + col_e, 'error', True, False, False, [])
 				home_rec_size = 0x0 # Crash at next step due to division by 0
 			
 			file_8_records = divmod(len(file_8_data), home_rec_size)[0] # MFS Home Directory Root/Start (Low Level File 8) Records Count
@@ -6618,13 +6649,14 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 			file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
 			mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
 			# noinspection PyTypeChecker
-			ext_print = ext_anl(mfs_file[1], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs]) # Get Manifest Backup Extension Info
+			ext_print = ext_anl(mfs_file[1], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
+						[pch_init_final,config_rec_size,vol_ftbl_id]) # Get Manifest Backup Extension Info
 			for man_pt in ext_print[1] : mfs_txt(man_pt, file_9_folder, os.path.join(file_9_folder + 'FTPR.man'), 'a', False) # Store MFS Manifest Backup Extension Info
 		
 	# Store all Non-Parsed MFS Low Level Files
 	for mfs_file in mfs_files :
 		if mfs_file[1] and mfs_file[0] not in mfs_parsed_idx : # Check if MFS Low Level File has Contents but it has not been Parsed
-			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS Low Level File %d which has not been parsed!' % (mfs_file[0]) + col_e, 'error', False, False, [])
+			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS Low Level File %d which has not been parsed!' % (mfs_file[0]) + col_e, 'error', True, False, False, [])
 			mfs_file_path = os.path.join(mfs_folder, '%0.3d.bin' % mfs_file[0])
 			mfs_write(mfs_folder, mfs_file_path, mfs_file[1]) # Store MFS Low Level File
 		
@@ -6711,7 +6743,7 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 		
 		# Detect File System ID mismatch within MFS Home Directory
 		if file_index >= 8 and fs_id != 1 : # File System ID for MFS Home Directory (Low Level File >= 8) is 1 (home)
-			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected bad File System ID %d at MFS Home Directory > %0.3d %s' % (fs_id, file_index, file_name) + col_e, 'error', False, False, [])
+			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected bad File System ID %d at MFS Home Directory > %0.3d %s' % (fs_id, file_index, file_name) + col_e, 'error', True, False, False, [])
 		
 		# MFS Home Directory Record Nested Records Count
 		file_records = divmod(len(file_data), home_rec_size)[0]
@@ -6802,7 +6834,7 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 		if os.path.isfile(ftbl_json) :
 			with open(ftbl_json, 'r') as json_file : ftbl_dict = json.load(json_file)
 		else :
-			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS File Table Dictionary file is missing!' + col_e, 'error', False, False, [])
+			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS File Table Dictionary file is missing!' + col_e, 'error', True, False, False, [])
 		
 	mfs_pt.title = col_y + 'MFS %s Configuration Records' % ('006 Intel' if mfs_file == 6 else '007 OEM') + col_e
 	
@@ -6852,12 +6884,12 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 			fitc_cfg,flag_unk = rec_hdr.get_flags() # Get Record Flags
 			
 			if '%0.2X' % vol_ftbl_id not in ftbl_dict :
-				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: File Table Dictionary %0.2X does not exist!' % vol_ftbl_id + col_e, 'error', False, False, [])
+				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: File Table Dictionary %0.2X does not exist!' % vol_ftbl_id + col_e, 'error', True, False, False, [])
 				rec_path = os.path.normpath(os.path.join('/Unknown', '%0.8X.bin' % rec_id)) # Set generic/unknown File local path when errors occur
 				rec_file = os.path.normpath(rec_folder + rec_path) # Set generic/unknown File actual path when errors occur
 				rec_parent = os.path.normpath(os.path.join(rec_folder, 'Unknown')) # Set generic/unknown parent Folder actual path when errors occur
 			elif '%0.8X' % rec_id not in ftbl_dict['%0.2X' % vol_ftbl_id] :
-				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: File Table Dictionary %0.2X does not contain ID %0.8X!' % (vol_ftbl_id,rec_id) + col_e, 'error', False, False, [])
+				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: File Table Dictionary %0.2X does not contain ID %0.8X!' % (vol_ftbl_id,rec_id) + col_e, 'error', False, False, False, [])
 				rec_path = os.path.normpath(os.path.join('/Unknown', '%0.8X.bin' % rec_id)) # Set generic/unknown File local path when errors occur
 				rec_file = os.path.normpath(rec_folder + rec_path) # Set generic/unknown File actual path when errors occur
 				rec_parent = os.path.normpath(os.path.join(rec_folder, 'Unknown')) # Set generic/unknown parent Folder actual path when errors occur
@@ -6884,12 +6916,15 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 	
 # Analyze MFS Intel Configuration > PCH Initialization Table
 def mphytbl(mfs_file, rec_data, pch_init_info) :
-	pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual PCH SKU Platform (CNP-H, ICP-LP etc)
-	pch_init_stp = rec_data[3] & 0xF # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
-	pch_init_rev = rec_data[2] # PCH Initialization Table Revision
+	if rec_data[0x2:0x6] == b'\xFF' * 4 :
+		pch_init_plt = pch_dict[rec_data[7] & 0xF] if rec_data[7] & 0xF in pch_dict else 'Unknown' # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
+		pch_init_stp = rec_data[7] >> 4 # Actual PCH SKU Platform (ICP-LP, TGP-H etc)
+		pch_init_rev = rec_data[6] # PCH Initialization Table Revision
+	else :
+		pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual PCH SKU Platform (SPT-H, CNP-LP etc)
+		pch_init_stp = rec_data[3] & 0xF # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
+		pch_init_rev = rec_data[2] # PCH Initialization Table Revision
 	pch_true_stp = '' # Actual PCH Stepping(s) (A, B, C etc)
-	
-	if rec_data[0x2:0x6] == b'\xFF' * 4 : return pch_init_info # FUI!
 	
 	# Detect Actual PCH Stepping(s) for CSME 11 & CSSPS 4
 	if (variant,major) in [('CSME',11),('CSSPS',4)] :
@@ -6901,13 +6936,12 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			# Unreliable for CSME ~< 11.0.0.1140 @ 2015-05-19 (always 80 --> SPT/KBP-LP A)
 			pass
 	
-	# Detect Actual PCH Stepping(s) for CSME 12-14 & CSSPS 5
-	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] :
+	# Detect Actual PCH Stepping(s) for CSME 12-15 & CSSPS 5
+	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15),('CSSPS',5)] :
 		if (mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x01)
-		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25)) \
-		and (variant,major,minor) != ('CSME',14,5) :
+		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25)) :
 			# Bitfield for CSME >=~ 12.0.0.1058 @ 2018-01-25 (0011 = --BA, 0110 = -CB-)
-			for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else ''
+			for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else 'A'
 		else :
 			# Absolute for CSME ~< 12.0.0.1058 @ 2018-01-25 (0 = A, 1 = B, 2 = C, 3 = D etc)
 			pch_true_stp = {0:'A',1:'B',2:'C',3:'D',4:'E'}[pch_init_stp]
@@ -6951,8 +6985,8 @@ def mfs_write(folder_path, file_path, data) :
 		with open(file_path, 'wb') as file : file.write(data)
 		
 # Store and show MFS Analysis Errors
-def mfs_anl_msg(mfs_err_msg, msg_type, is_page, is_chunk_crc, mfs_tmp_page) :
-	if msg_type == 'error' : err_stor.append([mfs_err_msg, True])
+def mfs_anl_msg(mfs_err_msg, msg_type, msg_copy, is_page, is_chunk_crc, mfs_tmp_page) :
+	if msg_type == 'error' : err_stor.append([mfs_err_msg, msg_copy])
 	
 	if param.me11_mod_extr and not is_page :
 		if msg_type == 'error' and param.me11_mod_bug : input('\n    %s' % mfs_err_msg)
@@ -7692,39 +7726,47 @@ def spi_fd_init() :
 		return False, 0, 0, 0
 
 # Analyze Intel Flash Descriptor (FD)
-def spi_fd(action,start_fd_match,end_fd_match) :
+def spi_fd(start_fd_match,end_fd_match) :
 	fd_reg_exist = [] # BIOS/IAFW + Engine
 	
-	if action == 'region' :
-		bios_fd_base = int.from_bytes(reading[end_fd_match + 0x30:end_fd_match + 0x32], 'little')
-		bios_fd_limit = int.from_bytes(reading[end_fd_match + 0x32:end_fd_match + 0x34], 'little')
-		me_fd_base = int.from_bytes(reading[end_fd_match + 0x34:end_fd_match + 0x36], 'little')
-		me_fd_limit = int.from_bytes(reading[end_fd_match + 0x36:end_fd_match + 0x38], 'little')
-		devexp_fd_base = int.from_bytes(reading[end_fd_match + 0x40:end_fd_match + 0x42], 'little')
-		devexp_fd_limit = int.from_bytes(reading[end_fd_match + 0x42:end_fd_match + 0x44], 'little')
-		
-		if bios_fd_limit != 0 :
-			bios_fd_start = bios_fd_base * 0x1000 + start_fd_match # fd_match required in case FD is not at the start of image
-			bios_fd_size = (bios_fd_limit + 1 - bios_fd_base) * 0x1000 # The +1 is required to include last Region byte
-			fd_reg_exist.extend((True,bios_fd_start,bios_fd_size)) # BIOS/IAFW Region exists
-		else :
-			fd_reg_exist.extend((False,0,0)) # BIOS/IAFW Region missing
-			
-		if me_fd_limit != 0 :
-			me_fd_start = me_fd_base * 0x1000 + start_fd_match
-			me_fd_size = (me_fd_limit + 1 - me_fd_base) * 0x1000
-			fd_reg_exist.extend((True,me_fd_start,me_fd_size)) # Engine Region exists
-		else :
-			fd_reg_exist.extend((False,0,0)) # Engine Region missing
-			
-		if devexp_fd_limit != 0 :
-			devexp_fd_start = devexp_fd_base * 0x1000 + start_fd_match
-			devexp_fd_size = (devexp_fd_limit + 1 - devexp_fd_base) * 0x1000
-			fd_reg_exist.extend((True,devexp_fd_start,devexp_fd_size)) # Device Expansion Region exists
-		else :
-			fd_reg_exist.extend((False,0,0)) # Device Expansion Region missing
-			
-		return fd_reg_exist
+	bios_fd_base = int.from_bytes(reading[end_fd_match + 0x30:end_fd_match + 0x32], 'little')
+	bios_fd_limit = int.from_bytes(reading[end_fd_match + 0x32:end_fd_match + 0x34], 'little')
+	me_fd_base = int.from_bytes(reading[end_fd_match + 0x34:end_fd_match + 0x36], 'little')
+	me_fd_limit = int.from_bytes(reading[end_fd_match + 0x36:end_fd_match + 0x38], 'little')
+	pdr_fd_base = int.from_bytes(reading[end_fd_match + 0x3C:end_fd_match + 0x3E], 'little')
+	pdr_fd_limit = int.from_bytes(reading[end_fd_match + 0x3E:end_fd_match + 0x40], 'little')
+	devexp_fd_base = int.from_bytes(reading[end_fd_match + 0x40:end_fd_match + 0x42], 'little')
+	devexp_fd_limit = int.from_bytes(reading[end_fd_match + 0x42:end_fd_match + 0x44], 'little')
+	
+	if bios_fd_limit != 0 :
+		bios_fd_start = bios_fd_base * 0x1000 + start_fd_match # fd_match required in case FD is not at the start of image
+		bios_fd_size = (bios_fd_limit + 1 - bios_fd_base) * 0x1000 # The +1 is required to include last Region byte
+		fd_reg_exist.extend((True,bios_fd_start,bios_fd_size)) # BIOS/IAFW Region exists
+	else :
+		fd_reg_exist.extend((False,0,0)) # BIOS/IAFW Region missing
+	
+	if me_fd_limit != 0 :
+		me_fd_start = me_fd_base * 0x1000 + start_fd_match
+		me_fd_size = (me_fd_limit + 1 - me_fd_base) * 0x1000
+		fd_reg_exist.extend((True,me_fd_start,me_fd_size)) # Engine Region exists
+	else :
+		fd_reg_exist.extend((False,0,0)) # Engine Region missing
+	
+	if pdr_fd_limit != 0 :
+		pdr_fd_start = pdr_fd_base * 0x1000 + start_fd_match
+		pdr_fd_size = (pdr_fd_limit + 1 - pdr_fd_base) * 0x1000
+		fd_reg_exist.extend((True,pdr_fd_start,pdr_fd_size)) # Platform Data Region exists
+	else :
+		fd_reg_exist.extend((False,0,0)) # Engine Region missing
+	
+	if devexp_fd_limit != 0 :
+		devexp_fd_start = devexp_fd_base * 0x1000 + start_fd_match
+		devexp_fd_size = (devexp_fd_limit + 1 - devexp_fd_base) * 0x1000
+		fd_reg_exist.extend((True,devexp_fd_start,devexp_fd_size)) # Device Expansion Region exists
+	else :
+		fd_reg_exist.extend((False,0,0)) # Device Expansion Region missing
+	
+	return fd_reg_exist
 	
 # Format firmware version
 def fw_ver(major,minor,hotfix,build) :
@@ -7939,7 +7981,7 @@ def get_variant() :
 		if variant == 'Unknown' : var_rsa_db = False # TBDx are multi-platform RSA Public Keys
 		
 		# Get CSE $CPD Module Names only for targeted variant detection via special ext_anl _Stage1 mode
-		cpd_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', major, minor, hotfix, build], None, [[],''])
+		cpd_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', major, minor, hotfix, build], None, [[],''], [[],-1,-1])
 		
 		# Remember to also adjust pmc_anl for PMC Variants
 		
@@ -8383,6 +8425,7 @@ for file_in in source :
 	upd_found = False
 	rgn_exist = False
 	pmcp_found = False
+	fitc_found = False
 	ifwi_exist = False
 	utok_found = False
 	oemp_found = False
@@ -8401,6 +8444,7 @@ for file_in in source :
 	fw_in_db_found = False
 	fd_me_rgn_exist = False
 	cse_lt_chk_fail = False
+	fd_pdr_rgn_exist = False
 	fd_bios_rgn_exist = False
 	fd_devexp_rgn_exist = False
 	rgn_over_extr_found = False
@@ -8470,9 +8514,13 @@ for file_in in source :
 	fpt_num_calc = 0
 	me_fd_start = -1
 	me_fd_size = -1
+	pdr_fd_size = -1
+	bios_fd_size = -1
+	bios_fd_start = -1
 	pmc_fw_rel = -1
 	pmc_pch_gen = -1
 	vol_ftbl_id = -1
+	pdr_fd_start = -1
 	fpt_part_num = -1
 	fpt_chk_byte = -1
 	fpt_chk_start = -1
@@ -8482,6 +8530,7 @@ for file_in in source :
 	sps3_chk16_calc = 0
 	cpd_offset_last = 0
 	p_end_last_cont = 0
+	devexp_fd_size = -1
 	devexp_fd_start = -1
 	uncharted_start = -1
 	p_end_last_back = -1
@@ -8582,8 +8631,8 @@ for file_in in source :
 		# Determine if FD exists and if Engine Region is present
 		fd_exist,start_fd_match,end_fd_match,fd_count = spi_fd_init()
 		if fd_exist :
-			fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size \
-			= spi_fd('region',start_fd_match,end_fd_match)
+			fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_pdr_rgn_exist,pdr_fd_start,pdr_fd_size, \
+			fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size = spi_fd(start_fd_match,end_fd_match)
 		
 		# Engine Region exists but cannot be identified
 		if fd_me_rgn_exist :
@@ -8668,8 +8717,8 @@ for file_in in source :
 	# Detect Intel Flash Descriptor
 	fd_exist,start_fd_match,end_fd_match,fd_count = spi_fd_init()
 	if fd_exist :
-		fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size \
-		= spi_fd('region',start_fd_match,end_fd_match)
+		fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_pdr_rgn_exist,pdr_fd_start,pdr_fd_size, \
+		fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size = spi_fd(start_fd_match,end_fd_match)
 	
 	# Detect all $FPT and/or BPDT starting offsets (both allowed/needed)
 	if fd_me_rgn_exist :
@@ -8680,7 +8729,7 @@ for file_in in source :
 		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
 		
 		# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
-		man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', 0, 0, 0, 0], None, [[],''])
+		man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', 0, 0, 0, 0], None, [[],''], [[],-1,-1])
 		fptemp_exists = True if man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0] else False # Detect if CSE FTPR > fptemp module exists
 		
 		# Adjust $FPT matches, ignore known CSE false positives
@@ -8867,13 +8916,16 @@ for file_in in source :
 				pmcp_fwu_found = True # CSME12+ FWUpdate tool requires PMC
 				pmcp_size = p_size
 				
-				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC', -1, -1, -1, -1], None, [[],''])
+				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn,x15 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC', -1, -1, -1, -1], None, [[],''], [[],-1,-1])
 				
 			# Detect if firmware has CSE File System Partition
 			if p_name in ('MFS','AFSP') and not p_empty :
 				mfs_found = True
 				mfs_start = p_offset_spi
 				mfs_size = p_size
+				
+			# Detect if firmware has FITC File System Configuration Partition
+			if p_name == 'FITC' and not p_empty : fitc_found = True
 			
 			# Detect if firmware has OEM Unlock Token (UTOK/STKN)
 			if p_name in ('UTOK','STKN') and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
@@ -9004,13 +9056,16 @@ for file_in in source :
 				pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
 				pmcp_size = p_size
 				
-				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC', -1, -1, -1, -1], None, [[],''])				
+				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn,x15 = ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC', -1, -1, -1, -1], None, [[],''], [[],-1,-1])				
 				
 			# Detect if IFWI Primary has CSE File System Partition (Not POR, just in case)
 			if p_name in ('MFS','AFSP') and not p_empty :
 				mfs_found = True
 				mfs_start = p_offset_spi
 				mfs_size = p_size
+				
+			# Detect if IFWI Primary has FITC File System Configuration Partition (Not POR, just in case)
+			if p_name == 'FITC' and not p_empty : fitc_found = True
 			
 			if p_type == 5 and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x2] == b'\xAA\x55' : # Secondary BPDT (S-BPDT)
 				s_bpdt_hdr = get_struct(reading, p_offset_spi, get_bpdt(reading, p_offset_spi))
@@ -9065,13 +9120,16 @@ for file_in in source :
 						pmcp_fwu_found = False # CSME12+ FWUpdate tool requires PMC
 						pmcp_size = s_p_size
 						
-						x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn = ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PMC', -1, -1, -1, -1], None, [[],''])
+						x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_arb_svn,x15 = ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PMC', -1, -1, -1, -1], None, [[],''], [[],-1,-1])
 					
 					# Detect if IFWI Secondary has CSE File System Partition (Not POR, just in case)
 					if s_p_name in ('MFS','AFSP') and not s_p_empty :
 						mfs_found = True
 						mfs_start = s_p_offset_spi
 						mfs_size = s_p_size
+						
+					# Detect if IFWI Secondary has FITC File System Configuration Partition (Not POR, just in case)
+					if s_p_name == 'FITC' and not s_p_empty : fitc_found = True
 					
 					# Store all Secondary BPDT entries for extraction
 					bpdt_part_all.append([s_p_name,s_p_offset_spi,s_p_offset_spi + s_p_size,s_p_type,s_p_empty,'Secondary',cse_in_id])
@@ -9928,11 +9986,11 @@ for file_in in source :
 		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
 		
 		# Get CSE Firmware Attributes (must be after mfs_anl)
-		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
+		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
-		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured'
+		if mfs_state == 'Unconfigured' and (oem_config or fitc_found) : mfs_state = 'Configured'
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -9953,7 +10011,7 @@ for file_in in source :
 		# Detect SKU Platform via Extension 0xC Attributes
 		if fw_0C_sku2 == 0 : pos_sku_ext = 'H' # Halo
 		elif fw_0C_sku2 == 1 : pos_sku_ext = 'LP' # Low Power
-		elif fw_0C_sku2 == 2 : pos_sku_ext = 'N' # Maybe V for Value ???
+		elif fw_0C_sku2 == 2 : pos_sku_ext = 'N' # ???
 		
 		# Detect SKU Platform via MFS Intel PCH Initialization Table
 		if pch_init_final and '-LP' in pch_init_final[-1][0] : pos_sku_tbl = 'LP'
@@ -10092,7 +10150,8 @@ for file_in in source :
 			sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, upd_found, False)
 			
 			# Adjust PCH/SoC Platform via Minor version
-			if minor == 0 and not pch_init_final : platform = 'CMP' # Comet Point
+			if minor == 0 and not pch_init_final : platform = 'CMP' # Comet Point H/LP
+			elif minor == 5 and not pch_init_final : platform = 'CMP-V' # Comet Point V
 			
 		elif major == 15 :
 			
@@ -10164,11 +10223,11 @@ for file_in in source :
 		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
 		
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
-		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
+		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
-		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured'
+		if mfs_state == 'Unconfigured' and (oem_config or fitc_found) : mfs_state = 'Configured'
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -10257,11 +10316,11 @@ for file_in in source :
 		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
 		
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
-		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs])
+		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
-		if mfs_state == 'Unconfigured' and oem_config : mfs_state = 'Configured'
+		if mfs_state == 'Unconfigured' and (oem_config or fitc_found) : mfs_state = 'Configured'
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -10309,8 +10368,8 @@ for file_in in source :
 			continue # Next input file
 		
 		# Detect CSE Firmware Attributes
-		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn \
-		= ext_anl(reading, '$CPD', 0, file_end, ['PMC', -1, -1, -1, -1], None, [[],''])
+		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
+		= ext_anl(reading, '$CPD', 0, file_end, ['PMC', -1, -1, -1, -1], None, [[],''], [[],-1,-1])
 		
 		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit = pmc_anl(cpd_mn2_info, cpd_mod_attr)
 		
