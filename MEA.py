@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.104.0'
+title = 'ME Analyzer v1.105.0'
 
 import os
 import re
@@ -5565,7 +5565,17 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					cpd_mod_offset = cpd_ext_offset + CSE_Ext_TCSS_length
 					CSE_Ext_TCSS_Mod_length = ctypes.sizeof(ext_struct_mod)
 					CSE_Ext_TCSS_Mod_area = cpd_ext_end - cpd_mod_offset
-					tcss_types = {1:'iom', 2:'nphy' if cpd_name == 'NPHY' else 'mg', 3:'tbt', 4:'iom.cd', 5:'tbt.cd', 11:'iom.hwcd'} # mg = nphy
+					iom_names = {'SAMF':'samf', 'IOMP':'iom'}
+					tbt_names = {'TBTP':'tbt'}
+					mg_names = {'PPHY':'pphy', 'NPHY':'nphy', 'DPHY':'dphy', 'MGPP':'mg'}
+					tcss_types = {
+								1:iom_names[cpd_name] if cpd_name in iom_names else 'iom',
+								2:mg_names[cpd_name] if cpd_name in mg_names else 'mg',
+								3:tbt_names[cpd_name] if cpd_name in tbt_names else 'tbt',
+								4:(iom_names[cpd_name] if cpd_name in iom_names else 'iom') + '.cd',
+								5:(tbt_names[cpd_name] if cpd_name in tbt_names else 'tbt') + '.cd',
+								11:(iom_names[cpd_name] if cpd_name in iom_names else 'iom') + '.hwcd'
+								}
 					
 					# Check if Mod data is divisible by Mod size
 					if CSE_Ext_TCSS_Mod_area % CSE_Ext_TCSS_Mod_length != 0 :
@@ -5577,8 +5587,15 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						tcss_type = mod_hdr_p.HashType # Numeric value which corresponds to specific TCSS module filename
 						tcss_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in mod_hdr_p.Hash) # Hash (BE)
 						
-						if tcss_type in tcss_types : cpd_mod_attr.append([tcss_types[tcss_type], 0, 0, 0, 0, 0, 0, tcss_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
-						else : cse_anl_err(col_r + 'Error: Detected unknown CSE TCSS Type %d at %s > %s!' % (tcss_type, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
+						if tcss_type in tcss_types :
+							tcss_name = tcss_types[tcss_type] # Get TCSS Module Name based on its Type and $CPD Name
+							
+							# Check if the generated TCSS Module Name is actually one of the $CPD Partition Modules Names
+							if tcss_name not in cpd_mod_names : cse_anl_err(col_r + 'Error: Detected unknown CSE TCSS Name at %s > %s!' % (cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
+								
+							cpd_mod_attr.append([tcss_name, 0, 0, 0, 0, 0, 0, tcss_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_valid])
+						else :
+							cse_anl_err(col_r + 'Error: Detected unknown CSE TCSS Type %d at %s > %s!' % (tcss_type, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
 						
 						cpd_mod_offset += CSE_Ext_TCSS_Mod_length
 				
@@ -6884,15 +6901,15 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 			fitc_cfg,flag_unk = rec_hdr.get_flags() # Get Record Flags
 			
 			if '%0.2X' % vol_ftbl_id not in ftbl_dict :
-				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: File Table Dictionary %0.2X does not exist!' % vol_ftbl_id + col_e, 'error', True, False, False, [])
-				rec_path = os.path.normpath(os.path.join('/Unknown', '%0.8X.bin' % rec_id)) # Set generic/unknown File local path when errors occur
-				rec_file = os.path.normpath(rec_folder + rec_path) # Set generic/unknown File actual path when errors occur
-				rec_parent = os.path.normpath(os.path.join(rec_folder, 'Unknown')) # Set generic/unknown parent Folder actual path when errors occur
+				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_m + 'Warning: File Table Dictionary %0.2X does not exist!' % vol_ftbl_id + col_e, '', True, False, False, [])
+				rec_path = os.path.normpath(os.path.join('/Unknown', '%0.8X.bin' % rec_id)) # Set generic/unknown File local path when warnings occur
+				rec_file = os.path.normpath(rec_folder + rec_path) # Set generic/unknown File actual path when warnings occur
+				rec_parent = os.path.normpath(os.path.join(rec_folder, 'Unknown')) # Set generic/unknown parent Folder actual path when warnings occur
 			elif '%0.8X' % rec_id not in ftbl_dict['%0.2X' % vol_ftbl_id] :
-				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: File Table Dictionary %0.2X does not contain ID %0.8X!' % (vol_ftbl_id,rec_id) + col_e, 'error', False, False, False, [])
-				rec_path = os.path.normpath(os.path.join('/Unknown', '%0.8X.bin' % rec_id)) # Set generic/unknown File local path when errors occur
-				rec_file = os.path.normpath(rec_folder + rec_path) # Set generic/unknown File actual path when errors occur
-				rec_parent = os.path.normpath(os.path.join(rec_folder, 'Unknown')) # Set generic/unknown parent Folder actual path when errors occur
+				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_m + 'Warning: File Table Dictionary %0.2X does not contain ID %0.8X!' % (vol_ftbl_id,rec_id) + col_e, '', False, False, False, [])
+				rec_path = os.path.normpath(os.path.join('/Unknown', '%0.8X.bin' % rec_id)) # Set generic/unknown File local path when warnings occur
+				rec_file = os.path.normpath(rec_folder + rec_path) # Set generic/unknown File actual path when warnings occur
+				rec_parent = os.path.normpath(os.path.join(rec_folder, 'Unknown')) # Set generic/unknown parent Folder actual path when warnings occur
 			else :
 				rec_path = os.path.normpath(ftbl_dict['%0.2X' % vol_ftbl_id]['%0.8X' % rec_id]) # Get File local path from FTBL Dictionary
 				rec_file = os.path.normpath(rec_folder + rec_path) # Set File actual path from FTBL Dictionary
@@ -8192,7 +8209,7 @@ key_dict = {
 			# Intel (0-31)
 			0 : 'CSE BUP', # Fault Tolerant Partition (FTPR)
 			1 : 'CSE Main', # Non-Fault Tolerant Partition (NFTP)
-			2 : 'PMC', # Power Management Controller
+			2 : 'Intel PMC', # Power Management Controller
 			6 : 'USB Type C IOM', # USB Type C I/O Manageability
 			7 : 'USB Type C MG', # USB Type C Manageability (?)
 			8 : 'USB Type C TBT', # USB Type C Thunderbolt
@@ -8202,6 +8219,8 @@ key_dict = {
 			13 : 'USB Type C D-PHY',
 			14 : 'PCH Configuration',
 			16 : 'Intel ISI',
+			17 : 'SAM',
+			18 : 'PPHY',
 			# OEM (32-127)
 			32 : 'Boot Policy',
 			33 : 'iUnit Boot Loader', # Imaging Unit (Camera)
@@ -8211,7 +8230,7 @@ key_dict = {
 			37 : 'IFWI', # Integrated Firmware Image
 			38 : 'OS Boot Loader',
 			39 : 'OS Kernel',
-			40 : 'OEM SMIP', # Signed Master Image Profile
+			40 : 'SMIP', # Signed Master Image Profile
 			41 : 'ISH Main', # Integrated Sensor Hub
 			42 : 'ISH BUP',
 			43 : 'OEM Unlock Token',
@@ -8224,6 +8243,12 @@ key_dict = {
 			53 : 'OEM DNX IFWI R2', # XML v2.4 (Download and Execute v2)
 			57 : 'OEM Descriptor',
 			58 : 'OEM ISI',
+			60 : 'HBM IO',
+			61 : 'OOB MSM',
+			62 : 'GT GPU',
+			63 : 'MDF IO',
+			64 : 'OEM PMC Code',
+			65 : 'GSC DPHY',
 			}
 	
 # IFWI BPDT Entry Types
@@ -8260,6 +8285,14 @@ bpdt_dict = {
 			32 : 'PCHC', # PCH Configuration
 			33 : 'ISIF', # ISI Firmware
 			34 : 'ISIC', # ISI Configuration
+			35 : 'HBMI', # HMB IO Partition
+			36 : 'OMSM', # OOB MSM Partition
+			37 : 'GTGP', # GT-GPU Partition
+			38 : 'MDFI', # MDF IO Partition
+			39 : 'PUNP', # PUnit Partition
+			40 : 'DPHY', # GSC DPHY Partition
+			41 : 'SAMF', # SAM Firmware
+			42 : 'PPHY', # PPHY Partition
 			}
 	
 # CSE PCH Platforms
@@ -8429,7 +8462,7 @@ for file_in in source :
 	ifwi_exist = False
 	utok_found = False
 	oemp_found = False
-	wcod_found = False
+	is_partial_upd = False
 	fw_type_fix = False
 	is_patsburg = False
 	can_search_db = True
@@ -10042,13 +10075,13 @@ for file_in in source :
 						huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error')
 						ker_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 						
-						# 0F22D88D65F85B5E5DC355B8 (56 & AA for H, 60 & A0 for LP)
+						# 0F22D88D65F85B5E5DC355B8 (56AA|36AA for H, 60A0|004D for LP)
 						sku_pat = re.compile(br'\x0F\x22\xD8\x8D\x65\xF8\x5B\x5E\x5D\xC3\x55\xB8').search(ker_decomp)
 						
 						if sku_pat :
 							sku_bytes = int.from_bytes(ker_decomp[sku_pat.end():sku_pat.end() + 0x1] + ker_decomp[sku_pat.end() + 0x17:sku_pat.end() + 0x18], 'big')
-							if sku_bytes == 0x56AA : pos_sku_ker = 'H'
-							elif sku_bytes == 0x60A0 : pos_sku_ker = 'LP'
+							if sku_bytes in (0x56AA,0x36AA) : pos_sku_ker = 'H' # 0x36AA for 11.0.0.1126
+							elif sku_bytes in (0x60A0,0x004D) : pos_sku_ker = 'LP' # 0x004D for 11.0.0.1100
 						
 						break # Skip rest of FTPR modules
 			
@@ -10395,15 +10428,17 @@ for file_in in source :
 	
 	# Partial Firmware Update adjustments
 	if pr_man_8 or pr_man_9 :
-		wcod_found = True
+		is_partial_upd = True
 		fw_type = 'Partial Update'
 		del err_stor[:]
+		del warn_stor[:]
+		del note_stor[:]
 	
 	# Create Firmware Type DB entry
 	fw_type, type_db = fw_types(fw_type)
 	
 	# Check for CSME 12+ FWUpdate Support/Compatibility
-	if variant == 'CSME' and major >= 12 and not wcod_found :
+	if variant == 'CSME' and major >= 12 and not is_partial_upd :
 		fwu_iup_check = True if type_db == 'EXTR' and sku_db.startswith('COR') else False
 		if fwu_iup_check and (uncharted_start != -1 or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
 		else : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
@@ -10436,7 +10471,7 @@ for file_in in source :
 		continue # Next input file
 	
 	# Search Database for firmware
-	if not variant.startswith('PMC') and not wcod_found : # Not PMC or Partial Update
+	if not variant.startswith('PMC') and not is_partial_upd : # Not PMC or Partial Update
 		fw_db = db_open()
 		for line in fw_db :
 			# Search the re-created file name without extension at the database
@@ -10458,7 +10493,7 @@ for file_in in source :
 		note_stor.append([col_g + 'Note: This %s firmware was not found at the database, please report it!' % variant_p + col_e, True])
 	
 	# Check if firmware is updated, Production only
-	if release == 'Production' and not wcod_found : # Does not display if firmware is non-Production or Partial Update
+	if release == 'Production' and not is_partial_upd : # Does not display if firmware is non-Production or Partial Update
 		if not variant.startswith(('SPS','CSSPS','PMCAPL','PMCBXT','PMCGLK')) : # (CS)SPS and old PMC excluded
 			if upd_found : upd_rslt = col_r + 'No' + col_e
 			elif not upd_found : upd_rslt = col_g + 'Yes' + col_e
@@ -10491,42 +10526,42 @@ for file_in in source :
 		msg_pt.add_row(['Release', release + ', Engineering ' if build >= 7000 else release])
 		msg_pt.add_row(['Type', fw_type])
 		
-		if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') or wcod_found \
+		if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') or is_partial_upd \
 		or variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) :
 			pass
 		else :
 			msg_pt.add_row(['SKU', sku])
 		
-		if variant.startswith(('CS','PMC')) and not wcod_found :
+		if variant.startswith(('CS','PMC')) and not is_partial_upd :
 			if sku_stp == 'NaN' : msg_pt.add_row(['Chipset', 'Unknown'])
 			elif pch_init_final : msg_pt.add_row(['Chipset', pch_init_final[-1][0]])
 			else : msg_pt.add_row(['Chipset Stepping', ', '.join(map(str, list(sku_stp)))])
 		
-		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith('PMC')) and not wcod_found :
+		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith('PMC')) and not is_partial_upd :
 			msg_pt.add_row(['%sSecurity Version Number' % ('TCB ' if arb_svn != -1 else ''), svn])
 			
-		if arb_svn != -1 and not wcod_found : msg_pt.add_row(['ARB Security Version Number', arb_svn])
+		if arb_svn != -1 and not is_partial_upd : msg_pt.add_row(['ARB Security Version Number', arb_svn])
 			
-		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith('PMC')) and not wcod_found :
+		if ((variant in ['ME','CSME'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith('PMC')) and not is_partial_upd :
 			msg_pt.add_row(['Version Control Number', vcn])
 		
-		if pvbit in [0,1] and wcod_found is False : msg_pt.add_row(['Production Ready', ['No','Yes'][pvbit]])
+		if pvbit in [0,1] and is_partial_upd is False : msg_pt.add_row(['Production Ready', ['No','Yes'][pvbit]])
 		
-		if [variant,major,wcod_found] == ['CSME',11,False] :
+		if [variant,major,is_partial_upd] == ['CSME',11,False] :
 			if pdm_status != 'NaN' : msg_pt.add_row(['Power Down Mitigation', pdm_status])
 			msg_pt.add_row(['Lewisburg PCH Support', ['No','Yes'][fw_0C_lbg]])
 			
 		if variant == 'ME' and major == 7 : msg_pt.add_row(['Patsburg PCH Support', ['No','Yes'][is_patsburg]])
 			
-		if variant in ('CSME','CSTXE','CSSPS') and not wcod_found : msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed or oemp_found)]])
+		if variant in ('CSME','CSTXE','CSSPS') and not is_partial_upd : msg_pt.add_row(['OEM RSA Signature', ['No','Yes'][int(oem_signed or oemp_found)]])
 			
 		if (rgn_exist or ifwi_exist) and variant in ('CSME','CSTXE','CSSPS','TXE') : msg_pt.add_row(['OEM Unlock Token', ['No','Yes'][int(utok_found)]])
 		
-		if variant == 'CSME' and major >= 12 and not wcod_found : msg_pt.add_row(['FWUpdate Support', fwu_iup_result])
+		if variant == 'CSME' and major >= 12 and not is_partial_upd : msg_pt.add_row(['FWUpdate Support', fwu_iup_result])
 		
 		msg_pt.add_row(['Date', date])
 
-		if variant in ('CSME','CSTXE','CSSPS') and not wcod_found : msg_pt.add_row(['File System State', mfs_state])
+		if variant in ('CSME','CSTXE','CSSPS') and not is_partial_upd : msg_pt.add_row(['File System State', mfs_state])
 		
 		if rgn_exist or variant.startswith('PMC') :
 			if (variant,major,release) == ('ME',6,'ROM-Bypass') : msg_pt.add_row(['Size', 'Unknown'])
