@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.105.0'
+title = 'ME Analyzer v1.106.0'
 
 import os
 import re
@@ -5567,7 +5567,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					CSE_Ext_TCSS_Mod_area = cpd_ext_end - cpd_mod_offset
 					iom_names = {'SAMF':'samf', 'IOMP':'iom'}
 					tbt_names = {'TBTP':'tbt'}
-					mg_names = {'PPHY':'pphy', 'NPHY':'nphy', 'DPHY':'dphy', 'MGPP':'mg'}
+					mg_names = {'PPHY':'pphy', 'NPHY':'nphy', 'SPHY':'sphy', 'DPHY':'dphy', 'MGPP':'mg'}
 					tcss_types = {
 								1:iom_names[cpd_name] if cpd_name in iom_names else 'iom',
 								2:mg_names[cpd_name] if cpd_name in mg_names else 'mg',
