@@ -1,3 +1,18 @@
+v1.106.0
+
+Improved support for future platforms
+Finalized Huffman symbol dictionary v12
+
+r188
+
+CSME 14.0.32.1123_CON_H_A_PRD_EXTR
+CSME 14.0.31.1120_CON_LP_A_PRD_EXTR
+CSME 14.0.31.1120_COR_LP_A_PRD_EXTR-Y
+CSSPS 04.00.04.128_BA_SKU3_PRD_OPR
+CSSPS 04.00.04.128_BA_SKU3_BA_PRD_REC
+PMC CMP_140.2.01.1010_H_A_PRD
+PMC CMP_140.1.01.1008_LP_A_PRD
+
 v1.105.0
 
 Improved support for future platforms
