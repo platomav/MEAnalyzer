@@ -1,3 +1,29 @@
+v1.110.0
+
+Added PCH Configuration (PCHC) detection
+Added PMC ICP-N 130.3 & CMP-V 140.1 support
+Added stitched PMC unknown RSA Key detection
+Improved CSE Independent Partition detection
+Improved CSE Extension 15 revision detection
+Improved CSSPS 4 Ignition firmware support
+Applied various code fixes & improvements
+
+r189
+
+CSME 14.5.12.1111_CON_H_A_PRD_EXTR
+CSME 14.5.11.1105_CON_H_A_PRD_EXTR
+CSME 14.5.0.1010_CON_H_A_PRD_EXTR
+CSME 13.0.31.1465_SLM_N_A_PRD_EXTR
+CSME 11.22.77.1664_COR_H_BA_PRD_RGN
+CSME 11.12.77.1664_CON_H_A_PRD_RGN
+CSME 11.12.77.1664_COR_H_A_PRD_RGN
+CSME 11.8.77.3664_CON_H_DA_PRD_EXTR
+CSME 11.8.77.3664_COR_H_DA_PRD_RGN
+CSSPS 01.00.02.043_HA_SKU0_PRD_REC
+PMC CMP_140.1.00.1005_V_A_PRD
+PMC ICP_130.3.10.1030_N_B_PRD
+PMC ICP_130.3.10.1026_N_B_PRD
+
 v1.106.0
 
 Improved support for future platforms
