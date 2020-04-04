@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.110.0'
+title = 'ME Analyzer v1.111.0'
 
 import os
 import re
@@ -23,6 +23,7 @@ import crccheck
 import colorama
 import itertools
 import traceback
+import subprocess
 import prettytable
 
 # Initialize and setup Colorama
@@ -92,7 +93,7 @@ class MEA_Param :
 
 	def __init__(self, mea_os, source) :
 	
-		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-ftbl']
+		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-ftbl','-rcfg']
 		self.win = ['-extr','-msg'] # Windows only
 		
 		if mea_os == 'win32' : self.val = self.all
@@ -113,6 +114,7 @@ class MEA_Param :
 		self.write_html = False
 		self.write_json = False
 		self.mfs_ftbl = False
+		self.mfs_rcfg = False
 		
 		for i in source :
 			if i == '-?' : self.help_scr = True
@@ -128,6 +130,7 @@ class MEA_Param :
 			if i == '-html' : self.write_html = True
 			if i == '-json' : self.write_json = True
 			if i == '-ftbl' : self.mfs_ftbl = True # Hidden
+			if i == '-rcfg' : self.mfs_rcfg = True # Hidden
 			
 			# Windows only options
 			if mea_os == 'win32' :
@@ -5303,7 +5306,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					CSE_Ext_03_Mod_area = cpd_ext_end - cpd_mod_offset
 					
 					# Verify Partition Hash ($CPD - $MN2 + Data)
-					if start_man_match != -1 and not single_man_name and not oem_config and not oem_signed :
+					if start_man_match != -1 and not single_man_name and not oem_config and not oem_signed and not fptemp_info[0] :
 						mea_pdata = buffer[cpd_offset:mn2_offset] + buffer[mn2_offset + mn2_size:cpd_offset + ext_psize] # $CPD + Data (no $MN2)
 						mea_phash = get_hash(mea_pdata, len(ext_phash) // 2) # Hash for CSE_Ext_03
 						
@@ -5466,7 +5469,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					ext_phash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Partition Hash
 					
 					# Verify Partition Hash ($CPD - $MN2 + Data)
-					if start_man_match != -1 and not single_man_name and not oem_config and not oem_signed :
+					if start_man_match != -1 and not single_man_name and not oem_config and not oem_signed and not fptemp_info[0] :
 						mea_pdata = buffer[cpd_offset:mn2_offset] + buffer[mn2_offset + mn2_size:cpd_offset + ext_psize] # $CPD + Data (no $MN2)
 						
 						mea_phash = get_hash(mea_pdata, ext_phlen)
@@ -6495,40 +6498,55 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		# Parse MFS Low Level File 6 (Intel Configuration) and 7 (OEM Configuration)
 		elif mfs_file[1] and mfs_file[0] in (6,7) :
 			
-			'''
 			# Create copy of firmware with clean/unconfigured MFS (Linux only)
 			# MFSTool by Peter Bosch (https://github.com/peterbjornx/meimagetool)
-			if mfs_file[0] == 6 :
-				import subprocess
+			if param.mfs_rcfg and mfs_file[0] == 6 :
+				mfs_tmpl_name = '%d_%d_%d.bin' % (mfs_size,vol_file_rec,vol_total_size)
 				
-				temp_dir = os.path.join(mea_dir, 'temp', '')
-				out_dir = os.path.join(mea_dir, 'output', '')
-				if os.path.isdir(temp_dir) : shutil.rmtree(temp_dir)
-				os.mkdir(temp_dir)
-				if not os.path.isdir(out_dir) : os.mkdir(out_dir)
+				# MFS Templates depend on their Size (256K,400K,1272K), Volume File Record Count (256,512,1024,2048 etc) and
+				# Total Volume Size (0x39240,0x58B80,0x58F80,0x11D900,0x11E100 etc). When the Volume File Record Count and
+				# the Total Volume Size increase, a new template must be created with adjusted Volume Header Info but also
+				# with adjusted Page First Chunk & CRC-8 at each Data Page. To determine the Data Page First Chunk increase
+				# for each page, calculate Total Volume Size Difference / Raw Chunk Size. For example, to create template
+				# 1272K_2048_0x11E100 from 1272K_1024_0x11D900, add (0x11E100 - 0x11D900) / 0x40 = 0x20 to each Data Page
+				# First Chunk. After adjusting all Data Page First Chunk & CRC-8, the Volume Header Info must be updated
+				# as well. It is enough to copy the entire First System Page Chunk at 0x104 - 0x146 from old to new MFS.
+				# Note that, at CSTXE, the Initialized AFS Size is variable as it expands during CSE operation at DevExp
+				# SPI Region based on operational needs. That is OK because CSTXE does not need AFS cleaning either way
+				# due to its use of FTPR > intl.cfg and fitc.cfg files as base even if its RGN includes the 256K MFS.
 				
-				intl_cfg = os.path.join(temp_dir, 'intel.cfg')
-				with open(intl_cfg, 'wb') as o : o.write(mfs_file[1])
-				
-				mfs_tmpl = {0x40000 : '256K.bin', 0x64000 : '400K.bin', 0x13E000 : '1272K.bin'}[mfs_size]
-				
-				clean_mfs_path = os.path.join(mea_dir, 'MFS_INTEL.bin')
-				mfstool_path = os.path.join(mea_dir, 'mfstool')
-				
-				# The temp_dir for MFSTool must not include files other than intel.cfg and fitc.cfg
-				mfstool = subprocess.run([mfstool_path, 'c', clean_mfs_path, mfs_tmpl, temp_dir])
+				if os.path.isfile(mfs_tmpl_name) :
+					temp_dir = os.path.join(mea_dir, 'temp', '')
+					out_dir = os.path.join(mea_dir, 'output', '')
+					if os.path.isdir(temp_dir) : shutil.rmtree(temp_dir)
+					os.mkdir(temp_dir)
+					if not os.path.isdir(out_dir) : os.mkdir(out_dir)
+					
+					with open(os.path.join(temp_dir, 'intel.cfg'), 'wb') as o :
+						# noinspection PyTypeChecker
+						o.write(mfs_file[1])
+					
+					temp_mfs_path = os.path.join(mea_dir, 'MFS_TEMP.bin')
+					clean_mfs_path = os.path.join(mea_dir, 'MFS_CLEAN.bin')
+					
+					with open(mfs_tmpl_name, 'rb') as mfs_tmpl : mfs_tmpl_fixed = bytearray(mfs_tmpl.read())
+					mfs_tmpl_fixed[0x104:0x146] = mfs_buffer_init[0x104:0x146] # Copy 1st Chunk from dirty MFS to template for Volume info
+					with open(temp_mfs_path, 'wb') as o : o.write(mfs_tmpl_fixed)
+					
+					# The temp_dir for MFSTool must NOT include files other than intel.cfg and fitc.cfg
+					mfstool = subprocess.run([os.path.join(mea_dir, 'mfstool'), 'c', clean_mfs_path, temp_mfs_path, temp_dir])			
 
-				final = os.path.join(out_dir, os.path.basename(file_in))				
-
-				if os.path.isfile(clean_mfs_path) :
-					with open(clean_mfs_path, 'rb') as mfs_rgn : clean_mfs = mfs_rgn.read()
-					if len(clean_mfs) != mfs_size : input('Error: MFS size mismatch!')
-					new_mfs = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
-					with open(final, 'wb') as o : o.write(new_mfs)
-
-				shutil.rmtree(temp_dir)
-				os.remove(clean_mfs_path)
-			'''
+					if os.path.isfile(clean_mfs_path) :
+						with open(clean_mfs_path, 'rb') as mfs_new : clean_mfs = mfs_new.read()
+						if len(clean_mfs) != mfs_size : input('\nError: MFS size mismatch!')
+						output = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
+						with open(os.path.join(out_dir, os.path.basename(file_in)), 'wb') as o : o.write(output)
+					
+					shutil.rmtree(temp_dir)
+					os.remove(temp_mfs_path)
+					os.remove(clean_mfs_path)
+				else :
+					input(col_r + '\nError: Unknown MFS template %s detected!' % mfs_tmpl_name[:-4] + col_e)
 			
 			mfs_file_name = {6:'Intel Configuration', 7:'OEM Configuration'}
 			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name[mfs_file[0]]) + col_e)
@@ -8838,19 +8856,20 @@ for file_in in source :
 	# Detect all $FPT and/or BPDT starting offsets (both allowed/needed)
 	if fd_me_rgn_exist :
 		# $FPT detection based on FD with Engine region (limits false positives from IE or CSTXE Engine/ROMB & DevExp1/Init)
-		fpt_matches = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading[me_fd_start:me_fd_start + me_fd_size]))
+		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading[me_fd_start:me_fd_start + me_fd_size]))
 	else :
 		# FD with Engine region not found or multiple FD detected, scan entire file (could lead to false positives)
 		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
 		
-		# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
-		man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', 0, 0, 0, 0], None, [[],''], [[],-1,-1])
-		fptemp_exists = True if man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0] else False # Detect if CSE FTPR > fptemp module exists
-		
-		# Adjust $FPT matches, ignore known CSE false positives
-		for fpt_match in fpt_matches_init :
-			if fptemp_exists and fptemp_info[2] > fpt_match.start() >= fptemp_info[1] : pass # CSE FTPR > fptemp
-			else : fpt_matches.append(fpt_match)
+	# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
+	man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME', 0, 0, 0, 0], None, [[],''], [[],-1,-1])
+	fptemp_exists = True if man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0] else False # Detect if CSE FTPR > fptemp module exists
+	
+	# Adjust $FPT matches, ignore known false positives
+	for fpt_match in fpt_matches_init :
+		fpt_match_start = me_fd_start + fpt_match.start() if fd_me_rgn_exist else fpt_match.start()
+		if fptemp_exists and fptemp_info[2] > fpt_match_start >= fptemp_info[1] : pass # CSE FTPR > fptemp
+		else : fpt_matches.append(fpt_match)
 	
 	# Store Initial Manifest Offset for CSSPS EXTR RSA Signatures Hash
 	init_man_match = [start_man_match,end_man_match]

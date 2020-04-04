@@ -1,3 +1,11 @@
+v1.111.0
+
+Improved handling of CSE FTPR fptemp module
+
+r190
+
+CSME 12.0.64.1551_CON_H_BA_PRD_EXTR
+
 v1.110.0
 
 Added PCH Configuration (PCHC) detection
