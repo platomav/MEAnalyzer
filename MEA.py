@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.111.0'
+title = 'ME Analyzer v1.112.0'
 
 import os
 import re
@@ -3235,12 +3235,12 @@ class CSE_Ext_11_R2(ctypes.LittleEndianStructure) : # R2 - cAVS (ADSP, not in XM
 		
 		return pt
 		
-class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Isolated Memory Region Information (FTPR, not in XML, Reverse Engineered)
+class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Isolated Memory Ranges (FTPR, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
-		("ModuleCount",		uint32_t),		# 0x08 Region Count
+		("ModuleCount",		uint32_t),		# 0x08 Range Count
 		("Reserved",		uint32_t*4),	# 0x0C
 		# 0x1C
 	]
@@ -3250,7 +3250,7 @@ class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Isolated Memory Region I
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 18, Isolated Memory Region Information' + col_e
+		pt.title = col_y + 'Extension 18, Isolated Memory Ranges' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Module Count', '%d' % self.ModuleCount])
@@ -3282,7 +3282,7 @@ class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # R1 - (not in XML, Reverse
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 18, Isolated Memory Region' + col_e
+		pt.title = col_y + 'Extension 18, Isolated Memory Range' + col_e
 		pt.add_row(['Unknown 00_04', '0x%X' % self.Unknown00_04])
 		pt.add_row(['Unknown 04_08', '0x%X' % self.Unknown04_08])
 		pt.add_row(['Unknown 08_0C', '0x%X' % self.Unknown08_0C])
@@ -7143,7 +7143,8 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 		   
 # Verify CSE FTPR/OPR & stitched PMC compatibility
 def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_gen_list, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
-	if pmc_mn2_signed != release or pmc_pch_gen not in pmc_gen_list or pmc_pch_sku != sku_result or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
+	if pmc_mn2_signed != release or pmc_pch_gen not in pmc_gen_list or pmc_pch_sku != sku_result \
+	or (sku_stp != 'NaN' and pmc_pch_gen == 300 and pmc_pch_rev[0] not in sku_stp) :
 		warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
 		
 # Analyze CSE PCHC firmware
@@ -7958,6 +7959,7 @@ def release_fix(release, rel_db, rsa_key_hash) :
 	rsa_pre_keys = [
 	'F00916F0080505A5A377D5F013DAB6C82EB2952AC6AEADCCC104662CA206BA70',
 	'B48B05EAB48710FC0A0EC30AEBADE252D5CE4669E27244FEEB861C7E16688345',
+	'6F4BDE36CB1DD10A797CCE74BEA122F7609BA29630458E93586B2B447E58C38C',
 	'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7',
 	'86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894',
 	'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76'
@@ -8044,8 +8046,7 @@ def get_variant() :
 	is_pmccmpv = True if hasattr(mn2_ftpr_hdr, 'MEU_Minor') and mn2_ftpr_hdr.MEU_Minor == 5 else False
 	
 	# Variant DB RSA Public Key not found, manual known correction
-	if variant == 'TBD6' and major == 150 : variant = 'PMCTGP'
-	elif variant == 'TBD5' and major == 15 and reading[0xC:0x10] == b'PCHC' : variant = 'PCHCTGP'
+	if variant == 'TBD5' and major == 15 and reading[0xC:0x10] == b'PCHC' : variant = 'PCHCTGP'
 	elif variant == 'TBD5' and major == 15 : variant = 'CSME' # After PCHC
 	elif variant == 'TBD4' and major in (300,3232) : variant = 'PMCCNP'
 	elif variant == 'TBD4' and major == 140 and is_pmccmpv : variant = 'PMCCMPV'
@@ -8061,7 +8062,7 @@ def get_variant() :
 	elif variant == 'TBD1' and 0 <= major <= 2 : variant = 'TXE'
 	
 	# Manual known variant correction failed, targeted detection
-	if variant in ['Unknown','TBD1','TBD2','TBD3','TBD4','TBD5','TBD6'] :
+	if variant in ['Unknown','TBD1','TBD2','TBD3','TBD4','TBD5'] :
 		if variant == 'Unknown' : var_rsa_db = False # TBDx are multi-platform RSA Public Keys
 		
 		# Get CSE $CPD Module Names only for targeted variant detection via special ext_anl _Stage1 mode
@@ -8299,7 +8300,7 @@ key_dict = {
 			9 : 'WCOD', # Wireless Microcode
 			10 : 'LOCL', # AMT Localization
 			11 : 'Intel Unlock Token',
-			13 : 'USB Type C D-PHY',
+			13 : 'USB Type C PHY',
 			14 : 'PCH Configuration',
 			16 : 'Intel ISI',
 			17 : 'SAM',
