@@ -9,11 +9,11 @@ Intel Engine Firmware Analysis Tool
 
 [![ME Analyzer Donation](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=DJDZD3PRGCSCL)
 
-![](https://i.imgur.com/XWRRPEq.png)
+![](https://i.imgur.com/PoUD96g.png)
 
 ## **A. About ME Analyzer**
 
-ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (Converged Security) Management Engine, (Converged Security) Trusted Execution Engine, (Converged Security) Server Platform Services & Power Management Controller families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) code & file system, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
+ME Analyzer is a tool which parses Intel Engine, PMC & PCHC firmware images from the (Converged Security) Management Engine, (Converged Security) Trusted Execution Engine, (Converged Security) Server Platform Services, Power Management Controller & Platform Controller Hub Configuration families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) code & file system, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), CSE File Table (FTBL), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
 
 #### **A1. ME Analyzer Features**
 
@@ -24,6 +24,7 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (
 - Detection of Region (Stock/clean or Extracted/dirty), Update etc Types
 - Detection of Security Version Numbers (SVN), Version Control Number (VCN)
 - Detection of Power Management Controller (PMC) firmware Version, SKU etc
+- Detection of Platform Controller Hub Configuration (PCHC) firmware Version etc
 - Detection of whether the imported Engine firmware is updated or not
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)
 - Ability to fully unpack CSE firmware CSME 11+, CSTXE 3+ and CSSPS 4+
@@ -43,7 +44,7 @@ ME Analyzer is a tool which parses Intel Engine & PMC firmware images from the (
 
 #### **A2. Engine Firmware Repository Database**
 
-ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine Firmware Repositories](http://www.win-raid.com/t832f39-Intel-Management-amp-Trusted-Execution-Engine-Firmware-Repository.html) is a collection of every (CS)ME, (CS)TXE & (CS)SPS firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities, check for updated firmware etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine firmware that are available to us. This accommodates primarily three actions: a) Detect each firmware's Family via unique identifier keys, b) Check whether the imported firmware is up to date and c) Help find new Engine firmware sooner by reporting them at the [Intel Management Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t596f39-Intel-Management-Engine-Drivers-Firmware-amp-System-Tools.html) or [Intel Trusted Execution Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t624f39-Intel-Trusted-Execution-Engine-Drivers-Firmware-amp-System-Tools.html) threads respectively.
+ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine Firmware Repositories](http://www.win-raid.com/t832f39-Intel-Management-amp-Trusted-Execution-Engine-Firmware-Repository.html) is a collection of every (CS)ME, (CS)TXE, (CS)SPS, PMC & PCHC firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities, check for updated firmware etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine firmware that are available to us. This accommodates primarily three actions: a) Detect each firmware's Family via unique identifier keys, b) Check whether the imported firmware is up to date and c) Help find new Engine firmware sooner by reporting them at the [Intel Management Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t596f39-Intel-Management-Engine-Drivers-Firmware-amp-System-Tools.html) or [Intel Trusted Execution Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t624f39-Intel-Trusted-Execution-Engine-Drivers-Firmware-amp-System-Tools.html) threads respectively.
 
 ## **B. How to use ME Analyzer**
 
@@ -76,7 +77,7 @@ During operation, ME Analyzer may encounter issues that can trigger Notes, Warni
 
 ## **C. Download ME Analyzer**
 
-ME Analyzer consists of three files, the executable (MEA.exe or MEA) and the databases (MEA.dat & Huffman.dat). An already built/frozen/compiled binary is provided by me for Windows only (icon designed by [Those Icons](https://thoseicons.com/)). Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should be "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bundled with the latest executable release, title should be "DB rXX". To extract the already built/frozen/compiled archive, you need to use programs which support RAR5 compression.
+ME Analyzer consists of four files, the executable (MEA.exe or MEA) and the databases (MEA.dat, Huffman.dat & FileTable.dat). An already built/frozen/compiled binary is provided by me for Windows only (icon designed by [Those Icons](https://thoseicons.com/)). Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should be "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bundled with the latest executable release, title should be "DB rXX". To extract the already built/frozen/compiled archive, you need to use programs which support RAR5 compression.
 
 #### **C1. Compatibility**
 
@@ -136,44 +137,44 @@ Some Anti-Virus software may claim that the built/frozen/compiled MEA executable
 
 **Note:** Some pictures are outdated and depict older ME Analyzer versions.
 
-![](https://i.imgur.com/XWRRPEq.png)
+![](https://i.imgur.com/PoUD96g.png)
 
-![](https://i.imgur.com/6UNqSe8.png)
+![](https://i.imgur.com/Sns8rtN.png)
 
-![](https://i.imgur.com/9tnZ7lA.png)
+![](https://i.imgur.com/xqvD43s.png)
 
-![](https://i.imgur.com/v46gBmR.png)
+![](https://i.imgur.com/S2I8uRD.png)
 
-![](https://i.imgur.com/WIATngh.png)
+![](https://i.imgur.com/aXKKq8j.png)
 
-![](https://i.imgur.com/OEBpie6.png)
+![](https://i.imgur.com/xY2aWeX.png)
 
-![](https://i.imgur.com/CYNWoiS.png)
+![](https://i.imgur.com/7oLhnMQ.png)
 
-![](https://i.imgur.com/dLVMFlg.png)
+![](https://i.imgur.com/wkcx30U.png)
 
-![](https://i.imgur.com/3ofDnwl.png)
+![](https://i.imgur.com/9d8vAnF.png)
 
-![](https://i.imgur.com/febB1yM.png)
+![](https://i.imgur.com/n9u2mnc.png)
 
-![](https://i.imgur.com/JGljfRQ.png)
+![](https://i.imgur.com/an23XZv.png)
 
-![](https://i.imgur.com/LdYLZrg.png)
+![](https://i.imgur.com/fhp16ve.png)
 
-![](https://i.imgur.com/XCY7eY6.png)
+![](https://i.imgur.com/0MD8888.png)
 
-![](https://i.imgur.com/D012Cpt.png)
+![](https://i.imgur.com/OvIodbo.png)
 
-![](https://i.imgur.com/cvHhCO2.png)
+![](https://i.imgur.com/0DpROxw.png)
 
-![](https://i.imgur.com/U4jLUPS.png)
+![](https://i.imgur.com/DJJPWPX.png)
 
-![](https://i.imgur.com/crUf9f9.png)
+![](https://i.imgur.com/23PLB1W.png)
 
-![](https://i.imgur.com/YEd7frw.png)
+![](https://i.imgur.com/TkLvx7O.png)
 
-![](https://i.imgur.com/QiyR9n8.png)
+![](https://i.imgur.com/lmvcleJ.png)
 
-![](https://i.imgur.com/kSKcpb0.png)
+![](https://i.imgur.com/ZYprlQE.png)
 
-![](https://i.imgur.com/mszfNno.png)
+![](https://i.imgur.com/d5nzMSE.png)
