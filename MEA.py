@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.120.0'
+title = 'ME Analyzer v1.121.0'
 
 import os
 import re
@@ -6192,7 +6192,7 @@ def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_ini
 			
 			# CSE File System exists, determine its Configuration State
 			if any(idx in mfs_parsed_idx for idx in [1,2,3,4,5,8]) : mfs_state = 'Initialized'
-			elif 7 in mfs_parsed_idx : mfs_state = 'Configured'
+			elif any(idx in mfs_parsed_idx for idx in [7,9]) in mfs_parsed_idx : mfs_state = 'Configured'
 		except :
 			# CSE File System analysis failed, maybe corrupted
 			mfs_state = col_r + 'Error' + col_e
@@ -7044,7 +7044,7 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			# Unreliable for CSME ~< 11.0.0.1140 @ 2015-05-19 (always 80 --> SPT/KBP-LP A)
 			pass
 	
-	# Detect Actual PCH Stepping(s) for CSME 12-15 & CSSPS 5
+	# Detect Actual PCH Stepping(s) for CSME 12 & CSSPS 5
 	elif (variant,major) in [('CSME',12),('CSSPS',5)] :
 		if (mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x01)
 		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25)) :
@@ -7054,8 +7054,9 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 		else :
 			# Absolute for CSME ~< 12.0.0.1058 @ 2018-01-25 (0 = A, 1 = B, 2 = C, 3 = D etc)
 			pch_true_stp = pch_stp_val[pch_init_stp]
-			
-	elif (variant,major) in [('CSME',13),('CSME',14),('CSME',15)] :
+	
+	# Detect Actual PCH Stepping(s) for CSME 13
+	elif (variant,major) in [('CSME',13)] :
 		if rec_data[0x2:0x6] == b'\xFF' * 4 :
 			# Absolute for CSME 13 >=~ 13.0.0.1061 (0 = A, 1 = B, 2 = C, 3 = D etc)
 			pch_true_stp = pch_stp_val[pch_init_stp]
@@ -7063,6 +7064,17 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			# Bitfield for CSME ~< 13.0.0.1061 (0011 = --BA, 0110 = -CB-)
 			for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else ''
 			if not pch_true_stp : pch_true_stp = 'A' # Fallback to A in case Bitfield is 0000
+		
+	# Detect Actual PCH Stepping(s) for CSME 14.5
+	elif (variant,major,minor) in [('CSME',14,5)] :
+		# Absolute for CSME 14.5 (0 = A, 1 = B, 2 = C, 3 = D etc)
+		pch_true_stp = pch_stp_val[pch_init_stp]
+	
+	# Detect Actual PCH Stepping(s) for CSME 14.0 & CSME 15 (?)
+	elif (variant,major) in [('CSME',14),('CSME',15)] :
+		# Bitfield for CSME 14.0 & maybe CSME 15 (0011 = --BA, 0110 = -CB-)
+		for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else ''
+		if not pch_true_stp : pch_true_stp = 'A' # Fallback to A in case Bitfield is 0000
 		
 	pch_init_info.append([mfs_file, pch_init_plt, pch_true_stp, pch_init_rev]) # Output PCH Initialization Table Info
 	
@@ -8714,6 +8726,7 @@ for file_in in source :
 	intel_cfg_hash_mfs = None
 	var_rsa_db = True
 	mfs_found = False
+	mfsb_found = False
 	upd_found = False
 	rgn_exist = False
 	pchc_found = False
@@ -8787,7 +8800,9 @@ for file_in in source :
 	cse_in_id = 0
 	fpt_start = -1
 	mfs_start = -1
+	mfsb_start = -1
 	mfs_size = 0
+	mfsb_size = 0
 	pmcp_size = 0
 	pchc_size = 0
 	oem_signed = 0
@@ -9247,6 +9262,12 @@ for file_in in source :
 				mfs_start = p_offset_spi
 				mfs_size = p_size
 				
+			# Detect if firmware has CSE File System Backup Partition
+			if p_name == 'MFSB' and not p_empty :
+				mfsb_found = True
+				mfsb_start = p_offset_spi
+				mfsb_size = p_size
+				
 			# Detect if firmware has FITC File System Configuration Partition
 			if p_name == 'FITC' and not p_empty : fitc_found = True
 			
@@ -9289,6 +9310,7 @@ for file_in in source :
 		else :
 			# More than two $FPT detected, probably Intel Engine Capsule image
 			mfs_found = False
+			mfsb_found = False
 		
 		# Check for extra $FPT Entries, wrong NumPartitions (0x2+ for SPS3 Checksum)
 		while reading[fpt_step + 0x2:fpt_step + 0xC] not in [b'\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF',b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'] :
@@ -9313,6 +9335,7 @@ for file_in in source :
 		bpdt_match = list((re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01-\x03]\x00', re.DOTALL)).finditer(reading)) # BPDT detection
 		for match in bpdt_match :
 			if mfs_found and mfs_start <= match.start() < mfs_start + mfs_size : continue # Skip BPDT within MFS (i.e. 008 > fwupdate> fwubpdtinfo)
+			elif mfsb_found and mfsb_start <= match.start() < mfsb_start + mfsb_size : continue # Skip BPDT within MFSB (i.e. 008 > fwupdate> fwubpdtinfo)
 			else : bpdt_matches.append(match.span()) # Store all BPDT ranges, already relative to 0x0
 	
 	# Parse IFWI/BPDT Ranges
@@ -9394,6 +9417,12 @@ for file_in in source :
 				mfs_start = p_offset_spi
 				mfs_size = p_size
 				
+			# Detect if IFWI Primary has CSE File System Backup Partition (Not POR, just in case)
+			if p_name == 'MFSB' and not p_empty :
+				mfsb_found = True
+				mfsb_start = p_offset_spi
+				mfsb_size = p_size
+				
 			# Detect if IFWI Primary has FITC File System Configuration Partition (Not POR, just in case)
 			if p_name == 'FITC' and not p_empty : fitc_found = True
 			
@@ -9465,6 +9494,12 @@ for file_in in source :
 						mfs_found = True
 						mfs_start = s_p_offset_spi
 						mfs_size = s_p_size
+						
+					# Detect if IFWI Secondary has CSE File System Backup Partition (Not POR, just in case)
+					if s_p_name == 'MFSB' and not s_p_empty :
+						mfsb_found = True
+						mfsb_start = s_p_offset_spi
+						mfsb_size = s_p_size
 						
 					# Detect if IFWI Secondary has FITC File System Configuration Partition (Not POR, just in case)
 					if s_p_name == 'FITC' and not s_p_empty : fitc_found = True
@@ -9793,6 +9828,7 @@ for file_in in source :
 			
 			if eng_fw_end > file_end :
 				if eng_fw_end == file_end + 0x1000 - mod_align :
+					#with open('__PADDED__' + os.path.basename(file_in), 'wb') as o : o.write(reading + b'\xFF' * (0x1000 - mod_align)) # Debug/Research
 					pass # Firmware ends at last $FPT entry but is not 4K aligned, can be ignored (CSME12+)
 				else :
 					eng_size_text = [col_m + 'Warning: Firmware size exceeds file, possible data loss!' + col_e, False]
@@ -10328,8 +10364,8 @@ for file_in in source :
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
 		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 		
-		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
-		if mfs_state == 'Unconfigured' and (oem_config or fitc_found) : mfs_state = 'Configured'
+		# MFS missing, determine state via FTPR > fitc.cfg, FITC Partition or MFSB Partition (must be after mfs_anl & ext_anl)
+		if mfs_state == 'Unconfigured' and (oem_config or fitc_found or mfsb_found) : mfs_state = 'Configured'
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -10582,8 +10618,8 @@ for file_in in source :
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
 		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 		
-		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
-		if mfs_state == 'Unconfigured' and (oem_config or fitc_found) : mfs_state = 'Configured'
+		# MFS missing, determine state via FTPR > fitc.cfg, FITC Partition or MFSB Partition (must be after mfs_anl & ext_anl)
+		if mfs_state == 'Unconfigured' and (oem_config or fitc_found or mfsb_found) : mfs_state = 'Configured'
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -10676,8 +10712,8 @@ for file_in in source :
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final \
 		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant, major, minor, hotfix, build], None, [mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 		
-		# MFS missing, determine state via FTPR > fitc.cfg (must be after mfs_anl & ext_anl)
-		if mfs_state == 'Unconfigured' and (oem_config or fitc_found) : mfs_state = 'Configured'
+		# MFS missing, determine state via FTPR > fitc.cfg, FITC Partition or MFSB Partition (must be after mfs_anl & ext_anl)
+		if mfs_state == 'Unconfigured' and (oem_config or fitc_found or mfsb_found) : mfs_state = 'Configured'
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
@@ -10960,6 +10996,8 @@ for file_in in source :
 		if variant not in ['SPS','CSSPS'] and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
 		
 		print(msg_pt)
+		
+		#if mfs_state != 'Unconfigured' or oem_signed or oemp_found or utok_found : input() # Debug/Research
 		
 		if param.write_html :
 			with open('%s.html' % os.path.basename(file_in), 'w') as o : o.write('\n<br/>\n%s' % pt_html(msg_pt))
