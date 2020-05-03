@@ -1,3 +1,27 @@
+v1.123.0
+
+Improved CSE Extension 30 unpacking
+Improved CSME 14.5 CMP-V SKU detection
+Improved PMC & PCHC compatibility check
+Improved CSE $MN2 Manifest v2.1 support
+Improved CSE Extension 12 SKU detection
+Improved CSE Known Bad Hashes detection
+Improved CSE File System File unpacking
+Improved CSE File System Volume handling
+Improved non-CSE PRD/PRE Release detection
+Fixed CSE Configured File System detection
+
+r194
+
+CSME 14.5.11.1106_CON_V_A_PRD_EXTR
+CSME 13.0.33.1481_SLM_N_B_PRD_EXTR
+CSME 11.8.77.3664_CON_LP_C_NPDM_PRD_RGN
+CSME 11.8.77.3664_COR_LP_C_NPDM_PRD_RGN
+CSME 11.8.77.3664_SLM_H_DA_PRD_EXTR
+CSSPS 05.01.04.113_ME_SKU3_BA_PRD_REC
+CSSPS 05.01.04.113_ME_SKU3_PRD_OPR
+ME 9.1.40.1000_1.5MB_PRD_EXTR
+
 v1.121.0
 
 Improved CSME 14.x Chipset Stepping detection
@@ -70,9 +94,9 @@ Applied various code fixes & improvements
 
 r189
 
-CSME 14.5.12.1111_CON_H_A_PRD_EXTR
-CSME 14.5.11.1105_CON_H_A_PRD_EXTR
-CSME 14.5.0.1010_CON_H_A_PRD_EXTR
+CSME 14.5.12.1111_CON_V_A_PRD_EXTR
+CSME 14.5.11.1105_CON_V_A_PRD_EXTR
+CSME 14.5.0.1010_CON_V_A_PRD_EXTR
 CSME 13.0.31.1465_SLM_N_A_PRD_EXTR
 CSME 11.22.77.1664_COR_H_BA_PRD_RGN
 CSME 11.12.77.1664_CON_H_A_PRD_RGN
