@@ -14,6 +14,7 @@ import sys
 import lzma
 import zlib
 import json
+import math
 import struct
 import ctypes
 import shutil
@@ -5866,9 +5867,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_m + '\n    RSA Signature of partition "%s" is UNKNOWN' % cpd_pname + col_e)
 					elif mn2_valid : print(col_g + '\n    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
 					else :
-						if (variant,major) == ('CSME',15) : # RSA SSA-PSS Signature validation not implemented!
-							print(col_m + '\n    RSA Signature of partition "%s" is UNKNOWN (%s %d Ignore)' % (cpd_pname,variant,major) + col_e)
-						elif param.me11_mod_bug :
+						if param.me11_mod_bug :
 							input(col_r + '\n    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e) # Debug
 						else :
 							print(col_r + '\n    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
@@ -8157,9 +8156,88 @@ def fw_types(fw_type) :
 	
 	return fw_type, type_db
 	
+# Calculate Hash of Message
+def calc_hash(message, hash_func, hex = False) :
+	hash = hash_func()
+	hash.update(message)
+	
+	return hash.hexdigest().upper() if hex else hash.digest()
+
+# SSA-PSS Mask Generation Function
+def pss_mgf(seed, mask_len, hash_func) :
+	mask = b''
+	
+	hash_len = hash_func().digest_size
+	if mask_len > (hash_len << 32) : return '' # Mask length is invalid
+	
+	for i in range(math.ceil(mask_len / hash_len)) :
+		mask += calc_hash(seed + i.to_bytes(4, 'big'), hash_func)
+	
+	return mask
+
+# Apply SSA-PSS Mask to DB
+def unmask_DB(masked_DB, mask) :
+	return bytes([a ^ b for (a,b) in zip(masked_DB, mask[:len(masked_DB)])])
+
+# Get SSA-PSS Hash & Mask DB
+def parseSign(em_sign, sig_len, hash_func) :
+	TF = 0xBC
+	
+	digest_size = hash_func().digest_size
+	sign = bytes.fromhex(em_sign)
+	hash = sign[-digest_size - 1:-1]
+	if (sign[-1] != TF) : return '', None # TF is invalid
+	masked_DB = sign[0:-digest_size - 1]
+	
+	return hash, masked_DB
+
+# Get SSA-PSS Salt from DB
+def get_salt(unmasked_DB, mod_size) :
+	PADDING_BYTE = b'\x00'
+	SEPARATOR = b'\x01'
+	
+	z_bits = 8 - (mod_size - 1) % 8
+	z_byte = unmasked_DB[0]
+	for i in range(z_bits) :
+		z_byte &= ~(0x80 >> i)
+	
+	index = unmasked_DB.find(SEPARATOR)
+	if (index == -1) or (z_byte != 0) or (unmasked_DB[1:index] != PADDING_BYTE * (index-1)) : return '' # Invalid padding
+	
+	return unmasked_DB[index + 1:]
+
+# Final SSA-PSS Signature validation
+def pss_final_validate(message, salt_unmask, hash_func) :
+	PADDING_BYTE = b'\x00'
+	SALT_PADDING_COUNT = 8
+	
+	# Calculate hash of the message
+	message_hash = calc_hash(message, hash_func)
+	M_salt = PADDING_BYTE * SALT_PADDING_COUNT + message_hash + salt_unmask
+	
+	return calc_hash(M_salt, hash_func)
+
+# Verify SSA-PSS Signature
+def pss_verify(em_sign, message, sign_len, hash_func) :
+	# Extract hash and Mask DB
+	sig_hash, masked_DB = parseSign(em_sign, sign_len, hash_func)
+	if sig_hash == '' : return '', None
+	
+	# Calculate a mask
+	mask = pss_mgf(sig_hash, len(masked_DB), hash_func)
+	if mask == '' : return sig_hash, ''
+	
+	# Apply mask to DB
+	unmasked_DB = unmask_DB(masked_DB, mask)
+	
+	# Extract salt from DB
+	salt_unmask = get_salt(unmasked_DB, sign_len)
+	if salt_unmask == '' : return sig_hash, ''
+	
+	return sig_hash, pss_final_validate(message, salt_unmask, hash_func)
+	
 # Validate Manifest RSA Signature
-# TODO: Add RSA SSA-PSS Signature validation
-def rsa_sig_val(man_hdr_struct, input_stream, check_start) :
+def rsa_sig_val(man_hdr_struct, buffer, check_start) :
 	man_tag = man_hdr_struct.Tag.decode('utf-8')
 	man_size = man_hdr_struct.Size * 4
 	man_hdr_size = man_hdr_struct.HeaderLength * 4
@@ -8167,28 +8245,26 @@ def rsa_sig_val(man_hdr_struct, input_stream, check_start) :
 	man_pexp = man_hdr_struct.RSAExponent
 	man_pkey = int.from_bytes(man_hdr_struct.RSAPublicKey, 'little')
 	man_sign = int.from_bytes(man_hdr_struct.RSASignature, 'little')
+	hash_data = buffer[check_start:check_start + 0x80] # First 0x80 before RSA block
+	hash_data += buffer[check_start + man_hdr_size:check_start + man_size] # Manifest protected data
 	
 	# return [RSA Sig isValid, RSA Sig Decr Hash, RSA Sig Data Hash, RSA Validation isCrashed, $MN2 Offset, $MN2 Struct Object]
 	
 	try :
-		dec_sign = '%X' % pow(man_sign, man_pexp, man_pkey) # Decrypted Signature
+		dec_sign = '%0.*X' % (man_key_size * 2, pow(man_sign, man_pexp, man_pkey)) # Decrypted Signature
 		
 		if (man_tag,man_key_size) == ('$MAN',0x100) : # SHA-1
-			rsa_hash = hashlib.sha1()
+			rsa_hash = calc_hash(hash_data, hashlib.sha1, True)
 			dec_hash = dec_sign[-40:] # 160-bit
 		elif (man_tag,man_key_size) == ('$MN2',0x100) : # SHA-256
-			rsa_hash = hashlib.sha256()
+			rsa_hash = calc_hash(hash_data, hashlib.sha256, True)
 			dec_hash = dec_sign[-64:] # 256-bit
 		elif (man_tag,man_key_size) == ('$MN2',0x180) : # SHA-384
-			rsa_hash = hashlib.sha384()
-			dec_hash = dec_sign[-96:] # 384-bit
+			rsa_hash, dec_hash = pss_verify(dec_sign, hash_data, 0x180, hashlib.sha384)
+			rsa_hash, dec_hash = rsa_hash.hex().upper(), dec_hash.hex().upper()
 		else :
-			rsa_hash = hashlib.sha384()
-			dec_hash = dec_sign[-96:] # 384-bit
-	
-		rsa_hash.update(input_stream[check_start:check_start + 0x80]) # First 0x80 before RSA area
-		rsa_hash.update(input_stream[check_start + man_hdr_size:check_start + man_size]) # Manifest protected data
-		rsa_hash = rsa_hash.hexdigest().upper() # Data SHA-1, SHA-256 or SHA-384 Hash
+			rsa_hash, dec_hash = pss_verify(dec_sign, hash_data, 0x180, hashlib.sha384)
+			rsa_hash, dec_hash = rsa_hash.hex().upper(), dec_hash.hex().upper()
 		
 		return [dec_hash == rsa_hash, dec_hash, rsa_hash, False, check_start, man_hdr_struct] # RSA block validation check OK
 	except :
@@ -9673,8 +9749,7 @@ for file_in in source :
 	# Detect RSA Signature Validity
 	man_valid = rsa_sig_val(mn2_ftpr_hdr, reading, start_man_match - 0x1B)
 	if not man_valid[0] :
-		if rsa_key_len == 0x180 : err_stor.append([col_m + 'Warning: RSA SSA-PSS Signature validation not implemented!' + col_e, False])
-		else : err_stor.append([col_r + 'Error: Invalid %s %d.%d RSA Signature!' % (variant, major, minor) + col_e, True])
+		err_stor.append([col_r + 'Error: Invalid %s %d.%d RSA Signature!' % (variant, major, minor) + col_e, True])
 	
 	if rgn_exist :
 		
