@@ -1,3 +1,28 @@
+v1.130.0
+
+Added RSA SSA-PSS Signature validation by @h0t
+Added initial support for future platforms
+Improved CSE Layout Table detection
+Improved Flash Descriptor detection
+Improved Engine firmware size detection
+Improved CSE File System FTBL detection
+Improved CSE IFWI BPDT Partition Naming
+Improved CSE & PMC compatibility check
+Improved CSME 11+ SKU Platform detection
+Fixed display of paused colored messages
+Fixed ME Production Ready field detection
+Applied various code fixes & improvements
+
+r195
+
+CSME 14.0.31.1120_COR_H_A_PRD_EXTR-N
+CSME 14.0.10.1204_CON_LP_BA_PRD_RGN
+CSTXE 3.1.75.2351_B_PRD_EXTR
+CSTXE 3.1.75.2349_B_PRD_EXTR
+CSTXE 3.1.50.2244_B_PRD_RGN
+PMC CMP_140.1.01.1009_LP_A_PRD
+PMC APL_0.1.0.0_B_2020-02-05_PRD
+
 v1.123.0
 
 Improved CSE Extension 30 unpacking
