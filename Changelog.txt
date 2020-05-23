@@ -1,3 +1,23 @@
+v1.135.0
+
+Added initial support for future platform
+Improved CSE Layout Table BP/FPT detection
+Improved CSE File System FTBL ID detection
+Improved CSE File System Backup detection
+Applied various code fixes & improvements
+
+r196
+
+CSME 14.0.30.1115_CON_LP_BA_PRD_EXTR
+CSME 14.0.11.1205_CON_LP_BA_PRD_RGN
+CSME 13.0.32.1478_CON_LP_D_PRD_EXTR
+CSME 12.0.30.1413_CON_LP_C_PRD_EXTR
+CSME 11.8.77.3664_COR_LP_C_YPDM_PRD_RGN
+CSTXE 4.0.25.1324_B_PRD_EXTR
+CSSPS 04.03.03.260_PU_SKU3_BA_PRD_REC
+PMC ICP_130.1.30.1050_LP_D_PRD
+PMC ICP_130.1.30.1049_LP_D_PRD
+
 v1.130.0
 
 Added RSA SSA-PSS Signature validation by @h0t

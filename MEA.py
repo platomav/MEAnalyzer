@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.130.0'
+title = 'ME Analyzer v1.135.0'
 
 import os
 import re
@@ -71,22 +71,21 @@ uint64_t = ctypes.c_uint64
 
 # Print MEA Help screen
 def mea_help() :
-
 	print(
-	"\nUsage: MEA [FilePath] {Options}\n\n{Options}\n\n"
-	"-?      : Displays help & usage screen\n"
-	"-skip   : Skips welcome & options screen\n"
-	"-exit   : Skips Press enter to exit prompt\n"
-	"-mass   : Scans all files of a given directory\n"
-	"-pdb    : Writes input file DB entry to text file\n"
-	"-dbname : Renames input file based on unique DB name\n"
-	"-dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers\n"
-	"-unp86  : Unpacks all CSE Converged Security Engine firmware\n"
-	"-bug86  : Enables pausing on error during CSE unpacking\n"
-	"-ver86  : Enables full verbose output during CSE unpacking\n"
-	"-html   : Writes parsable HTML files during MEA operation\n"
-	"-json   : Writes parsable JSON files during MEA operation"
-	)
+		  '\nUsage: MEA [FilePath] {Options}\n\n{Options}\n\n'
+		  '-?      : Displays help & usage screen\n'
+		  '-skip   : Skips welcome & options screen\n'
+		  '-exit   : Skips Press enter to exit prompt\n'
+		  '-mass   : Scans all files of a given directory\n'
+		  '-pdb    : Writes input file DB entry to text file\n'
+		  '-dbname : Renames input file based on unique DB name\n'
+		  '-dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers\n'
+		  '-unp86  : Unpacks all CSE Converged Security Engine firmware\n'
+		  '-bug86  : Enables pausing on error during CSE unpacking\n'
+		  '-ver86  : Enables full verbose output during CSE unpacking\n'
+		  '-html   : Writes parsable HTML files during MEA operation\n'
+		  '-json   : Writes parsable JSON files during MEA operation'
+		  )
 	
 	mea_exit(0)
 
@@ -1501,7 +1500,7 @@ class MFS_Quota_Storage_Header(ctypes.LittleEndianStructure) : # MFS Quota Stora
 		
 		return pt
 		
-class MFS_Backup_Header(ctypes.LittleEndianStructure) : # MFS Backup
+class MFS_Backup_Header_R0(ctypes.LittleEndianStructure) : # MFS Backup Header R0
 	_pack_ = 1
 	_fields_ = [
 		('Signature',		uint32_t),		# 0x00 MFSB
@@ -1517,8 +1516,60 @@ class MFS_Backup_Header(ctypes.LittleEndianStructure) : # MFS Backup
 		
 		pt.title = col_y + 'MFS Backup Header' + col_e
 		pt.add_row(['Signature', '0x%0.8X' % self.Signature])
-		pt.add_row(['CRC-32', '0x%0.8X' % self.CRC32])
+		pt.add_row(['CRC32', '0x%0.8X' % self.CRC32])
 		pt.add_row(['Reserved', '0xFF * 24' if Reserved == 'FFFFFFFF' * 6 else Reserved])
+		
+		return pt
+		
+class MFS_Backup_Header_R1(ctypes.LittleEndianStructure) : # MFS Backup Header R1
+	_pack_ = 1
+	_fields_ = [
+		('Signature',		uint32_t),		# 0x00 MFSB
+		('Revision',		uint32_t),		# 0x04 1
+		('HeaderCRC32',		uint32_t),		# 0x08 CRC-32 of Header w/ HeaderCRC32 = 0
+		('Entry6Offset',	uint32_t),		# 0x0C Intel Configuration (6)
+		('Entry6Size',		uint32_t),		# 0x10
+		('Entry9Offset',	uint32_t),		# 0x14 Manifest Backup (9)
+		('Entry9Size',		uint32_t),		# 0x18
+		('Entry7Offset',	uint32_t),		# 0x1C OEM Configuration (7)
+		('Entry7Size',		uint32_t),		# 0x20
+		# 0x24
+	]
+	
+	def mfs_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'MFS Backup Header' + col_e
+		pt.add_row(['Signature', '0x%0.8X' % self.Signature])
+		pt.add_row(['Revision', self.Revision])
+		pt.add_row(['Header CRC32', '0x%0.8X' % self.HeaderCRC32])
+		pt.add_row(['Entry 6 Offset', '0x%X' % self.Entry6Offset])
+		pt.add_row(['Entry 6 Size', '0x%X' % self.Entry6Size])
+		pt.add_row(['Entry 9 Offset', '0x%X' % self.Entry9Offset])
+		pt.add_row(['Entry 9 Size', '0x%X' % self.Entry9Size])
+		pt.add_row(['Entry 7 Offset', '0x%X' % self.Entry7Offset])
+		pt.add_row(['Entry 7 Size', '0x%X' % self.Entry7Size])
+		
+		return pt
+		
+class MFS_Backup_Entry(ctypes.LittleEndianStructure) : # MFS Backup Entry
+	_pack_ = 1
+	_fields_ = [
+		('Revision',		uint32_t),		# 0x00 1
+		('Unknown',			uint32_t),		# 0x04 Unknown CRC-32 (?)
+		('Size',			uint32_t),		# 0x08
+		('CRC32',			uint32_t),		# 0x0C CRC-32 of MFSB Entry (Low Level File) Data
+		# 0x10
+	]
+	
+	def mfs_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'MFS Backup Entry' + col_e
+		pt.add_row(['Revision', self.Revision])
+		pt.add_row(['Unknown', '0x%0.8X' % self.Unknown])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['CRC32', '0x%0.8X' % self.CRC32])
 		
 		return pt
 		
@@ -4451,7 +4502,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	rbe_pm_met_hashes = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
-	config_rec_size = get_cfg_rec_size(variant,major)
+	config_rec_size = get_cfg_rec_size(variant,major,minor)
 	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
 	
 	# Create main Firmware Extraction Directory
@@ -4506,7 +4557,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				
 				with open(mod_fname, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
 			
-				print(col_y + '--> Stored CSE LT Partition "%s" [0x%0.6X - 0x%0.6X]\n' % (part[0], part_start, part_end) + col_e)
+				print(col_y + '--> Stored CSE LT Partition "%s" [0x%0.6X - 0x%0.6X]\n' % (part_name, part_start, part_end) + col_e)
 	
 	# Parse all Flash Partition Table ($FPT) entries
 	if len_fpt_part_all :
@@ -4538,7 +4589,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		pt.title = col_y + 'Detected %d Partition(s) at $FPT [0x%0.6X]' % (len_fpt_part_all, fpt_start) + col_e
 		
 		for part in fpt_part_all :
-			pt.add_row([part[0].decode('utf-8'), '0x%0.6X' % part[1], '0x%0.6X' % part[2], '%0.4X' % part[3], part[4], part[5], part[6]]) # Store Partition details
+			pt.add_row([part[0], '0x%0.6X' % part[1], '0x%0.6X' % part[2], '%0.4X' % part[3], part[4], part[5], part[6]]) # Store Partition details
 		
 		print(pt) # Show Partition details
 		
@@ -4572,13 +4623,13 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		# Place MFS first to validate FTPR > FTPR.man > 0x00 > Intel Configuration Hash
 		# and get MFS FTBL ID & Record Size for FTPR/FITC Partition intl.cfg/fitc.cfg
 		for i in range(len(fpt_part_all)) :
-			if fpt_part_all[i][0] in [b'MFS',b'AFSP',b'MFSB'] :
+			if fpt_part_all[i][0] in ['MFS','AFSP','MFSB'] :
 				fpt_part_all.insert(0, fpt_part_all.pop(i))
 				break
 		
 		# Charted Partitions include fpt_start, Uncharted do not (RGN only, non-SPI)
 		for part in fpt_part_all :
-			part_name = part[0].decode('utf-8')
+			part_name = part[0]
 			part_start = part[1]
 			part_end = part[2]
 			part_inid = part[3]
@@ -4586,15 +4637,15 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 			part_empty = part[6]
 			
 			if not part_empty : # Skip Empty Partitions
-				part_name += ' %0.4X' % part_inid
+				part_name_p = '%s %0.4X' % (part_name, part_inid) # Partition Name with Instance ID
 				
-				mod_f_path = os.path.join(mea_dir, fw_name, part_name + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
+				mod_f_path = os.path.join(mea_dir, fw_name, part_name_p + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
 				
 				with open(mod_f_path, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
 			
-				print(col_y + '\n--> Stored $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_type, part_name, part_start, part_end) + col_e)
+				print(col_y + '\n--> Stored $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_type, part_name_p, part_start, part_end) + col_e)
 				
-				if part[0] in [b'UTOK',b'STKN'] :
+				if part_name in ['UTOK','STKN'] :
 					ext_print = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month], part_name, [[],''], [[],-1,-1]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
@@ -4611,17 +4662,17 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
 							
-				if part[0] in [b'MFS',b'AFSP',b'MFSB'] :
-					mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl(os.path.join(mod_f_path[:-4], ''), part_start, part_end, variant) # Parse MFS
+				if part_name in ['MFS','AFSP','MFSB'] :
+					mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl(os.path.join(mod_f_path[:-4], ''),part_start,part_end,variant,vol_ftbl_id) # Parse MFS
 					for pt in mfs_info : mfs_txt(pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', False) # Print MFS Structure Info
 				
-				if part[0] == b'FITC' :
+				if part_name == 'FITC' :
 					print(col_g + '\n    Analyzing MFS Low Level File 7 (OEM Configuration) ...' + col_e)
 					rec_folder = os.path.join(mea_dir, os.path.join(mod_f_path[:-4]), 'OEM Configuration', '')
 					fitc_data = reading[part_start:part_end]
 					rec_data = fitc_data[0x4:0x4 + int.from_bytes(fitc_data[:4], 'little')] # FITC Partition includes Size first, then normal fitc.cfg
 					try :
-						pch_init_info = mfs_cfg_anl(7, rec_data, rec_folder, rec_folder, config_rec_size, [], check_ftbl_id(vol_ftbl_id)) # Parse MFS Configuration Records
+						pch_init_info = mfs_cfg_anl(7, rec_data, rec_folder, rec_folder, config_rec_size, [], vol_ftbl_id) # Parse MFS Configuration Records
 						pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
 					except :
 						if param.me11_mod_bug :
@@ -4630,7 +4681,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							print(col_r + '\n    Failed to analyze MFS Low Level File 7 (OEM Configuration)' + col_e)
 					
 				# Store RBEP > rbe and FTPR > pm "Metadata" within Module for Module w/o Metadata Hash validation
-				if part[0] in [b'FTPR',b'RBEP'] :
+				if part_name in ['FTPR','RBEP'] :
 					x0,rbe_pm_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16 = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month], None,
 																							[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 					
@@ -4698,15 +4749,15 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 			part_inid = part[6]
 			
 			if not part_empty : # Skip Empty Partitions
-				part_name += ' %0.4X' % part_inid
+				part_name_p = '%s %0.4X' % (part_name, part_inid) # Partition Name with Instance ID
 				
-				mod_f_path = os.path.join(mea_dir, fw_name, part_name + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries ("Unknown" etc)
+				mod_f_path = os.path.join(mea_dir, fw_name, part_name_p + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries ("Unknown" etc)
 				
 				with open(mod_f_path, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
 				
-				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name, part_start, part_end) + col_e)
+				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name_p, part_start, part_end) + col_e)
 				
-				if part[0] in ['UTOK'] :
+				if part_name in ['UTOK'] :
 					ext_print = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month], part_name, [[],''], [[],-1,-1]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest/Metadata/Key Extension Info
@@ -4723,17 +4774,17 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 								if param.me11_mod_ext : print(ext) # Print Manifest/Metadata/Key Extension Info
 							break
 							
-				if part[0] in ['MFS','AFSP','MFSB'] :
-					mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl(os.path.join(mod_f_path[:-4], ''), part_start, part_end, variant) # Parse MFS
+				if part_name in ['MFS','AFSP','MFSB'] :
+					mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl(os.path.join(mod_f_path[:-4], ''),part_start,part_end,variant,vol_ftbl_id) # Parse MFS
 					for pt in mfs_info : mfs_txt(pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', False) # Print MFS Structure Info
 					
-				if part[0] == 'FITC' :
+				if part_name == 'FITC' :
 					print(col_g + '\n    Analyzing MFS Low Level File 7 (OEM Configuration) ...' + col_e)
 					rec_folder = os.path.join(mea_dir, os.path.join(mod_f_path[:-4]), 'OEM Configuration', '')
 					fitc_data = reading[part_start:part_end]
 					rec_data = fitc_data[0x4:0x4 + int.from_bytes(fitc_data[:4], 'little')] # FITC Partition includes Size first, then normal fitc.cfg
 					try :
-						pch_init_info = mfs_cfg_anl(7, rec_data, rec_folder, rec_folder, config_rec_size, [], check_ftbl_id(vol_ftbl_id)) # Parse MFS Configuration Records
+						pch_init_info = mfs_cfg_anl(7, rec_data, rec_folder, rec_folder, config_rec_size, [], vol_ftbl_id) # Parse MFS Configuration Records
 						pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
 					except :
 						if param.me11_mod_bug :
@@ -4742,7 +4793,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							print(col_r + '\n    Failed to analyze MFS Low Level File 7 (OEM Configuration)' + col_e)
 					
 				# Store RBEP > rbe and FTPR > pm "Metadata" within Module for Module w/o Metadata Hash validation
-				if part[0] in ['FTPR','RBEP'] :
+				if part_name in ['FTPR','RBEP'] :
 					x0,rbe_pm_mod_attr,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,x12,x13,x14,x15,x16 = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month], None,
 																							[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id])
 					
@@ -4753,8 +4804,6 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							except : rbe_pm_data_d = rbe_pm_data
 					
 					rbe_pm_met_hashes = get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes)
-	
-	vol_ftbl_id = check_ftbl_id(vol_ftbl_id) # Check if CSE File System Volume FTBL ID was detected
 	
 	# Parse all Code Partition Directory ($CPD) entries
 	# Better to separate $CPD from $FPT/BPDT to avoid duplicate FTUP/NFTP ($FPT) issue
@@ -4916,7 +4965,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 		cpd_hdr_struct, cpd_hdr_size = get_cpd(buffer, cpd_offset)
 		cpd_hdr = get_struct(buffer, cpd_offset, cpd_hdr_struct)
 		cpd_num = cpd_entry_num_fix(buffer, cpd_offset, cpd_hdr.NumModules, cpd_hdr_size)
-		cpd_name = cpd_hdr.PartitionName.decode('utf-8')
+		cpd_name = cpd_hdr.PartitionName.strip(b'\x00').decode('utf-8')
 		
 		# Validate $CPD Checksum, skip at special _Stage1 mode (Variant/fptemp) to not see duplicate messages
 		if not input_type.endswith('_Stage1') :
@@ -4961,7 +5010,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				if not param.me11_mod_extr :
 					try :
 						intel_cfg_folder = os.path.join(mea_dir, 'intl.cfg_placeholder', '') # Not used here, placeholder value for mfs_cfg_anl to work
-						pch_init_info = mfs_cfg_anl(6, intel_cfg_data, intel_cfg_folder, intel_cfg_folder, config_rec_size, [], check_ftbl_id(vol_ftbl_id)) # Parse MFS Configuration Records
+						pch_init_info = mfs_cfg_anl(6, intel_cfg_data, intel_cfg_folder, intel_cfg_folder, config_rec_size, [], vol_ftbl_id) # Parse MFS Configuration Records
 						pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
 					except :
 						cse_anl_err(col_r + 'Error: Failed to analyze MFS Low Level File 6 (Intel Configuration) at %s > %s' % (cpd_name, cpd_entry_name) + col_e, None)
@@ -5072,7 +5121,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				elif (variant,major,minor) == ('CSSPS',5,0) and hotfix in (0,1,2,3) :
 					if ext_tag in ext_tag_rev_hdr_cssps503 : hdr_rev_tag = ext_tag_rev_hdr_cssps503[ext_tag]
 					if ext_tag in ext_tag_rev_mod_cssps503 : mod_rev_tag = ext_tag_rev_mod_cssps503[ext_tag]
-				elif (variant,major) == ('CSSPS',5) :
+				elif (variant,major) == ('CSSPS',5) or (variant,major,minor) == ('CSSPS',4,4) :
 					if ext_tag in ext_tag_rev_hdr_cssps5 : hdr_rev_tag = ext_tag_rev_hdr_cssps5[ext_tag]
 					if ext_tag in ext_tag_rev_mod_cssps5 : mod_rev_tag = ext_tag_rev_mod_cssps5[ext_tag]
 				else :
@@ -5507,6 +5556,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						ext_phval = [True, ext_phash == mea_phash, ext_phash, mea_phash]
 						if not ext_phval[1] and int(ext_phval[2], 16) != 0 :
 							if (variant,major) == ('CSSPS',5) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 5 Partition Hash is always wrong, ignore
+							elif (variant,major,minor) == ('CSSPS',4,4) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 4.4 Partition Hash is always wrong, ignore
 							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, (ext_phash,mea_phash))
 					
 					# Detect CSE Extension without Modules different size & notify user
@@ -5672,7 +5722,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				# by its unique Name, Offset & Instance ID. If $FPT Entry size is smaller than Extension size, error is shown.
 				# The check is skipped when Extension size is not found so no problem with OEM/FIT firmware configuration.
 				# The check is skipped when IDLM partition (DLMP) is parsed because its $FPT size is wrong by Intel design.
-				if not msg_shown and ext_psize != -1 and part[0] == cpd_hdr.PartitionName and part[0] != b'DLMP' \
+				if not msg_shown and ext_psize != -1 and part[0] == cpd_name and part[0] != 'DLMP' \
 				and part[1] == cpd_offset and part[3] == in_id and part[2] < (cpd_offset + ext_psize) :
 					cse_anl_err(col_r + 'Error: Detected CSE Extension 0x3/0x16 with smaller $FPT %s Partition Size!' % cpd_name + col_e, None)
 					msg_shown = True # Partition related error, show only once
@@ -5683,7 +5733,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				# by its unique Name, Offset & Instance ID. If BPDT Entry size is smaller than Extension size, error is shown.
 				# The check is skipped when Extension size is not found so no problem with OEM/FIT firmware configuration.
 				# The check is skipped when IDLM partition (DLMP) is parsed because its BPDT size is wrong by Intel design.
-				if not msg_shown and ext_psize != -1 and part[0] == cpd_hdr.PartitionName.decode('utf-8') and part[0] != 'DLMP' \
+				if not msg_shown and ext_psize != -1 and part[0] == cpd_name and part[0] != 'DLMP' \
 				and part[1] == cpd_offset and part[6] == in_id and part[2] < (cpd_offset + ext_psize) :
 					cse_anl_err(col_r + 'Error: Detected CSE Extension 0x3/0x16 with smaller BPDT %s Partition Size!' % cpd_name + col_e, None)
 					msg_shown = True # Partition related error, show only once
@@ -5901,8 +5951,8 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					elif ext_phval[0] : # Hash exists but is Invalid (CSME 11.8 SLM and CSSPS 5 Hashes are always wrong)
 						if (variant,major,minor,ext12_info[1]) == ('CSME',11,8,2) :
 							print(col_r + '\n    Hash of partition "%s" is INVALID (CSME 11.8 Slim Ignore)' % cpd_pname + col_e)
-						elif (variant,major) in [('CSSPS',1),('CSSPS',5)] :
-							print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d Ignore)' % (cpd_pname,variant,major) + col_e)
+						elif (variant,major) in [('CSSPS',1),('CSSPS',5)] or (variant,major,minor) == ('CSSPS',4,4) :
+							print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d.%d Ignore)' % (cpd_pname,variant,major,minor) + col_e)
 						elif param.me11_mod_bug and (ext_phval[2],ext_phval[3]) not in cse_known_bad_hashes :
 							input_col(col_r + '\n    Hash of partition "%s" is INVALID' % cpd_pname + col_e) # Debug
 						elif param.me11_mod_bug and (ext_phval[2],ext_phval[3]) in cse_known_bad_hashes :
@@ -6224,25 +6274,28 @@ def cse_anl_err(ext_err_msg, checked_hashes) :
 		
 # Check if CSE File System Volume FTBL ID was detected
 def check_ftbl_id(vol_ftbl_id) :
-	if vol_ftbl_id == -1 and (variant == 'CSME' and major >= 13 or variant == 'GSC') :
+	if vol_ftbl_id == -1 :
 		vol_ftbl_id = 0xA # When MFS/AFS (thus vol_ftbl_id) is missing, assume Volume FTBL ID of 0xA
-		ftbl_id_msg = col_m + 'Warning: Could not detect File System Volume FTBL ID, assuming 0A!' + col_e
+		msg_pad = '    ' if param.me11_mod_extr else '' # Message "Tab" spacing during unpacking
+		ftbl_id_msg = col_m + '%sWarning: Could not detect File System Volume FTBL ID, assuming 0A!' % msg_pad + col_e
 		if param.me11_mod_extr : print('\n%s' % ftbl_id_msg)
 		else : warn_stor.append([ftbl_id_msg, False])
 		
 	return vol_ftbl_id
 
 # Get CSE File System Integrity Table Structure Size
-def get_sec_hdr_size(variant,major) :
-	if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4)] : sec_hdr_size = 0x34
+def get_sec_hdr_size(variant,major,minor) :
+	if (variant,major,minor) == ('CSSPS',4,4) : sec_hdr_size = 0x28
+	elif (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4)] : sec_hdr_size = 0x34
 	elif (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSSPS',5)] : sec_hdr_size = 0x28
 	else : sec_hdr_size = 0x28
 	
 	return sec_hdr_size
 	
 # Get CSE File System Configuration Record Structure Size
-def get_cfg_rec_size(variant,major) :
-	if (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : config_rec_size = 0x1C
+def get_cfg_rec_size(variant,major,minor) :
+	if (variant,major,minor) == ('CSSPS',4,4) : config_rec_size = 0xC
+	elif (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : config_rec_size = 0x1C
 	elif (variant,major) in [('CSME',13),('CSME',14),('CSME',15)] : config_rec_size = 0xC
 	else : config_rec_size = 0xC
 	
@@ -6251,12 +6304,12 @@ def get_cfg_rec_size(variant,major) :
 # Get CSE File System Attributes & Configuration State
 def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final) :
 	vol_ftbl_id = -0x1
-	config_rec_size = get_cfg_rec_size(variant,major) # Get CSE File System Configuration Record Structure Size
+	config_rec_size = get_cfg_rec_size(variant,major,minor) # Get CSE File System Configuration Record Structure Size
 	
 	if mfs_found and not param.me11_mod_extr :
 		try :
 			# Get CSE File System Attributes
-			mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl('NA', mfs_start, mfs_start + mfs_size, variant)
+			mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = mfs_anl('NA',mfs_start,mfs_start + mfs_size,variant,vol_ftbl_id)
 			
 			# CSE File System exists, determine its Configuration State
 			if any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) : mfs_state = 'Initialized'
@@ -6265,20 +6318,49 @@ def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_ini
 			# CSE File System analysis failed, maybe corrupted
 			mfs_state = col_r + 'Error' + col_e
 		
-	return mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, check_ftbl_id(vol_ftbl_id), config_rec_size
+	return mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size
 
 # Analyze & Extract CSE File Systems
 # noinspection PyUnusedLocal
-def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
-	mfs_info = [] # MFS Initial Info Printing
-	mfs_tmp_page = [] # MFS Temporary Pages Message Storage
+def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 	mfs_buffer_init = reading[mfs_start:mfs_end] # MFS Initial Buffer
+	mfs_signature = mfs_buffer_init[:0x4] # Store MFS Signature Tag (MFS 0x877855AA or MFSB 0x4D465342)
+	mfsb_reserved = True if mfs_buffer_init[0x8:0x20] == b'\xFF' * 0x18 else False # Check MFSB Reserved area
+	sec_hdr_size = get_sec_hdr_size(variant,major,minor) # Get CSE File System Integrity Table Structure Size
+	config_rec_size = get_cfg_rec_size(variant,major,minor) # Get CSE File System Configuration Record Structure Size
+	page_size = 0x2000 # MFS Page Length
+	chunk_size = 0x42 # MFS Chunk Payload + CRC Length
+	index_size_sys = 0x2 # MFS System Page Index Entry Length
+	index_size_dat = 0x1 # MFS Data Page Index Entry Length
+	page_hdr_size = 0x12 # MFS Page Header Structure Size
+	vol_hdr_size = 0xE # MFS Volume Header Structure Size
+	chunks_count_sys = 0xFFFF # MFS Actual System Chunks Count
+	mfs_info = [] # MFS Initial Info Printing
+	mfs_files = [] # MFS Low Level Files Numbers & Contents
+	mfs_tmp_page = [] # MFS Temporary Pages Message Storage
+	mfs_page_init = [] # MFS Total Unsorted Pages Contents
+	pch_init_info = [] # Store PCH Initialization Table Info
+	pch_init_final = [] # Store PCH Initialization Table Final Info
+	mfs_parsed_idx = [] # Store all parsed MFS Low Level Files
+	sys_page_sorted = [] # MFS Total Sorted System Pages Contents
+	dat_page_sorted = [] # MFS Total Sorted Data Pages Contents
+	all_chunks_dict = {} # MFS Total Chunk Index & Data Dictionary
+	intel_cfg_hash_mfs = None # Store MFS Low Level File 6 Hash
+	mfs_buffer_sorted = b'' # MFS Total Sorted Pages Contents Buffer
 	
-	mfsb_hdr = get_struct(mfs_buffer_init, 0, MFS_Backup_Header) # Check if input MFS is in MFS Backup state
-	if mfsb_hdr.Signature == 0x4253464D : # MFS Backup Signature is "MFSB"
+	# Verify that MFS/MFSB Partition can be parsed by mfs_anl
+	if mfs_signature not in (b'\x87\x78\x55\xAA',b'\x4D\x46\x53\x42') : # Check 1st System Page MFS/MFSB Signature Tag
+		mfs_anl_msg(col_r + 'Error: Skipped MFS partition at 0x%X, unrecognizable format!' % mfs_start + col_e, 'error', True, False, False, [])
+		
+		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size
+	
+	# Check if MFS is in MFS Backup R0 state
+	elif mfs_signature == b'\x4D\x46\x53\x42' and mfsb_reserved : # MFSB Tag & MFSB R0 Reserved = 0xFF * 24
+		mfsb_hdr = get_struct(mfs_buffer_init, 0, MFS_Backup_Header_R0) # MFSB Header R0 Structure
 		if param.me11_mod_extr :
 			print('\n%s' % mfsb_hdr.mfs_print()) # Print Structure Info during CSE Unpacking
 			mfs_info.append(mfsb_hdr.mfs_print()) # Store Structure Info during CSE Unpacking
+		
 		mfsb_buffer = mfs_buffer_init[ctypes.sizeof(mfsb_hdr):] # MFS Backup Buffer without Header
 		mfsb_crc32 = mfsb_hdr.CRC32 # Intel CRC-32 of MFS Backup Buffer
 		mea_crc32 = ~zlib.crc32(mfsb_buffer, -1) & 0xFFFFFFFF # MEA CRC-32 of MFS Backup Buffer
@@ -6298,39 +6380,82 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		mfs_buffer_init += mfsb_buffer[data_start:mfsb_end] # Append Last MFS Backup Chunk Contents as has no 0x01030204 ending
 		mfs_buffer_init += b'\xFF' * (- len(mfs_buffer_init) % 0x2000) # Append EOF Alignment Padding based on MFS Page Size of 0x2000
 	
+	# Check if MFS is in MFS Backup R1 state
+	elif mfs_signature == b'\x4D\x46\x53\x42' : # MFSB Tag & MFSB R0 Reserved != 0xFF * 24
+		mfsb_hdr = get_struct(mfs_buffer_init, 0, MFS_Backup_Header_R1) # MFSB Header R1 Structure
+		if param.me11_mod_extr :
+			print('\n%s' % mfsb_hdr.mfs_print()) # Print Structure Info during CSE Unpacking
+			mfs_info.append(mfsb_hdr.mfs_print()) # Store Structure Info during CSE Unpacking
+		
+		mfsb_rev = mfsb_hdr.Revision # MFSB Header R1 Revision Tag
+		if mfsb_rev != 1 : # Validate MFSB Header Revision, should be 1
+			mfs_anl_msg(col_r + 'Error: Unknown MFS Backup Header Revision %d at 0x%X!' % (mfsb_rev,mfs_start) + col_e, 'error', True, False, False, [])
+		
+		mfsb_len = mfsb_hdr.Entry6Offset # MFSB Header R1 Size based on 1st Entry Offset
+		mfsb_hdr_data = mfs_buffer_init[:0x8] + b'\x00' * 4 + mfs_buffer_init[0xC:mfsb_len] # MFS Backup Header Data
+		mfsb_crc32 = mfsb_hdr.HeaderCRC32 # Intel CRC-32 of MFS Backup Header Data with HeaderCRC32 = 0
+		mea_crc32 = zlib.crc32(mfsb_hdr_data) # MEA CRC-32 of MFS Backup Header Data with HeaderCRC32 = 0
+		
+		if mfsb_crc32 != mea_crc32 :
+			mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS Backup Header CRC-32 0x%0.8X is INVALID, expected 0x%0.8X!' % (mfsb_crc32,mea_crc32) + col_e, 'error', True, False, False, [])
+		else :
+			mfs_tmp_page = mfs_anl_msg(col_g + 'MFS Backup Header CRC-32 is VALID' + col_e, '', True, False, False, [])
+		
+		mfsb_entry_6 = [6, mfsb_hdr.Entry6Offset, mfsb_hdr.Entry6Size] # MFSB Entry 6 (Intel Configuration) Info
+		mfsb_entry_7 = [7, mfsb_hdr.Entry7Offset, mfsb_hdr.Entry7Size] # MFSB Entry 7 (OEM Configuration) Info
+		mfsb_entry_9 = [9, mfsb_hdr.Entry9Offset, mfsb_hdr.Entry9Size] # MFSB Entry 9 (Manifest Backup) Info
+		mfsb_entries = [mfsb_entry_6, mfsb_entry_7, mfsb_entry_9] # MFSB Entries 6,7,9 Info Storage
+		
+		for entry in mfsb_entries :
+			entry_file = entry[0] # MFSB R1 Entry Low Level File Index
+			entry_data = mfs_buffer_init[entry[1]:entry[1] + entry[2]] # MFSB R1 Entry Data
+			
+			entry_hdr = get_struct(entry_data, 0, MFS_Backup_Entry) # MFSB R1 Entry Structure
+			if param.me11_mod_extr :
+				print('\n%s' % entry_hdr.mfs_print()) # Print Structure Info during CSE Unpacking
+				mfs_info.append(entry_hdr.mfs_print()) # Store Structure Info during CSE Unpacking
+			
+			entry_rev = entry_hdr.Revision # MFSB R1 Entry Revision Tag
+			if entry_rev != 1 : # Validate MFSB Entry Revision, should be 1
+				mfs_anl_msg(col_r + 'Error: Unknown MFS Backup Entry %d Revision %d at 0x%X!' % (entry_file,entry_rev,mfs_start) + col_e, 'error', True, False, False, [])
+			
+			entry_len = ctypes.sizeof(MFS_Backup_Entry) # MFSB R1 Entry Size based on Structure
+			file_data = entry_data[entry_len:entry_len + entry_hdr.Size]
+			file_crc32 = entry_hdr.CRC32 # Intel CRC-32 of MFSB R1 Entry Data with CRC32 = 0
+			mea_crc32 = zlib.crc32(file_data) # MEA CRC-32 of MFSB R1 Entry Data with CRC32 = 0
+			
+			if file_crc32 != mea_crc32 :
+				mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS Backup Entry %d CRC-32 0x%0.8X is INVALID, expected 0x%0.8X!' % (entry_file,file_crc32,mea_crc32) + col_e, 'error', True, False, False, [])
+			else :
+				mfs_tmp_page = mfs_anl_msg(col_g + 'MFS Backup Entry %d CRC-32 is VALID' % entry_file + col_e, '', True, False, False, [])
+			
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (entry_file, mfs_dict[entry_file]) + col_e)
+			
+			if entry_file in (6,7) :
+				rec_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
+				root_folder = rec_folder # Store File Root Folder for Local Path printing
+				
+				pch_init_info = mfs_cfg_anl(entry_file, file_data, rec_folder, root_folder, config_rec_size, pch_init_info, vol_ftbl_id) # Parse MFS Config Records
+				
+			elif entry_file == 9 and man_pat.search(file_data[:0x20]) :
+				file_9_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
+				file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
+				mfs_write(file_9_folder, file_9_data_path, file_data) # Store MFS Manifest Backup Contents
+				
+				ext_print = ext_anl(file_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
+						[pch_init_final,config_rec_size,vol_ftbl_id]) # Get Manifest Backup Extension Info
+				
+				for man_pt in ext_print[1] : mfs_txt(man_pt, file_9_folder, os.path.join(file_9_folder + 'FTPR.man'), 'a', False) # Store MFS Manifest Backup Extension Info
+				
+		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size
+	
+	# MFS Size related Variable Initialization (must be after MFSB R0)
 	mfs_size = len(mfs_buffer_init) # MFS Total Length
-	page_size = 0x2000 # MFS Page Length
 	page_count = mfs_size // page_size # MFS Total Pages Count
 	sys_count = page_count // 12 # MFS System Pages Count
 	dat_count = page_count - sys_count - 1 # MFS Data Pages Count
-	chunk_size = 0x42 # MFS Chunk Payload + CRC Length
-	index_size_sys = 0x2 # MFS System Page Index Entry Length
-	index_size_dat = 0x1 # MFS Data Page Index Entry Length
-	page_hdr_size = 0x12 # MFS Page Header Structure Size
-	vol_hdr_size = 0xE # MFS Volume Header Structure Size
-	vol_ftbl_id = -0x1 # MFS File Table Dictionary ID
-	mfs_files = [] # MFS Low Level Files Numbers & Contents
-	mfs_page_init = [] # MFS Total Unsorted Pages Contents
-	sys_page_sorted = [] # MFS Total Sorted System Pages Contents
-	dat_page_sorted = [] # MFS Total Sorted Data Pages Contents
-	mfs_buffer_sorted = b'' # MFS Total Sorted Pages Contents Buffer
-	chunks_count_sys = 0xFFFF # MFS Actual System Chunks Count
-	all_chunks_dict = {} # MFS Total Chunk Index & Data Dictionary
-	mfs_parsed_idx = [] # Store all parsed MFS Low Level Files
-	intel_cfg_hash_mfs = None # Store MFS Low Level File 6 Hash
-	pch_init_info = [] # Store PCH Initialization Table Info
-	pch_init_final = [] # Store PCH Initialization Table Final Info
 	chunks_max_sys = sys_count * ((page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_size)) # MFS Maximum System Chunks Count
 	chunks_max_dat = dat_count * ((page_size - page_hdr_size) // (index_size_dat + chunk_size)) # MFS Maximum Data Chunks Count (= Actual)
-	
-	sec_hdr_size = get_sec_hdr_size(variant,major) # Get CSE File System Integrity Table Structure Size
-	
-	config_rec_size = get_cfg_rec_size(variant,major) # Get CSE File System Configuration Record Structure Size
-	
-	# Verify that MFS Partition is proper based on 1st System Page Signature
-	if mfsb_hdr.Signature not in (0xAA557887,0x4253464D) :
-		mfs_anl_msg(col_r + 'Error: Skipped MFS partition at 0x%X, unrecognizable format!' % mfs_start + col_e, 'error', True, False, False, [])
-		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size
 	
 	# Sort MFS System & Data Pages
 	for page_index in range(page_count) :
@@ -6600,17 +6725,17 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 				
 				if os.path.isfile(mfs_tmpl_path) :
 					temp_dir = os.path.join(mfstool_path, 'temp', '')
-					out_dir = os.path.join(mfstool_path, 'output', '')
 					if os.path.isdir(temp_dir) : shutil.rmtree(temp_dir)
 					os.mkdir(temp_dir)
-					if not os.path.isdir(out_dir) : os.mkdir(out_dir)
 					
 					with open(os.path.join(temp_dir, 'intel.cfg'), 'wb') as o :
 						# noinspection PyTypeChecker
 						o.write(mfs_file[1])
 					
 					temp_mfs_path = os.path.join(mfstool_path, 'MFS_TEMP.bin')
+					if os.path.isfile(temp_mfs_path) : os.remove(temp_mfs_path)
 					clean_mfs_path = os.path.join(mfstool_path, 'MFS_CLEAN.bin')
+					if os.path.isfile(clean_mfs_path) : os.remove(clean_mfs_path)
 					
 					with open(mfs_tmpl_path, 'rb') as mfs_tmpl : mfs_tmpl_fixed = bytearray(mfs_tmpl.read())
 					mfs_tmpl_fixed[0x108:0x10C] = struct.pack('<I', vol_unk_field) # Copy Volume Unknown field from dirty MFS to template
@@ -6626,8 +6751,9 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 					if os.path.isfile(clean_mfs_path) :
 						with open(clean_mfs_path, 'rb') as mfs_new : clean_mfs = mfs_new.read()
 						if len(clean_mfs) != mfs_size : input('\nError: MFS size mismatch!')
-						output = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
-						with open(os.path.join(out_dir, os.path.basename(file_in)), 'wb') as o : o.write(output)
+						output_data = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
+						output_path = os.path.join(mea_dir, '__RCFG__%s' % os.path.basename(file_in))
+						with open(output_path, 'wb') as o : o.write(output_data)
 					
 					shutil.rmtree(temp_dir)
 					os.remove(temp_mfs_path)
@@ -6684,9 +6810,9 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant) :
 		
 		# Parse MFS Low Level File 9 (Manifest Backup), if applicable
 		elif mfs_file[1] and mfs_file[0] == 9 and man_pat.search(mfs_file[1][:0x20]) :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File 9 (Manifest Backup) ...' + col_e)
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
 			mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
-			file_9_folder = os.path.join(mea_dir, mfs_folder, '009 Manifest Backup', '') # MFS Manifest Backup root folder
+			file_9_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '') # MFS Manifest Backup root folder
 			file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
 			mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
 			# noinspection PyTypeChecker
@@ -6893,6 +7019,7 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 	fvalue = ['No','Yes']
 	
 	file_data = mfs_file_data if mfs_file_data else b'' # MFS Home Directory File Contents
+	vol_ftbl_id = check_ftbl_id(vol_ftbl_id) # Check if MFS Volume FTBL ID was detected
 	ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag (0A, 0D, 1E etc)
 	
 	if ftbl_dict_id not in ftbl_dict :
@@ -7063,6 +7190,8 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 			rec_offset = rec_hdr.FileOffset # File Offset relative to MFS Low Level File start
 			rec_size = rec_hdr.FileSize # File Size
 			fitc_cfg,flag_unk = rec_hdr.get_flags() # Get Record Flags
+			
+			vol_ftbl_id = check_ftbl_id(vol_ftbl_id) # Check if MFS Volume FTBL ID was detected
 			
 			if '%0.2X' % vol_ftbl_id not in ftbl_dict :
 				if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_m + 'Warning: File Table Dictionary %0.2X does not exist!' % vol_ftbl_id + col_e, '', True, False, False, [])
@@ -7266,7 +7395,7 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 			
 			if pmcc_version in pmc_variants :
 				pmc_variant = pmc_variants[pmcc_version]
-			elif pmcc_version == 0 and (mn2_info[0] in (300,3232) or mn2_info[0] < 130) : # 0 CNP
+			elif pmcc_version == 0 and (mn2_info[0] in (300,3232) or (mn2_info[0] < 130 and int(mn2_info[7][:4]) <= 2017)) : # 0 CNP
 				pmc_variant = 'PMCCNP'
 			elif pmcc_version == 0 and mn2_info[0] in (400,130) : # 0 ICP
 				pmc_variant = 'PMCICP'
@@ -7276,6 +7405,8 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 				pmc_variant = 'PMCCMP'
 			elif pmcc_version == 0 and mn2_info[0] == 150 : # 0 TGP
 				pmc_variant = 'PMCTGP'
+			elif pmcc_version == 0 and mn2_info[0] == 1 : # 0 LBG (CSSPS 4.4)
+				pmc_variant = 'PMCLBG'
 				
 			break # Found PMC Code Module, skip the rest
 		
@@ -7287,6 +7418,18 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 	
 	if pmc_variant == 'PMCGSC' :
 		pmc_platform = 'DGx'
+	
+	elif pmc_variant == 'PMCLBG' :
+		pmc_platform = 'LBG'
+		
+		if mn2_info[0] == 1 :
+			# 1.151.0.0 = LBG H + PMC Revision 151 (?)
+			pmc_pch_sku = 'H' # Hardcoded based on reason
+			pmc_pch_rev = 'B' # Hardcoded based on mphytbl
+		
+		# Check if PMCLBG firmware is the latest
+		db_pch,db_sku,db_rev,db_rel = check_upd(('Latest_PMCLBG_%s_%s' % (pmc_pch_sku, pmc_pch_rev)))
+		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
 	
 	elif pmc_variant == 'PMCTGP' :
 		pmc_platform = 'TGP'
@@ -7822,7 +7965,7 @@ def get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes) :
 		rbe_pm_met = get_struct(rbe_pm_met_data, i * rbe_pm_struct_size, rbe_pm_struct_name) # Parse "Metadata" entries
 		rbe_pm_met_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(rbe_pm_met.Hash)) # Get "Metadata" entry Hash
 		rbe_pm_met_hashes.append(rbe_pm_met_hash) # Store each "Metadata" entry Hash for Modules w/o Metadata Hash validation
-			
+	
 	return rbe_pm_met_hashes
 	
 # Process ctypes Structure Classes
@@ -7901,24 +8044,26 @@ def pt_json(pt_obj) :
 	
 # Detect DB Revision
 def mea_hdr_init() :
-	db_rev = col_r + 'Unknown' + col_e
+	mea_db_rev = 'Unknown'
+	mea_db_rev_p = col_r + mea_db_rev + col_e
 	
 	try :
 		fw_db = db_open()
 		for line in fw_db :
 			if 'Revision' in line :
-				db_line = line.split()
-				db_rev = col_y + db_line[2] + col_e
+				mea_db_rev = line.split()[2]
+				mea_db_rev_p = col_y + mea_db_rev + col_e
+				break
 		fw_db.close()
 	except :
 		pass
 	
-	return db_rev
+	return mea_db_rev, mea_db_rev_p
 
 # Print MEA Header
-def mea_hdr(db_rev) :
+def mea_hdr(mea_db_rev_p) :
 	hdr_pt = ext_table([], False, 1)
-	hdr_pt.add_row([col_y + '        %s' % title + col_e + ' %s        ' % db_rev])
+	hdr_pt.add_row([col_y + '        %s' % title + col_e + ' %s        ' % mea_db_rev_p])
 	print(hdr_pt)
 
 # https://stackoverflow.com/a/22881871
@@ -8024,7 +8169,7 @@ def copy_on_msg() :
 
 # Open MEA database
 def db_open() :
-	fw_db = open(db_path, 'r', encoding = 'utf-8')
+	fw_db = open(mea_db_path, 'r', encoding = 'utf-8')
 	return fw_db
 
 # Check DB for latest version
@@ -8177,7 +8322,7 @@ def fovd_clean(fovdtype) :
 	fovd_empty = 'N/A'
 	
 	for part in fpt_part_all :
-		if (fovdtype,part[0]) in [('new',b'FOVD'),('old',b'NVKR')] :
+		if (fovdtype,part[0]) in [('new','FOVD'),('old','NVKR')] :
 			fovd_start = part[1]
 			fovd_empty = part[6]
 	
@@ -8481,7 +8626,7 @@ def get_variant() :
 				elif mod == 'IntelRec' and major == 13 : # ICP
 					variant = 'PCHCICP'
 					break
-				elif mod == 'PMCC000' and (major in (300,3232) or major < 130) : # 0 CNP
+				elif mod == 'PMCC000' and (major in (300,3232) or (major < 130 and year <= 0x2017)) : # 0 CNP
 					variant = 'PMCCNP'
 					break
 				elif mod == 'PMCC000' and major in (400,130) : # 0 ICP
@@ -8495,6 +8640,9 @@ def get_variant() :
 					break
 				elif mod == 'PMCC000' and major == 150 : # 0 TGP
 					variant = 'PMCTGP'
+					break
+				elif mod == 'PMCC000' and major == 1 : # 0 LBG (CSSPS 4.4)
+					variant = 'PMCLBG'
 					break
 				elif mod == 'PMCC002' : # 2 APL A
 					variant = 'PMCAPLA'
@@ -8593,7 +8741,7 @@ ext_tag_mod_count = [0x1, 0x2, 0x12, 0x14, 0x15, 0x1F]
 cssps_type_fw = {'RC':'Recovery', 'OP':'Operational'}
 
 # CSE SPS SKU Platform ID
-cssps_platform = {'GE':'Greenlow', 'PU':'Purley', 'HA':'Harrisonville', 'PE':'Purley EPO', 'BA':'Bakerville', 'ME':'Mehlow'}
+cssps_platform = {'GE':'Greenlow', 'PU':'Purley', 'HA':'Harrisonville', 'PE':'Purley EPO', 'BA':'Bakerville', 'ME':'Mehlow', 'WH':'Whitley'}
 
 # CSE File System ID
 mfs_type = {0:'root', 1:'home', 2:'bin', 3:'susram', 4:'fpf', 5:'dev', 6:'umafs'}
@@ -8811,6 +8959,7 @@ mfs_dict = {
 			5 : 'Quota Storage',
 			6 : 'Intel Configuration',
 			7 : 'OEM Configuration',
+			9 : 'Manifest Backup',
 			}
 			
 # CSE & PMC Compatibility
@@ -8821,6 +8970,7 @@ pmc_dict = {
 			('CSME',15) : [150],
 			('CSTXE',3) : [-1],
 			('CSTXE',4) : [-1],
+			('CSSPS',4) : [1],
 			('CSSPS',5) : [300],
 			('GSC',100) : [0],
 			}
@@ -8848,24 +8998,12 @@ cse_known_bad_hashes = [
 ('35C7D3383E6B380C3B07CB41444448EC63E3F219C77E7D99DA19C5BFB856713B','785F395BC28544253332ACB1C5C65CDA7C24662D55DC8AB8F0E56543B865A4C3'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_d0d3
 ('4DCF921DC0A48D2967063969ED1314CB17AA03E86635A366E2750BE43A219D95','058C09ABE1D1AB2B28D1D06153908EDAE8B420967D54EC4F1F99AC0D0101454C'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > umac_d0
 ('$CPD_CSSPS_1_0x000000B2','$CPD_CSSPS_1_0x0000003F'), # CSSPS 01.00.02.029_HA_SKU0_PRD_REC & 01.00.02.043_HA_SKU0_PRD_REC > FTPR > $CPD
-('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSME 11.8 SLM Extension 0x3, CSSPS 1/IGN Extension 0x3, CSSPS 5 Extension 0x16)
+('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSME 11.8 SLM & CSSPS 1/IGN Extension 0x3, CSSPS 5 & CSSPS 4.4 Extension 0x16)
 ]
-
-# Intel Engine firmware Manifest pattern ($MN2 or $MAN)
-man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL) # .$MN2 or .$MAN pattern
 	
 # Get MEA Parameters from input
 param = MEA_Param(mea_os, sys.argv)
 
-# Actions for MEA but not UEFIStrip
-if not param.extr_mea and not param.print_msg :
-	# Pause after any unexpected python exception
-	sys.excepthook = show_exception_and_exit
-	
-	# Set console/shell window title
-	if mea_os == 'win32' : ctypes.windll.kernel32.SetConsoleTitleW(title)
-	elif mea_os.startswith('linux') or mea_os == 'darwin' : sys.stdout.write('\x1b]2;' + title + '\x07')
-	
 # Get script location
 mea_dir = get_script_dir()
 
@@ -8873,16 +9011,26 @@ mea_dir = get_script_dir()
 arg_num = len(sys.argv)
 
 # Set dependencies paths
-db_path = os.path.join(mea_dir, 'MEA.dat')
+mea_db_path = os.path.join(mea_dir, 'MEA.dat')
 
 # Check if dependencies exist
-depend_db = os.path.isfile(db_path)
+depend_db = os.path.isfile(mea_db_path)
 
 # Get Database Revision
-db_rev = mea_hdr_init()
+mea_db_rev, mea_db_rev_p = mea_hdr_init()
+
+# Actions for MEA but not UEFIStrip
+if not param.extr_mea and not param.print_msg :
+	# Pause after any unexpected python exception
+	sys.excepthook = show_exception_and_exit
+	
+	# Set console/shell window title
+	mea_title = '%s %s' % (title, mea_db_rev)
+	if mea_os == 'win32' : ctypes.windll.kernel32.SetConsoleTitleW(mea_title)
+	elif mea_os.startswith('linux') or mea_os == 'darwin' : sys.stdout.write('\x1b]2;' + mea_title + '\x07')
 
 if not param.skip_intro :
-	mea_hdr(db_rev)
+	mea_hdr(mea_db_rev_p)
 
 	print("\nWelcome to Intel Engine Firmware Analysis Tool\n")
 	
@@ -8915,10 +9063,10 @@ if not param.skip_intro :
 	
 	os.system(cl_wipe)
 	
-	mea_hdr(db_rev)
+	mea_hdr(mea_db_rev_p)
 	
 elif not param.extr_mea and not param.print_msg :
-	mea_hdr(db_rev)
+	mea_hdr(mea_db_rev_p)
 	
 if (arg_num < 2 and not param.help_scr and not param.mass_scan) or param.help_scr :
 	mea_help()
@@ -8939,6 +9087,9 @@ cur_count = 0
 in_count = len(source)
 for arg in source :
 	if arg in param.val : in_count -= 1
+
+# Intel Engine firmware Manifest pattern ($MN2 or $MAN)
+man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL) # .$MN2 or .$MAN pattern
 
 for file_in in source :
 	
@@ -9032,7 +9183,6 @@ for file_in in source :
 	note_stor = []
 	warn_stor = []
 	s_bpdt_all = []
-	fpt_ranges = []
 	fpt_matches = []
 	p_store_all = []
 	fpt_part_all = []
@@ -9123,6 +9273,7 @@ for file_in in source :
 	p_max_size = 0xFFFFFFFF
 	eng_fw_end = 0xFFFFFFFF
 	start_fw_start_match = 0
+	end_fw_start_match = 0
 	cur_count += 1
 	
 	if not os.path.isfile(file_in) :
@@ -9263,7 +9414,7 @@ for file_in in source :
 			
 			# Image is X58 ROMB Test
 			elif reading[:0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Found' + col_y + ' X58 ROMB Test ' + col_e + 'Intel Engine firmware'
+				no_man_text = 'Found' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
 				
 				if param.extr_mea : no_man_text = "NaN NaN_NaN_X58 NaN NaN NaN"
 			
@@ -9312,47 +9463,13 @@ for file_in in source :
 	fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich = \
 	fd_anl_init(reading,file_end,start_man_match,end_man_match)
 	
+	# Store Initial Manifest Offset for CSSPS EXTR RSA Signatures Hash
+	init_man_match = [start_man_match,end_man_match]
+	
 	# Analyze Intel Flash Descriptor Regions
 	if fd_exist :
 		fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_pdr_rgn_exist,pdr_fd_start,pdr_fd_size, \
 		fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size = fd_anl_rgn(start_fd_match,end_fd_match,fd_is_ich)
-	
-	# Detect all $FPT and/or BPDT starting offsets (both allowed/needed)
-	if fd_me_rgn_exist :
-		# $FPT detection based on FD with Engine region (limits false positives from IE or CSTXE Engine/ROMB & DevExp1/Init)
-		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading[me_fd_start:me_fd_start + me_fd_size]))
-	else :
-		# FD with Engine region not found or multiple FD detected, scan entire file (could lead to false positives)
-		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
-		
-	# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
-	man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME',0,0,0,0,0,0], None, [[],''], [[],-1,-1])
-	fptemp_exists = True if man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0] else False # Detect if CSE FTPR > fptemp module exists
-	
-	# Adjust $FPT matches, ignore known false positives
-	for fpt_match in fpt_matches_init :
-		fpt_match_start = me_fd_start + fpt_match.start() if fd_me_rgn_exist else fpt_match.start()
-		if fptemp_exists and fptemp_info[2] > fpt_match_start >= fptemp_info[1] : pass # CSE FTPR > fptemp
-		else : fpt_matches.append(fpt_match)
-	
-	# Store Initial Manifest Offset for CSSPS EXTR RSA Signatures Hash
-	init_man_match = [start_man_match,end_man_match]
-	
-	# Detect $FPT Firmware Starting Offset
-	if len(fpt_matches) :
-		rgn_exist = True # Set $FPT detection boolean
-		
-		for r in fpt_matches:
-			fpt_ranges.append(r.span()) # Store all $FPT ranges
-			fpt_count += 1 # Count $FPT ranges
-		
-		# Store ranges and start from 1st $FPT by default
-		(start_fw_start_match, end_fw_start_match) = fpt_ranges[0]
-		
-		# Adjust $FPT offset if FD with Engine region exists
-		if fd_me_rgn_exist :
-			start_fw_start_match += me_fd_start
-			end_fw_start_match += me_fd_start
 			
 	# Detect CSE Layout Table, it unfortunately lacks a unique identifier (GREAT WORK INTEL...)
 	if fd_me_rgn_exist :
@@ -9363,21 +9480,30 @@ for file_in in source :
 	
 	cse_lt_size = 0x1000 # CSE LT total size is static at 4K
 	cse_lt_bp = [b'\xAA\x55\x00\x00',b'\xAA\x55\xAA\x00'] # IFWI BPDT Signatures
-	cse_lt_16 = get_struct(reading, cse_lt_off, CSE_Layout_Table_16) # IFWI 1.6 & 2.0 Structure
+	cse_lt_16 = get_struct(reading, cse_lt_off, CSE_Layout_Table_16) # IFWI 1.6 Structure
 	cse_lt_17 = get_struct(reading, cse_lt_off, CSE_Layout_Table_17) # IFWI 1.7 Structure
-	cse_lt_16_padd = reading[cse_lt_off + ctypes.sizeof(CSE_Layout_Table_16):cse_lt_off + cse_lt_size]
-	cse_lt_17_padd = reading[cse_lt_off + ctypes.sizeof(CSE_Layout_Table_17):cse_lt_off + cse_lt_size]
-	cse_lt_16_bp1_sig = reading[cse_lt_off + cse_lt_16.BP1Offset:cse_lt_off + cse_lt_16.BP1Offset + 0x4] # IFWI 1.6 & 2.0 BP1 Signature
+	cse_lt_16_hdr_pad = reading[cse_lt_off + ctypes.sizeof(CSE_Layout_Table_16):cse_lt_off + cse_lt_size] # IFWI 1.6 Header Padding
+	cse_lt_17_hdr_pad = reading[cse_lt_off + ctypes.sizeof(CSE_Layout_Table_17):cse_lt_off + cse_lt_size] # IFWI 1.7 Header Padding
+	cse_lt_16_fpt_sig = reading[cse_lt_off + cse_lt_16.DataOffset:cse_lt_off + cse_lt_16.DataOffset + 0x4] # IFWI 1.6 FPT Signature
+	cse_lt_17_fpt_sig = reading[cse_lt_off + cse_lt_17.DataOffset:cse_lt_off + cse_lt_17.DataOffset + 0x4] # IFWI 1.7 FPT Signature
+	cse_lt_16_bp1_sig = reading[cse_lt_off + cse_lt_16.BP1Offset:cse_lt_off + cse_lt_16.BP1Offset + 0x4] # IFWI 1.6 BP1 Signature
 	cse_lt_17_bp1_sig = reading[cse_lt_off + cse_lt_17.BP1Offset:cse_lt_off + cse_lt_17.BP1Offset + 0x4] # IFWI 1.7 BP1 Signature
 	
-	if reading[cse_lt_off:cse_lt_off + 0x4] in cse_lt_bp : pass # Skip any CSE LT "matches" which are BPx (BPDT)
-	elif rgn_exist : # If $FPT exists, verify CSE LT via Data, BP1 & Padding. Otherwise, only via BP1 & Padding (risky)
-		if start_fw_start_match == cse_lt_off + cse_lt_16.DataOffset and cse_lt_16_bp1_sig in cse_lt_bp and \
-		cse_lt_16_padd == len(cse_lt_16_padd) * b'\xFF' : cse_lt_struct = cse_lt_16
-		elif start_fw_start_match == cse_lt_off + cse_lt_17.DataOffset and cse_lt_17_bp1_sig in cse_lt_bp and \
-		cse_lt_17_padd == len(cse_lt_17_padd) * b'\xFF' : cse_lt_struct = cse_lt_17
-	elif cse_lt_16_bp1_sig in cse_lt_bp and cse_lt_16_padd == len(cse_lt_16_padd) * b'\xFF' : cse_lt_struct = cse_lt_16
-	elif cse_lt_17_bp1_sig in cse_lt_bp and cse_lt_17_padd == len(cse_lt_17_padd) * b'\xFF' : cse_lt_struct = cse_lt_17
+	# If $FPT exists, verify CSE LT via Data, BP1 & Padding. Otherwise, only via BP1 & Padding (risky)
+	if reading[cse_lt_off:cse_lt_off + 0x4] in cse_lt_bp :
+		pass # Skip any CSE LT Structure "matches" which are actually IFWI 2.0 BPx (BPDT)
+	elif cse_lt_16_fpt_sig == b'$FPT' and cse_lt_16_bp1_sig in cse_lt_bp and cse_lt_16_hdr_pad == len(cse_lt_16_hdr_pad) * b'\xFF' :
+		cse_lt_struct = cse_lt_16 # CSE LT IFWI 1.6 with Data
+		start_fw_start_match = cse_lt_off + cse_lt_16.DataOffset # Adjust $FPT Starting Offset based on CSE LT IFWI 1.6 Data
+		end_fw_start_match = cse_lt_off + cse_lt_16.DataOffset + 0x4 # Adjust $FPT End Offset based on CSE LT IFWI 1.6 Data
+	elif cse_lt_17_fpt_sig == b'$FPT' and cse_lt_17_bp1_sig in cse_lt_bp and cse_lt_17_hdr_pad == len(cse_lt_17_hdr_pad) * b'\xFF' :
+		cse_lt_struct = cse_lt_17 # CSE LT IFWI 1.7 with Data
+		start_fw_start_match = cse_lt_off + cse_lt_17.DataOffset # Adjust $FPT Starting Offset based on CSE LT IFWI 1.7 Data
+		end_fw_start_match = cse_lt_off + cse_lt_17.DataOffset + 0x4 # Adjust $FPT End Offset based on CSE LT IFWI 1.7 Data
+	elif cse_lt_16_bp1_sig in cse_lt_bp and cse_lt_16_hdr_pad == len(cse_lt_16_hdr_pad) * b'\xFF' :
+		cse_lt_struct = cse_lt_16 # CSE LT IFWI 1.6 without Data
+	elif cse_lt_17_bp1_sig in cse_lt_bp and cse_lt_17_hdr_pad == len(cse_lt_17_hdr_pad) * b'\xFF' :
+		cse_lt_struct = cse_lt_17 # CSE LT IFWI 1.7 without Data
 	
 	# Analyze CSE Layout Table
 	if cse_lt_struct :
@@ -9421,8 +9547,41 @@ for file_in in source :
 					
 		# Show CSE LT partition info on demand (-dfpt)
 		if param.fpt_disp : print('%s\n' % pt_dcselt)
+		
+	# Detect all $FPT and/or BPDT starting offsets (both allowed/needed)
+	if fd_me_rgn_exist :
+		# $FPT detection based on FD with Engine region (limits false positives from IE or CSTXE Engine/ROMB & DevExp1/Init)
+		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading[me_fd_start:me_fd_start + me_fd_size]))
+	else :
+		# FD with Engine region not found or multiple FD detected, scan entire file (could lead to false positives)
+		fpt_matches_init = list((re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL)).finditer(reading))
+		
+	# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
+	man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME',0,0,0,0,0,0], None, [[],''], [[],-1,-1])
+	fptemp_exists = True if man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0] else False # Detect if CSE FTPR > fptemp module exists
+	
+	# Adjust $FPT matches, ignore known false positives
+	for fpt_match in fpt_matches_init :
+		fpt_match_start = me_fd_start + fpt_match.start() if fd_me_rgn_exist else fpt_match.start()
+		if fptemp_exists and fptemp_info[2] > fpt_match_start >= fptemp_info[1] : pass # CSE FTPR > fptemp
+		elif cse_lt_struct and cse_lt_off < fpt_match_start < start_fw_start_match : pass # CSE LT Padding > $FPT
+		else : fpt_matches.append(fpt_match)
+	
+	# Detect $FPT Firmware Starting Offset
+	if len(fpt_matches) :
+		rgn_exist = True # Set $FPT detection boolean
+		
+		fpt_count = len(fpt_matches) # Count $FPT matches
+		
+		# Set $FPT Start & End when no CSE LT Data was found
+		if end_fw_start_match == 0 :
+			(start_fw_start_match, end_fw_start_match) = fpt_matches[0].span() # Select the 1st $FPT match by default
 			
-	if rgn_exist :
+			# Adjust $FPT offset if FD with Engine region exists
+			if fd_me_rgn_exist :
+				start_fw_start_match += me_fd_start
+				end_fw_start_match += me_fd_start
+		
 		# Analyze $FPT header
 		pt_dfpt = ext_table([col_y + 'Name' + col_e, col_y + 'Owner' + col_e, col_y + 'Start' + col_e, col_y + 'Size' + col_e, col_y + 'End' + col_e,
 				  col_y + 'Type' + col_e, col_y + 'ID' + col_e, col_y + 'Valid' + col_e, col_y + 'Empty' + col_e], True, 1)
@@ -9467,6 +9626,15 @@ for file_in in source :
 			p_size = fpt_entry.Size
 			p_valid_print = False if p_valid == 0xFF else True
 			p_type_print = p_type_dict[p_type] if p_type in p_type_dict else 'Unknown'
+			is_cpd = reading[p_offset_spi:p_offset_spi + 0x4] == b'$CPD'
+			cpd_name = reading[p_offset_spi + 0xC:p_offset_spi + 0x10].strip(b'\x00')
+			
+			if p_name in [b'\xFF\xFF\xFF\xFF', b''] :
+				p_name = '' # If appears, wrong NumPartitions
+				fpt_num_diff -= 1 # Check for less $FPT Entries
+			elif p_name == b'\xE0\x15' : p_name = 'E0150020' # ME8 (E0150020)
+			elif is_cpd and p_name != b'FTUP' : p_name = cpd_name.decode('utf-8','ignore')
+			else : p_name = p_name.decode('utf-8','ignore')
 			
 			if p_offset in (0xFFFFFFFF, 0) or p_size == 0 or p_size != 0xFFFFFFFF and reading[p_offset_spi:p_offset_spi + p_size] in (b'', p_size * b'\xFF') :
 				p_empty = True
@@ -9488,12 +9656,6 @@ for file_in in source :
 						cse_in_id_str = cse_in_id
 			
 			fpt_part_all.append([p_name, p_offset_spi, p_offset_spi + p_size, cse_in_id, p_type_print, p_valid_print, p_empty])
-			
-			if p_name in [b'\xFF\xFF\xFF\xFF', b''] :
-				p_name = '' # If appears, wrong NumPartitions
-				fpt_num_diff -= 1 # Check for less $FPT Entries
-			elif p_name == b'\xE0\x15' : p_name = 'E0150020' # ME8 (E0150020)
-			else : p_name = p_name.decode('utf-8','ignore')
 			
 			# Store $FPT Partition info for -dfpt
 			if param.fpt_disp :
@@ -9579,7 +9741,7 @@ for file_in in source :
 			for p_rec_fix in p_store_all :
 				# For ME 2-5 & SPS 1, pick CODE if RCVY or COD1 are not present
 				# For SPS, pick Operational (COD1/OPR1) instead of Recovery (CODE/FTPR)
-				if p_rec_fix[0] in ['FTPR', 'RCVY', 'OPR1', 'COD1'] or (p_rec_fix[0] == 'CODE' and not any(p in ('RCVY', 'COD1') for p in p_store_all)) :
+				if p_rec_fix[0] in ['FTPR', 'RCVY', 'OPR1', 'OPR', 'COD1'] or (p_rec_fix[0] == 'CODE' and not any(p in ('RCVY', 'COD1') for p in p_store_all)) :
 					# Only if partition exists at file (counter-example: sole $FPT etc)
 					if p_rec_fix[1] + p_rec_fix[2] <= file_end :
 						rec_man_match = man_pat.search(reading[p_rec_fix[1]:p_rec_fix[1] + p_rec_fix[2]])
@@ -9610,7 +9772,7 @@ for file_in in source :
 		for part in cse_lt_part_all :
 			if part[0].startswith('Boot') and not part[4] : # Non-Empty CSE LT Boot Partition (skip Data/MFS)
 				bpdt_match = (re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01-\x03]\x00', re.DOTALL)).search(reading[part[1]:part[3]]) # BPDT detection
-				bpdt_matches.append((bpdt_match.start() + part[1], bpdt_match.end() + part[1])) # Store BPDT range, relative to 0x0
+				if bpdt_match : bpdt_matches.append((bpdt_match.start() + part[1], bpdt_match.end() + part[1])) # Store BPDT range, relative to 0x0
 	else :
 		# Search entire image when no CSE LT exists (slower & false positive prone)
 		bpdt_match = list((re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01-\x03]\x00', re.DOTALL)).finditer(reading)) # BPDT detection
@@ -10025,7 +10187,7 @@ for file_in in source :
 				cpd_hdr_struct, cpd_hdr_size = get_cpd(reading, p_end_last)
 				cpd_hdr = get_struct(reading, p_end_last, cpd_hdr_struct)
 				cpd_num = cpd_entry_num_fix(reading, p_end_last, cpd_hdr.NumModules, cpd_hdr_size)
-				cpd_tag = cpd_hdr.PartitionName
+				cpd_tag = cpd_hdr.PartitionName.strip(b'\x00').decode('utf-8','ignore')
 				
 				# Calculate partition size by the CSE Extension 03 or 16 (CSE_Ext_03 or CSE_Ext_16)
 				# PartitionSize of CSE_Ext_03/16 is always 0x0A at TXE3+ so check $CPD entries instead
@@ -10064,7 +10226,7 @@ for file_in in source :
 				
 				# Store $FPT Partition info for -dfpt
 				if param.fpt_disp :
-					pt_dfpt.add_row([cpd_tag.decode('utf-8'),'','0x%0.6X' % fpt_off_start,'0x%0.6X' % (p_end_last - fpt_off_start),
+					pt_dfpt.add_row([cpd_tag,'','0x%0.6X' % fpt_off_start,'0x%0.6X' % (p_end_last - fpt_off_start),
 					        '0x%0.6X' % p_end_last,'Code','%0.4X' % cse_in_id,True,False])
 		
 		# Show $FPT Partition info on demand (-dfpt)
@@ -10081,9 +10243,9 @@ for file_in in source :
 				# Ignore FTUP combo partition (NFTP + WCOD + LOCL)
 				# Ignore DLMP partition which overlaps by Intel design
 				if not part[6] and not all_part[6] and not any(s in [0,0xFFFFFFFF] for s in (part[1],part[2],all_part[1],all_part[2])) \
-				and part[0] not in [b'FTUP',b'DLMP'] and all_part[0] not in [b'FTUP',b'DLMP'] and (part[1] < all_part[1] < part[2]) :
+				and part[0] not in ['FTUP','DLMP'] and all_part[0] not in ['FTUP','DLMP'] and (part[1] < all_part[1] < part[2]) :
 					err_stor.append([col_r + 'Error: $FPT partition %s (0x%0.6X - 0x%0.6X) overlaps with %s (0x%0.6X - 0x%0.6X)' % \
-									(part[0].decode('utf-8'),part[1],part[2],all_part[0].decode('utf-8'),all_part[1],all_part[2]) + col_e, True])
+									(part[0],part[1],part[2],all_part[0],all_part[1],all_part[2]) + col_e, True])
 		
 	# Calculate Firmware Size based on $FPT and/or IFWI LT
 	if (cse_lt_struct and not rgn_exist) or (rgn_exist and p_end_last != p_max_size) :
@@ -10653,7 +10815,7 @@ for file_in in source :
 			
 			if minor == 0 : platform = 'WPT-LP'
 	
-	elif variant in ['CSME','GSC'] : # Converged Security Management Engine, Graphics Security Component (?)
+	elif variant in ['CSME','GSC'] : # Converged Security Management Engine, Graphics Security Controller (?)
 		
 		# Firmware Unpacking for all CSME/GSC
 		if param.me11_mod_extr :
@@ -10661,7 +10823,7 @@ for file_in in source :
 			continue # Next input file
 		
 		# Get CSE File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
-		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
 		
 		# Get CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final,gmf_cert_info \
@@ -10876,7 +11038,7 @@ for file_in in source :
 			continue # Next input file
 		
 		# Get CSE File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
-		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
 		
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final,gmf_cert_info \
@@ -10967,7 +11129,7 @@ for file_in in source :
 			continue # Next input file
 		
 		# Get CSE File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
-		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size = get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
 		
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext32_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info,ext_iunit_val,arb_svn,pch_init_final,gmf_cert_info \
@@ -11017,6 +11179,12 @@ for file_in in source :
 			pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, [(major,minor)], pchc_platform)
 		
 		if major == 4 :
+			
+			# CSSPS 4.4 (Whitley) is a terrible Frankenstein firmware. Double $FPT within CSE LT padding, PMC for LBG with bad versioning,
+			# multiple FTPR Partitions with multiple Manifests (FTPR.man, FTPR2.man), FTPR loading rbe by crossing over to RBEP partition,
+			# FTPR Manifests with different RSA blocks, CSE LT Boot Partition 4 is actually CSE LT Data Backup (new IFWI revision I hope).
+			# The support for both 14nm+++++++++++++++++++++++++++++++++++++ and 10nm+ is probably the reason but the design is just silly.
+			# My sample is old so hopefully Intel has revised that terrible CSSPS before official Whitley release. New MFSB is cool though.
 			
 			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
 		
