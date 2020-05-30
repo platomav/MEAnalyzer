@@ -1,3 +1,13 @@
+v1.136.0
+
+Improved CSE Layout Table IFWI 1.7 parsing
+Improved CSE unpacking filename display
+Improved CSME 11 SKU Platform detection
+
+r197
+
+TXE 1.1.2.1072_3MB_MD_PRD_EXTR
+
 v1.135.0
 
 Added initial support for future platform

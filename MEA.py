@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.135.0'
+title = 'ME Analyzer v1.136.0'
 
 import os
 import re
@@ -202,7 +202,7 @@ class FPT_Header(ctypes.LittleEndianStructure) : # Flash Partition Table v1.0 & 
 		pt.add_row(['Ticks To Add', '0x%X' % self.FlashCycleLife])
 		pt.add_row(['Tokens To Add', '0x%X' % self.FlashCycleLimit])
 		pt.add_row(['Reserved', 'N/A' if self.UMASize == NA else '0x%X' % self.UMASize])
-		pt.add_row(['Flash Layout', 'N/A' if self.Flags == NA else '%s' % sector_types[self.Flags]])
+		pt.add_row(['Flash Layout', 'N/A' if self.Flags == NA else sector_types[self.Flags]])
 		pt.add_row(['Flash Image Tool', 'N/A' if self.FitMajor in [0,0xFFFF] else fit_ver])
 		
 		return pt
@@ -343,9 +343,9 @@ class CSE_Layout_Table_16(ctypes.LittleEndianStructure) : # IFWI 1.6 (CseLayoutT
 		('BP2Size',			uint32_t),		# 0x24
 		('BP3Offset',		uint32_t),		# 0x28
 		('BP3Size',			uint32_t),		# 0x2C
-		('BP4Offset',		uint32_t),		# 0x30 Reserved
+		('BP4Offset',		uint32_t),		# 0x30
 		('BP4Size',			uint32_t),		# 0x34
-		('BP5Offset',		uint32_t),		# 0x38 Reserved
+		('BP5Offset',		uint32_t),		# 0x38
 		('BP5Size',			uint32_t),		# 0x3C
 		('Checksum',		uint64_t),		# 0x40 2's complement of CSE Layout Table (w/o ROMB), sum of the CSE LT + Checksum = 0
 		# 0x48
@@ -999,7 +999,7 @@ class CPD_Entry(ctypes.LittleEndianStructure) : # (CPD_ENTRY)
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("OffsetAttrib",	uint32_t),		# 0x0C
+		("OffsetAttrib",	uint32_t),		# 0x0C 00:24 $CPD Offset, 25 Huffman Yes/No, 26:31 Reserved
 		("Size",			uint32_t),		# 0x10 Uncompressed for LZMA/Huffman, Compressed at CSE_Ext_0A instead
 		("Reserved",		uint32_t),		# 0x14
 		# 0x18
@@ -4088,7 +4088,7 @@ class CSE_Ext_18(ctypes.LittleEndianStructure) : # R1 - USB Type C IO Manageabil
 		# 0x0C
 	]
 	
-	# TCCS = USB Type C Sub-System
+	# TCSS = USB Type C Sub-System
 	
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
@@ -4155,7 +4155,7 @@ class CSE_Ext_19(ctypes.LittleEndianStructure) : # R1 - USB Type C MG (TCSS_META
 		# 0x0C
 	]
 	
-	# TCCS = USB Type C Sub-System
+	# TCSS = USB Type C Sub-System
 	
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
@@ -4222,7 +4222,7 @@ class CSE_Ext_1A(ctypes.LittleEndianStructure) : # R1 - USB Type C Thunderbolt (
 		# 0x0C
 	]
 	
-	# TCCS = USB Type C Sub-System
+	# TCSS = USB Type C Sub-System
 	
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
@@ -4490,7 +4490,6 @@ class RBE_PM_Metadata_R3(ctypes.LittleEndianStructure) : # R3 - RBEP > rbe or FT
 # Unpack Engine CSE firmware
 # noinspection PyUnusedLocal
 def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_chk_fail, cse_lt_chk_fail) :
-	print()
 	rbe_pm_data_d = b''
 	vol_ftbl_id = -0x1
 	mfs_parsed_idx = None
@@ -4509,6 +4508,11 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	fw_name = 'Unpacked_' + os.path.basename(file_in)
 	if os.path.isdir(os.path.join(mea_dir, fw_name, '')) : shutil.rmtree(os.path.join(mea_dir, fw_name, ''))
 	os.mkdir(os.path.join(mea_dir, fw_name, ''))
+	
+	# Print Input File Name
+	file_pt = ext_table([], False, 1)
+	file_pt.add_row([col_c + os.path.basename(file_in) + col_e])
+	print('\n%s\n' % file_pt)
 	
 	# Show & Store CSE Layout Table info
 	if cse_lt_struct :
@@ -4828,6 +4832,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,x3,ext12_info,ext_print,x6,x7,ext_phval,ext_dnx_val,x10,x11,x12,ext_iunit_val,x14,x15,gmf_cert_info \
 		= ext_anl(reading, '$CPD', start_cpd_emod, file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 		[pch_init_final,config_rec_size,vol_ftbl_id])
+		
+		if cse_lt_struct or len_fpt_part_all or len_bpdt_part_all : print() # For visual purposes before $CPD info is shown
 		
 		rbe_pm_met_valid = mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val,
 						   rbe_pm_met_hashes, rbe_pm_met_valid, ext12_info, vol_ftbl_id, config_rec_size, gmf_cert_info)
@@ -5832,7 +5838,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 		
 		cpd_hdr_struct, cpd_hdr_size = get_cpd(reading, cpd_poffset)
 		cpd_phdr = get_struct(reading, cpd_poffset, cpd_hdr_struct)
-		if param.me11_mod_extr : print('\n%s' % cpd_phdr.hdr_print())
+		if param.me11_mod_extr : print('%s' % cpd_phdr.hdr_print())
 		
 		if cpd_chk_ok :
 			print(col_g + '\n$CPD Checksum of partition "%s" is VALID\n' % cpd_pname + col_e)
@@ -7273,7 +7279,7 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 	elif (variant,major,minor) in [('CSME',14,5)] :
 		# Absolute for CSME 14.5 (0 = A, 1 = B, 2 = C, 3 = D etc)
 		pch_true_stp = pch_stp_val[pch_init_stp]
-		pch_init_plt = 'CMP-V' # Change from KBP/BSF-H to CMP-V
+		pch_init_plt = 'CMP-V' # Change from KBP/BSF/GCF-H to CMP-V
 	
 	# Detect Actual PCH Stepping(s) for CSME 14.0 & CSME 15 (?)
 	elif (variant,major) in [('CSME',14),('CSME',15)] :
@@ -7646,15 +7652,16 @@ def pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_gen_li
 	if pchc_mn2_signed != release or (pchc_fw_major,pchc_fw_minor) not in pchc_gen_list :
 		warn_stor.append([col_m + 'Warning: Incompatible PCHC %s firmware detected!' % pchc_platform + col_e, False])
 
-# CSE Huffman Dictionary Loader by IllegalArgument
-# Dictionaries by Dmitry Sklyarov & IllegalArgument
-# Message Verbosity: All | Error | None
+# CSE Huffman Dictionary Loader by "IllegalArgument" (https://github.com/IllegalArgument)
+# Dictionaries by "IllegalArgument", Dmitry Sklyarov, Mark Ermolov, Maxim Goryachy & me
 def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 	HUFFMAN_SHAPE = []
 	HUFFMAN_SYMBOLS = {}
 	HUFFMAN_UNKNOWNS = {}
 	mapping_types = {'code' : 0x20, 'data' : 0x60}
 	huffman_dict = os.path.join(mea_dir, 'Huffman.dat')
+	
+	# Message Verbosity: All | Error | None
 	
 	# Check if Huffman dictionary version is supported
 	if (cse_variant,cse_major) in [('CSME',11),('CSSPS',4)] or (cse_variant,cse_major,cse_minor) in [('CSME',14,5)] : dict_version = 11
@@ -7725,12 +7732,13 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 			
 	return HUFFMAN_SHAPE, HUFFMAN_SYMBOLS, HUFFMAN_UNKNOWNS
 	
-# CSE Huffman Decompressor by IllegalArgument
-# Message Verbosity: All | Error | None
+# CSE Huffman Decompressor by "IllegalArgument" (https://github.com/IllegalArgument)
 def cse_huffman_decompress(module_contents, compressed_size, decompressed_size, HUFFMAN_SHAPE, HUFFMAN_SYMBOLS, HUFFMAN_UNKNOWNS, verbosity) :
 	CHUNK_SIZE = 0x1000
 	huff_error = False
 	decompressed_array = []
+	
+	# Message Verbosity: All | Error | None
 	
 	if not HUFFMAN_SHAPE : return module_contents, huff_error # Failed to load required Huffman dictionary
 	
@@ -8941,7 +8949,7 @@ pch_dict = {
 			0x7 : 'TGP-H', # Tiger Point H
 			0x8 : 'SPT/KBP-LP', # Sunrise Point LP, Union Point LP
 			0x9 : 'SPT-H', # Sunrise Point H
-			0xB : 'KBP/BSF-H', # Union Point H, Basin Falls H, Comet Point V
+			0xB : 'KBP/BSF/GCF-H', # Union Point H, Basin Falls H, Glacier Falls H, Comet Point V
 			0xC : 'CNP/CMP-LP', # Cannon Point LP, Comet Point LP
 			0xD : 'CNP/CMP-H', # Cannon Point H, Comet Point H
 			0xE : 'LKF', # Lakefield
@@ -9261,6 +9269,8 @@ for file_in in source :
 	fpt_chk_byte = -1
 	fpt_chk_start = -1
 	p_offset_last = 0
+	cse_lt_dp_size = 0
+	cse_lt_bp_size = 0
 	sps3_chk16_file = 0
 	sps3_chk16_calc = 0
 	cpd_offset_last = 0
@@ -9391,7 +9401,7 @@ for file_in in source :
 			
 			# ME Region is X58 ROMB Test
 			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Found' + col_y + ' X58 ROMB Test ' + col_e + 'Intel Engine firmware'
+				no_man_text = 'Found' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
 				
 				if param.extr_mea : no_man_text = 'NaN NaN_NaN_X58 NaN NaN NaN'
 			
@@ -9509,17 +9519,28 @@ for file_in in source :
 	if cse_lt_struct :
 		NA = [0,0xFFFFFFFF]
 		
-		# Validate IFWI 1.7 CSE Layout Table Checksum
+		cse_lt_hdr_info = [['Data',cse_lt_struct.DataOffset,cse_lt_struct.DataSize],['Boot 1',cse_lt_struct.BP1Offset,cse_lt_struct.BP1Size],
+						   ['Boot 2',cse_lt_struct.BP2Offset,cse_lt_struct.BP2Size],['Boot 3',cse_lt_struct.BP3Offset,cse_lt_struct.BP3Size],
+						   ['Boot 4',cse_lt_struct.BP4Offset,cse_lt_struct.BP4Size],['Boot 5',cse_lt_struct.BP5Offset,cse_lt_struct.BP5Size]]
+		
+		# Perform IFWI 1.7 specific CSE LT actions
 		if cse_lt_struct == cse_lt_17 :
+			# Validate IFWI 1.7 CSE LT Checksum
 			cse_lt_pointers = reading[cse_lt_off + 0x10:cse_lt_off + 0x14] + b'\x00' * 4 + reading[cse_lt_off + 0x18:cse_lt_off + 0x10 + cse_lt_struct.Size]
 			cse_lt_chk_file = cse_lt_struct.Checksum
 			cse_lt_chk_calc = zlib.crc32(cse_lt_pointers) & 0xFFFFFFFF
 			if cse_lt_chk_calc != cse_lt_chk_file :
 				cse_lt_chk_fail = True
 				warn_stor.append([col_m + 'Warning: Wrong CSE Layout Table Checksum 0x%0.8X, expected 0x%0.8X!' % (cse_lt_chk_file,cse_lt_chk_calc) + col_e, True])
+			
+			# Add IFWI 1.7 CSE LT Temp DRAM Cache Pages Offset & Size info
+			cse_lt_hdr_info.append(['Temp',cse_lt_struct.TempPagesOffset,cse_lt_struct.TempPagesSize])
 		
-		cse_lt_hdr_info = [['Data',cse_lt_struct.DataOffset,cse_lt_struct.DataSize],['Boot 1',cse_lt_struct.BP1Offset,cse_lt_struct.BP1Size],['Boot 2',cse_lt_struct.BP2Offset,cse_lt_struct.BP2Size],
-							['Boot 3',cse_lt_struct.BP3Offset,cse_lt_struct.BP3Size],['Boot 4',cse_lt_struct.BP4Offset,cse_lt_struct.BP4Size],['Boot 5',cse_lt_struct.BP5Offset,cse_lt_struct.BP5Size]]
+		# Calculate CSE LT Data Partition Total Size (w/o Boot & Temp)
+		cse_lt_dp_size = cse_lt_struct.DataSize
+		
+		# Calculate CSE LT Boot & Temp Partitions Total Size (w/o Data)
+		cse_lt_bp_size = sum([info[2] for info in cse_lt_hdr_info[1:]])
 		
 		# Store CSE LT partition details
 		for entry in cse_lt_hdr_info :
@@ -9533,7 +9554,7 @@ for file_in in source :
 			cse_lt_part_all.append([cse_lt_entry_name,cse_lt_entry_spi,cse_lt_entry_size,cse_lt_entry_end,cse_lt_entry_empty])
 
 		pt_dcselt = ext_table([col_y + 'Name' + col_e, col_y + 'Start' + col_e, col_y + 'Size' + col_e, col_y + 'End' + col_e, col_y + 'Empty' + col_e], True, 1)
-		pt_dcselt.title = col_y + 'CSE Partition Layout Table' + col_e		
+		pt_dcselt.title = col_y + 'CSE Region Layout Table' + col_e
 		
 		# Detect CSE LT partition overlaps
 		for part in cse_lt_part_all :
@@ -10250,9 +10271,8 @@ for file_in in source :
 	# Calculate Firmware Size based on $FPT and/or IFWI LT
 	if (cse_lt_struct and not rgn_exist) or (rgn_exist and p_end_last != p_max_size) :
 		if cse_lt_struct :
-			# CSME 12+ consists of Layout Table (0x1000) + Data (MEA or LT size) + BPx (LT size)
-			p_end_last = cse_lt_size + max(p_end_last,cse_lt_hdr_info[0][2]) + cse_lt_hdr_info[1][2] + cse_lt_hdr_info[2][2] + \
-						 cse_lt_hdr_info[3][2] + cse_lt_hdr_info[4][2] + cse_lt_hdr_info[5][2]
+			# CSME 12+ consists of Layout Table (0x1000) + Data (MEA or LT size) + Boot/Temp (LT size)
+			p_end_last = cse_lt_size + max(p_end_last,cse_lt_dp_size) + cse_lt_bp_size
 		
 		# For Engine alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)
 		mod_align = (p_end_last - fpt_start) % 0x1000 # 4K alignment on Engine size only
@@ -10922,8 +10942,8 @@ for file_in in source :
 			
 			# Adjust PCH Platform via Minor version
 			if minor == 0 and not pch_init_final : platform = 'SPT' # Sunrise Point
-			elif minor in [5,6,7,8] and not pch_init_final : platform = 'SPT/KBP' # Sunrise/Union Point
-			elif minor in [10,11,12] and not pch_init_final : platform = 'BSF' # Basin Falls
+			elif minor in [5,6,7,8] and not pch_init_final : platform = 'SPT/KBP' # Sunrise Point, Union Point
+			elif minor in [10,11,12] and not pch_init_final : platform = 'BSF/GCF' # Basin Falls, Glacier Falls
 			elif minor in [20,21,22] and not pch_init_final : platform = 'LBG' # Lewisburg
 			
 			# Get CSME 11 DB SKU and check for Latest status (must be before sku_pdm)
