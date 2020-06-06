@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.136.0'
+title = 'ME Analyzer v1.137.0'
 
 import os
 import re
@@ -6335,7 +6335,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 	sec_hdr_size = get_sec_hdr_size(variant,major,minor) # Get CSE File System Integrity Table Structure Size
 	config_rec_size = get_cfg_rec_size(variant,major,minor) # Get CSE File System Configuration Record Structure Size
 	page_size = 0x2000 # MFS Page Length
-	chunk_size = 0x42 # MFS Chunk Payload + CRC Length
+	chunk_all_size = 0x42 # MFS Chunk Payload + CRC Length
+	chunk_raw_size = chunk_all_size - 2 # MFS Chunk Payload
 	index_size_sys = 0x2 # MFS System Page Index Entry Length
 	index_size_dat = 0x1 # MFS Data Page Index Entry Length
 	page_hdr_size = 0x12 # MFS Page Header Structure Size
@@ -6460,8 +6461,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 	page_count = mfs_size // page_size # MFS Total Pages Count
 	sys_count = page_count // 12 # MFS System Pages Count
 	dat_count = page_count - sys_count - 1 # MFS Data Pages Count
-	chunks_max_sys = sys_count * ((page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_size)) # MFS Maximum System Chunks Count
-	chunks_max_dat = dat_count * ((page_size - page_hdr_size) // (index_size_dat + chunk_size)) # MFS Maximum Data Chunks Count (= Actual)
+	chunks_max_sys = sys_count * ((page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_all_size)) # MFS Maximum System Chunks Count
+	chunks_max_dat = dat_count * ((page_size - page_hdr_size) // (index_size_dat + chunk_all_size)) # MFS Maximum Data Chunks Count (= Actual)
 	
 	# Sort MFS System & Data Pages
 	for page_index in range(page_count) :
@@ -6517,7 +6518,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 		
 		# MFS System Page
 		if page_type == 'System' :
-			chunk_count = (page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_size) # System Page Chunks have a 2-byte Index after Page Header
+			chunk_count = (page_size - page_hdr_size - index_size_sys) // (index_size_sys + chunk_all_size) # System Page Chunks have a 2-byte Index after Page Header
 			index_size = chunk_count * index_size_sys + index_size_sys # System Page Total Chunk Indexes size is Chunk Count * Index Byte Length + Index Byte Length
 			index_data_obf = mfs_page[page_hdr_size:page_hdr_size + index_size] # System Page Total Obfuscated Chunk Indexes Buffer
 			index_values_obf = struct.unpack('%dH' % (chunk_count + 1), index_data_obf) # System Page Total Obfuscated Chunk Indexes List, each Index is 2 bytes
@@ -6537,7 +6538,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 			chunk_used_count = len(chunk_indexes) # System Page Total Used Chunks Count
 			for i in range(chunk_used_count) :
 				chunk_index = chunk_indexes[i] # Index of used System Page Chunk from total MFS Chunks (MFS start)
-				chunk_all = mfs_page[chunk_start + chunk_size * i:chunk_start + chunk_size * i + chunk_size] # System Page Chunk with CRC-16 (0x42)
+				chunk_all = mfs_page[chunk_start + chunk_all_size * i:chunk_start + chunk_all_size * i + chunk_all_size] # System Page Chunk with CRC-16 (0x42)
 				chunk_raw = chunk_all[:-2] # System Page Chunk without CRC-16 (0x40)
 				all_chunks_dict[chunk_index] = chunk_raw # Store System Page Chunk Index & Contents
 				
@@ -6555,7 +6556,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 		
 		# MFS Data Page
 		elif page_type == 'Data' :
-			chunk_count = (page_size - page_hdr_size) // (index_size_dat + chunk_size) # Data Page Chunks have a 1-byte Index after Page Header
+			chunk_count = (page_size - page_hdr_size) // (index_size_dat + chunk_all_size) # Data Page Chunks have a 1-byte Index after Page Header
 			index_size = chunk_count * index_size_dat # Data Page Total Chunk Indexes size is Chunk Count * Index Byte Length
 			index_data = mfs_page[page_hdr_size:page_hdr_size + index_size] # Data Page Total Chunk Indexes Buffer
 			index_values = struct.unpack('%dB' % chunk_count, index_data) # Data Page Total Chunk Indexes List, each index is 1 byte
@@ -6568,7 +6569,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 				if index_values[i] == 0 : # Used Data Page Chunk Index = 0x00, Unused = 0xFF
 					chunk_used_count += 1 # Add Used Data Page Chunk to Total Used Count
 					chunk_index = page_chunk_first + i # Index of used Data Page Chunk from total MFS Chunks (MFS start)
-					chunk_all = mfs_page[chunk_start + chunk_size * i:chunk_start + chunk_size * i + chunk_size] # Data Page Chunk with CRC-16 (0x42)
+					chunk_all = mfs_page[chunk_start + chunk_all_size * i:chunk_start + chunk_all_size * i + chunk_all_size] # Data Page Chunk with CRC-16 (0x42)
 					chunk_raw = chunk_all[:-2] # Data Page Chunk without CRC-16 (0x40)
 					all_chunks_dict[chunk_index] = chunk_raw # Store Data Page Chunk Index & Contents
 					chunk_crc16_int = int.from_bytes(chunk_all[0x40:0x42], 'little') # Intel CRC-16 of Chunk (0x40) with initial value of 0xFFFF
@@ -6592,16 +6593,20 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 		mfs_info.append(mfs_pages_pt) # Store MFS Page Records Log during CSE Unpacking
 	
 	# Build MFS Total System Chunks Buffer
-	all_mfs_sys = bytearray(chunks_count_sys * (chunk_size - 2)) # Empty System Area Buffer
+	all_mfs_sys = bytearray(chunks_count_sys * chunk_raw_size) # Empty System Area Buffer
 	for i in range(chunks_count_sys) :
 		# The final System Area Buffer must include all empty chunks for proper File Allocation Table parsing
-		if i in all_chunks_dict : all_mfs_sys[i * (chunk_size - 2):(i + 1) * (chunk_size - 2)] = bytearray(all_chunks_dict[i])
+		if i in all_chunks_dict : all_mfs_sys[i * chunk_raw_size:(i + 1) * chunk_raw_size] = bytearray(all_chunks_dict[i])
 	
 	# Parse MFS System Volume Structure
 	if not all_chunks_dict :
 		mfs_anl_msg(col_r + 'Error: MFS final System Area Buffer is empty!' + col_e, 'error', True, False, False, [])
 		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size # The final System Area Buffer must not be empty
 	vol_hdr = get_struct(all_chunks_dict[0], 0, MFS_Volume_Header) # System Volume is at the LAST Index 0 Chunk (the dictionary does that automatically)
+	vol_sig = vol_hdr.Signature # Volume Signature (0x724F6201)
+	if vol_sig != 0x724F6201 :
+		mfs_anl_msg(col_r + 'Error: MFS Volume Signature 0x%0.8X is invalid!' % vol_sig + col_e, 'error', True, False, False, [])
+		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size # The MFS Volume Signature must be valid
 	if param.me11_mod_extr :
 		print('\n%s' % vol_hdr.mfs_print()) # Print System Volume Structure Info during CSE Unpacking
 		mfs_info.append(vol_hdr.mfs_print()) # Store System Volume Structure Info during CSE Unpacking
@@ -6609,7 +6614,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 	vol_ftbl_id = vol_unk_field & 0xFF # FTBL Dictionary ID
 	vol_file_rec = vol_hdr.FileRecordCount # Number of File Records in Volume
 	vol_total_size = vol_hdr.VolumeSize # Size of MFS System & Data Volume via Volume
-	mea_total_size = chunks_count_sys * (chunk_size - 2) + chunks_max_dat * (chunk_size - 2) # Size of MFS System & Data Volume via MEA
+	mea_total_size = chunks_count_sys * chunk_raw_size + chunks_max_dat * chunk_raw_size # Size of MFS System & Data Volume via MEA
 	
 	if vol_total_size != mea_total_size : mfs_tmp_page = mfs_anl_msg(col_r + 'Error: Detected MFS System Volume Size missmatch!' + col_e, 'error', True, False, False, [])
 	else : mfs_tmp_page = mfs_anl_msg(col_g + 'MFS System Volume Size is VALID' + col_e, '', True, False, False, [])
@@ -6644,7 +6649,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 				fat_value = fat_values[fat_value] # Get Next Chunk FAT Value by using the current value as List index (starts from 0)
 				
 				# Small FAT Values (1 - 64) are markers for both EOF and Size of last Chunk
-				if 1 <= fat_value <= (chunk_size - 2) :
+				if 1 <= fat_value <= chunk_raw_size :
 					file_chunks += file_chunk[:fat_value] # Append the last File Chunk with its size adjusted based on the EOF FAT Value marker
 					break # File ends when the Next FAT Value is between 1 and 64 (EOF marker)
 				
@@ -6710,11 +6715,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 		# Parse MFS Low Level File 6 (Intel Configuration) and 7 (OEM Configuration)
 		elif mfs_file[1] and mfs_file[0] in (6,7) :
 			
-			# Create copy of firmware with clean/unconfigured MFS
+			# Create copy of input firmware with clean/unconfigured MFS
 			# MFSTool by Peter Bosch (https://github.com/peterbjornx/meimagetool)
+			# MFS Templates AFS_region_256K|400K|1272K.bin by Flash Image Tool v11
 			if param.mfs_rcfg and mfs_file[0] == 6 :
 				mfstool_path = os.path.join(mea_dir, 'mfstool', '')
-				mfs_tmpl_name = '%d_%d_%d.bin' % (mfs_size,vol_file_rec,vol_total_size)
+				mfs_tmpl_name = 'AFS_region_%sK.bin' % (mfs_size // 1024)
 				mfs_tmpl_path = os.path.join(mfstool_path, mfs_tmpl_name)
 				
 				# MFS Templates depend on their Size (256K,400K,1272K), Volume File Record Count (256,512,1024,2048 etc) and
@@ -6743,11 +6749,27 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 					clean_mfs_path = os.path.join(mfstool_path, 'MFS_CLEAN.bin')
 					if os.path.isfile(clean_mfs_path) : os.remove(clean_mfs_path)
 					
-					with open(mfs_tmpl_path, 'rb') as mfs_tmpl : mfs_tmpl_fixed = bytearray(mfs_tmpl.read())
-					mfs_tmpl_fixed[0x108:0x10C] = struct.pack('<I', vol_unk_field) # Copy Volume Unknown field from dirty MFS to template
-					first_crc16 = crccheck.crc.Crc16.calc(mfs_tmpl_fixed[0x104:0x144] + b'\x00\x00', initvalue = 0xFFFF) # CRC-16 of 1st Chunk with Index 0
-					mfs_tmpl_fixed[0x144:0x146] = struct.pack('<H', first_crc16) # Recalculate template's 1st Chunk CRC-16
-					with open(temp_mfs_path, 'wb') as o : o.write(mfs_tmpl_fixed)
+					with open(mfs_tmpl_path, 'rb') as mfs_tmpl : mfs_tmpl_new = bytearray(mfs_tmpl.read())
+					
+					tmpl_vol_size = int.from_bytes(mfs_tmpl_new[0x10C:0x110], 'little') # Get template MFS Volume Size
+						
+					start_diff = (vol_total_size - tmpl_vol_size) // chunk_raw_size # Calculate Data Page First Chunk difference
+					
+					# Parse template MFS and adjust all Data Pages First Chunk
+					page_offset = 0 # First Page Offset (System)
+					for i in range(page_count) :
+						chunk_start = int.from_bytes(mfs_tmpl_new[page_offset + 0xE:page_offset + 0x10], 'little') # Get Page First Chunk value
+						if chunk_start != 0 : # Adjust Data Pages only (First Chunk != 0), not System Pages
+							mfs_tmpl_new[page_offset + 0xE:page_offset + 0x10] = struct.pack('<H', chunk_start + start_diff) # Adjust Data Page First Chunk
+							crc8 = crccheck.crc.Crc8.calc(mfs_tmpl_new[page_offset:page_offset + 0x10], initvalue = 1) # Re-calculate Data Page CRC-8
+							mfs_tmpl_new[page_offset + 0x10] = crc8 # Adjust Data Page CRC-8
+		
+						page_offset += page_size # Adjust Page Offset to the next one
+					
+					mfs_tmpl_new[0x104:0x112] = struct.pack('<IIIH', vol_sig, vol_unk_field, vol_total_size, vol_file_rec) # Copy Volume Header Info from dirty MFS to template
+					first_crc16 = crccheck.crc.Crc16.calc(mfs_tmpl_new[0x104:0x144] + b'\x00\x00', initvalue = 0xFFFF) # CRC-16 of 1st Chunk with Index 0
+					mfs_tmpl_new[0x144:0x146] = struct.pack('<H', first_crc16) # Recalculate template's 1st Chunk CRC-16
+					with open(temp_mfs_path, 'wb') as o : o.write(mfs_tmpl_new)
 					
 					print(col_y + '\nCleaning %s\n' % os.path.basename(file_in) + col_e)
 					
@@ -6756,7 +6778,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 					
 					if os.path.isfile(clean_mfs_path) :
 						with open(clean_mfs_path, 'rb') as mfs_new : clean_mfs = mfs_new.read()
-						if len(clean_mfs) != mfs_size : input('\nError: MFS size mismatch!')
+						if len(clean_mfs) != mfs_size : input_col(col_r + '\nError: MFS size mismatch!' + col_e)
 						output_data = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
 						output_path = os.path.join(mea_dir, '__RCFG__%s' % os.path.basename(file_in))
 						with open(output_path, 'wb') as o : o.write(output_data)
@@ -6764,8 +6786,9 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id) :
 					shutil.rmtree(temp_dir)
 					os.remove(temp_mfs_path)
 					os.remove(clean_mfs_path)
+				
 				else :
-					input_col(col_r + '\nError: Unknown MFS template %s detected!' % mfs_tmpl_name[:-4] + col_e)
+					input_col(col_r + '\nError: MFS template %s could not be found!' % mfs_tmpl_name + col_e)
 			
 			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
 			if mfs_file[0] == 6 : intel_cfg_hash_mfs = [get_hash(mfs_file[1], 0x20), get_hash(mfs_file[1], 0x30)] # Store MFS Intel Configuration Hashes
@@ -8206,9 +8229,11 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 	
 	# Detected Flash Descriptor, use first but notify if more exist
 	if fd_match :
+		fd_start = fd_match[0].start()
+		fd_end = fd_match[0].end()
+		
 		# Platform Controller Hub (PCH)
-		if (fd_match[0].start() == 0x10 or reading[fd_match[0].start() - 0x4:fd_match[0].start()] == b'\xFF' * 4) \
-		and reading[fd_match[0].start() + 0x4] in [3,2] and reading[fd_match[0].start() + 0x6] == 4 :
+		if (fd_start == 0x10 or reading[fd_start - 0x4:fd_start] == b'\xFF' * 4) and reading[fd_start + 0x4] in [3,2] and reading[fd_start + 0x6] == 4 :
 			is_ich = False
 			start_substruct = 0x10
 			end_substruct = 0xBC # 0xBC for [0xAC] + 0xFF * 16 sanity check
@@ -8218,8 +8243,8 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 			start_substruct = 0x0
 			end_substruct = 0xBC # 0xBC for [0xAC] + 0xFF * 16 sanity check
 		
-		start_fd_match = fd_match[0].start() - start_substruct # Flash Descriptor pattern Start Offset
-		end_fd_match = fd_match[0].end() - end_substruct # Flash Descriptor pattern End Offset
+		start_fd_match = fd_start - start_substruct # Flash Descriptor pattern Start Offset
+		end_fd_match = fd_end - end_substruct # Flash Descriptor pattern End Offset
 		
 		# Calculate Flash Descriptor Flash Component Total Size
 		fd_flmap0_nc = ((int.from_bytes(reading[end_fd_match:end_fd_match + 0x4], 'little') >> 8) & 3) + 1 # Component Count (00 = 1, 01 = 2)
@@ -8242,7 +8267,7 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 		
 		# Do not notify for OEM Backup Flash Descriptors within the chosen/first Flash Descriptor
 		for match in fd_match[1:] :
-			if fd_match[0].start() < match.start() <= fd_match[0].start() + 0x1000 : fd_count -= 1
+			if fd_start < match.start() <= fd_start + 0x1000 : fd_count -= 1
 		
 		return True, reading, file_end, start_man_match, end_man_match, start_fd_match, end_fd_match, fd_count, fd_comp_all_size, is_ich
 	
@@ -8267,28 +8292,32 @@ def fd_anl_rgn(start_fd_match, end_fd_match, fd_is_ich) :
 	if bios_fd_limit != 0 :
 		bios_fd_start = bios_fd_base * 0x1000 + start_fd_match # fd_match required in case FD is not at the start of image
 		bios_fd_size = (bios_fd_limit + 1 - bios_fd_base) * 0x1000 # The +1 is required to include last Region byte
-		fd_reg_exist.extend((True,bios_fd_start,bios_fd_size)) # BIOS/IAFW Region exists
+		bios_fd_exist = True if bios_fd_start < file_end else False # Basic check that Region Start Offset is valid
+		fd_reg_exist.extend((bios_fd_exist,bios_fd_start,bios_fd_size)) # BIOS/IAFW Region exists
 	else :
 		fd_reg_exist.extend((False,0,0)) # BIOS/IAFW Region missing
 	
 	if me_fd_limit != 0 :
 		me_fd_start = me_fd_base * 0x1000 + start_fd_match
 		me_fd_size = (me_fd_limit + 1 - me_fd_base) * 0x1000
-		fd_reg_exist.extend((True,me_fd_start,me_fd_size)) # Engine Region exists
+		me_fd_exist = True if me_fd_start < file_end else False
+		fd_reg_exist.extend((me_fd_exist,me_fd_start,me_fd_size)) # Engine Region exists
 	else :
 		fd_reg_exist.extend((False,0,0)) # Engine Region missing
 	
 	if pdr_fd_limit != 0 :
 		pdr_fd_start = pdr_fd_base * 0x1000 + start_fd_match
 		pdr_fd_size = (pdr_fd_limit + 1 - pdr_fd_base) * 0x1000
-		fd_reg_exist.extend((True,pdr_fd_start,pdr_fd_size)) # Platform Data Region exists
+		pdr_fd_exist = True if pdr_fd_start < file_end else False
+		fd_reg_exist.extend((pdr_fd_exist,pdr_fd_start,pdr_fd_size)) # Platform Data Region exists
 	else :
 		fd_reg_exist.extend((False,0,0)) # Engine Region missing
 	
 	if devexp_fd_limit != 0 :
 		devexp_fd_start = devexp_fd_base * 0x1000 + start_fd_match
 		devexp_fd_size = (devexp_fd_limit + 1 - devexp_fd_base) * 0x1000
-		fd_reg_exist.extend((True,devexp_fd_start,devexp_fd_size)) # Device Expansion Region exists
+		devexp_fd_exist = True if devexp_fd_start < file_end else False
+		fd_reg_exist.extend((devexp_fd_exist,devexp_fd_start,devexp_fd_size)) # Device Expansion Region exists
 	else :
 		fd_reg_exist.extend((False,0,0)) # Device Expansion Region missing
 	
