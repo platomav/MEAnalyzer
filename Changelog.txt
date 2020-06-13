@@ -1,3 +1,20 @@
+v1.138.0
+
+Improved CSE Extension 30 & 31 unpacking
+Improved CSE Partition Module Empty check
+Applied various code fixes & improvements
+
+r199
+
+CSME 14.0.31.1120_CON_H_A_PRD_RGN
+CSME 14.0.31.1120_COR_H_A_PRD_RGN
+CSME 12.0.67.1579_CON_LP_C_PRD_EXTR
+CSME 12.0.67.1579_COR_LP_C_PRD_EXTR-Y
+CSME 12.0.47.1524_CON_H_BA_PRD_RGN
+CSME 12.0.20.1307_CON_H_BA_PRD_RGN
+CSTXE 4.0.26.1334_B_PRD_RGN
+CSTXE 3.1.76.2356_B_PRD_EXTR
+
 v1.137.0
 
 Improved Flash Descriptor detection
