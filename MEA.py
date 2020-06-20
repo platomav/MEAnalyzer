@@ -5379,7 +5379,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					ext_phash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Partition Hash
 					vcn = ext_hdr.VCN # Version Control Number
 					in_id = ext_hdr.InstanceID # LOCL/WCOD identifier
-					if gmf_blob_info : gmf_blob_info[1] = in_id # Fill GMF Certificate Partition Instance ID (Not POR, just in case)
+					if gmf_blob_info : gmf_blob_info[1] = in_id # Fill GMF Blobs Partition Instance ID (Not POR, just in case)
 					CSE_Ext_03_length = ctypes.sizeof(ext_struct_name)
 					cpd_mod_offset = cpd_ext_offset + CSE_Ext_03_length
 					CSE_Ext_03_Mod_length = ctypes.sizeof(ext_struct_mod)
@@ -5544,7 +5544,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					ext_psize = ext_hdr.PartitionSize # Partition Size
 					if ext_pname == '' : ext_pname = ext_hdr.PartitionName.decode('utf-8') # Partition Name (prefer CSE_Ext_03)
 					if in_id == 0 : in_id = ext_hdr.InstanceID # LOCL/WCOD identifier (prefer CSE_Ext_03)
-					if gmf_blob_info : gmf_blob_info[1] = in_id # Fill GMF Certificate Partition Instance ID
+					if gmf_blob_info : gmf_blob_info[1] = in_id # Fill GMF Blobs Partition Instance ID
 					ext_phalg = ext_hdr.HashAlgorithm # Partition Hash Algorithm
 					ext_phlen = int(''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.HashSize)), 16) # Partition Hash Size
 					ext_phash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Partition Hash
