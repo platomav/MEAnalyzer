@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.138.0'
+title = 'ME Analyzer v1.138.1'
 
 import os
 import re
@@ -4793,7 +4793,6 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	
 	# Parse all Code Partition Directory ($CPD) entries
 	# Better to separate $CPD from $FPT/BPDT to avoid duplicate FTUP/NFTP ($FPT) issue
-	cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14]', re.DOTALL) # $CPD detection
 	cpd_match_store = list(cpd_pat.finditer(reading))
 	
 	# Store all Code Partition Directory ranges
@@ -9125,7 +9124,10 @@ for arg in source :
 	if arg in param.val : in_count -= 1
 
 # Intel Engine firmware Manifest pattern ($MN2 or $MAN)
-man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL) # .$MN2 or .$MAN pattern
+man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL) # $MN2 or $MAN pattern
+
+# Intel Engine firmware Code Partition Directory pattern ($CPD)
+cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14]', re.DOTALL) # $CPD pattern
 
 for file_in in source :
 	
@@ -9182,6 +9184,7 @@ for file_in in source :
 	end_man_match = None
 	fpt_pre_hdr = None
 	mfs_parsed_idx = None
+	uncharted_match = None
 	intel_cfg_hash_mfs = None
 	var_rsa_db = True
 	mfs_found = False
@@ -9305,7 +9308,6 @@ for file_in in source :
 	p_end_last_cont = 0
 	devexp_fd_size = -1
 	devexp_fd_start = -1
-	uncharted_start = -1
 	p_end_last_back = -1
 	mod_end = 0xFFFFFFFF
 	p_max_size = 0xFFFFFFFF
@@ -10166,8 +10168,8 @@ for file_in in source :
 			# Due to 4K $FPT Partition alignment, Uncharted can start after 0x0 to 0x1000 bytes
 			if not fd_exist and not cse_lt_struct and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
 				p_end_last_back = p_end_last # Store $FPT-based p_end_last offset for CSME 12+ FWUpdate Support detection
-				uncharted_start = reading[p_end_last:p_end_last + 0x1004].find(b'$CPD') # Should be within the next 4K bytes
-				if uncharted_start != -1 : p_end_last += uncharted_start # Adjust p_end_last to actual Uncharted start
+				uncharted_match = cpd_pat.search(reading[p_end_last:p_end_last + 0x1004]) # Should be within the next 4K bytes
+				if uncharted_match : p_end_last += uncharted_match.start() # Adjust p_end_last to actual Uncharted start
 			
 			# ME8-10 WCOD/LOCL but works for ME7, TXE1-2, SPS2-3 even though these end at last $FPT entry
 			while reading[p_end_last + 0x1C:p_end_last + 0x20] == b'$MN2' :
@@ -11326,13 +11328,13 @@ for file_in in source :
 	# Check for CSME 12 FWUpdate Support/Compatibility
 	if variant == 'CSME' and major == 12 and not is_partial_upd :
 		fwu_iup_check = True if type_db == 'EXTR' and sku_db.startswith('COR') else False
-		if fwu_iup_check and (uncharted_start != -1 or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
+		if fwu_iup_check and (uncharted_match or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
 		else : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
 		
 	# Check for CSME 13+ FWUpdate Support/Compatibility
 	if variant == 'CSME' and major >= 13 and not is_partial_upd :
 		fwu_iup_check = True if type_db == 'EXTR' and sku_db.startswith('COR') else False
-		if fwu_iup_check and (uncharted_start != -1 or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
+		if fwu_iup_check and (uncharted_match or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
 		else : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found)]
 	
 	# Create firmware DB names
@@ -11546,8 +11548,8 @@ for file_in in source :
 	# Print Messages which must be at the end of analysis
 	if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
 	
-	if fwu_iup_result == 'Impossible' and uncharted_start != -1 :
-		fwu_iup_msg = (uncharted_start,p_end_last_back,p_end_last_back + uncharted_start)
+	if fwu_iup_result == 'Impossible' and uncharted_match :
+		fwu_iup_msg = (uncharted_match.start(),p_end_last_back,p_end_last_back + uncharted_match.start())
 		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from 0x%X - 0x%X for FWUpdate Support!' % fwu_iup_msg + col_e, False])
 	
 	if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Partition Tables detected!' % fpt_count + col_e, True])
