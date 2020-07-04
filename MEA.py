@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.138.1'
+title = 'ME Analyzer v1.138.4'
 
 import os
 import re
@@ -8231,15 +8231,17 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 		fd_start = fd_match[0].start()
 		fd_end = fd_match[0].end()
 		
-		# Platform Controller Hub (PCH)
-		if (fd_start == 0x10 or reading[fd_start - 0x4:fd_start] == b'\xFF' * 4) and reading[fd_start + 0x4] in [3,2] and reading[fd_start + 0x6] == 4 :
-			is_ich = False
-			start_substruct = 0x10
-			end_substruct = 0xBC # 0xBC for [0xAC] + 0xFF * 16 sanity check
+		fd_flmap0_fcba = reading[fd_start + 0x4] * 0x10 # Component Base Address from FD start (ICH8-ICH10 = 1, IBX = 2, CPT+ = 3)
+		
 		# I/O Controller Hub (ICH)
+		if fd_flmap0_fcba == 0x10 :
+			fd_is_ich = True
+			start_substruct = 0x0 # At ICH, Flash Descriptor starts at 0x0
+			end_substruct = 0xBC # 0xBC for [0xAC] + 0xFF * 16 sanity check	
+		# Platform Controller Hub (PCH)
 		else :
-			is_ich = True
-			start_substruct = 0x0
+			fd_is_ich = False
+			start_substruct = 0x10 # At PCH, Flash Descriptor starts at 0x10
 			end_substruct = 0xBC # 0xBC for [0xAC] + 0xFF * 16 sanity check
 		
 		start_fd_match = fd_start - start_substruct # Flash Descriptor pattern Start Offset
@@ -8247,13 +8249,12 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 		
 		# Calculate Flash Descriptor Flash Component Total Size
 		fd_flmap0_nc = ((int.from_bytes(reading[end_fd_match:end_fd_match + 0x4], 'little') >> 8) & 3) + 1 # Component Count (00 = 1, 01 = 2)
-		fd_flmap1_isl = reading[end_fd_match + 0x7] # PCH Strap Length (ICH8-IBX <= 0x10, CPT-PPT = 0x12, LPT+ >= 0x15)
-		fd_comp_den_off = 0x1C if fd_flmap1_isl > 0x10 else 0xC # Component Density Offset (ICH8-IBX = 0xC, CPT+ = 0x1C)
-		fd_comp_den_byte = reading[end_fd_match + fd_comp_den_off] # Component Density Byte (ICH8-PPT = 0:5, LPT+ = 0:7)
-		fd_comp_1_bitwise = 0xF if fd_flmap1_isl >= 0x15 else 0x7 # Component 1 Density Bits (ICH8-PPT = 3, LPT+ = 4)
-		fd_comp_2_bitwise = 0x4 if fd_flmap1_isl >= 0x15 else 0x3 # Component 2 Density Bits (ICH8-PPT = 3, LPT+ = 4)
-		fd_comp_all_size = comp_dict[fd_comp_den_byte & fd_comp_1_bitwise] # Component 1 Density (FCBA > C0DEN)
-		if fd_flmap0_nc == 2 : fd_comp_all_size += comp_dict[fd_comp_den_byte >> fd_comp_2_bitwise] # Component 2 Density (FCBA > C1DEN)
+		fd_flmap1_isl = reading[end_fd_match + 0x7] # PCH/ICH Strap Length (ME 2-8 & TXE 0-2 & SPS 1-2 <= 0x12, ME 9+ & TXE 3+ & SPS 3+ >= 0x13)
+		fd_comp_den = reading[start_fd_match + fd_flmap0_fcba] # Component Density Byte (ME 2-8 & TXE 0-2 & SPS 1-2 = 0:5, ME 9+ & TXE 3+ & SPS 3+ = 0:7)
+		fd_comp_1_bitwise = 0xF if fd_flmap1_isl >= 0x13 else 0x7 # Component 1 Density Bits (ME 2-8 & TXE 0-2 & SPS 1-2 = 3, ME 9+ & TXE 3+ & SPS 3+ = 4)
+		fd_comp_2_bitwise = 0x4 if fd_flmap1_isl >= 0x13 else 0x3 # Component 2 Density Bits (ME 2-8 & TXE 0-2 & SPS 1-2 = 3, ME 9+ & TXE 3+ & SPS 3+ = 4)
+		fd_comp_all_size = comp_dict[fd_comp_den & fd_comp_1_bitwise] # Component 1 Density (FCBA > C0DEN)
+		if fd_flmap0_nc == 2 : fd_comp_all_size += comp_dict[fd_comp_den >> fd_comp_2_bitwise] # Component 2 Density (FCBA > C1DEN)
 		
 		# Update input file RAM buffer (reading) based on the actual Flash Descriptor Flash Component Total Size
 		# Do not update reading if the initially detected Manifest pattern is outside the FD Component Total Data
@@ -8262,16 +8263,24 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 			file_end = fd_comp_all_size # Update input file RAM buffer length, same as FD Flash Component Total Size
 			start_man_match = start_man_match - start_fd_match # Update Manifest Pattern Start Offset (before FD)
 			end_man_match = end_man_match - start_fd_match # Update Manifest Pattern End Offset (before FD)
-			start_fd_match,end_fd_match = (0x0,0x4) if is_ich else (0x0,0x14) # Update FD Pattern Start & End Offsets (after Manifest)
+			start_fd_match,end_fd_match = (0x0,0x4) if fd_is_ich else (0x0,0x14) # Update FD Pattern Start & End Offsets (after Manifest)
 		
 		# Do not notify for OEM Backup Flash Descriptors within the chosen/first Flash Descriptor
 		for match in fd_match[1:] :
 			if fd_start < match.start() <= fd_start + 0x1000 : fd_count -= 1
 		
-		return True, reading, file_end, start_man_match, end_man_match, start_fd_match, end_fd_match, fd_count, fd_comp_all_size, is_ich
+		# Check if the Flash Descriptor Flash Component Total Size fits within the input file
+		fd_input_size = len(reading[start_fd_match:start_fd_match + fd_comp_all_size])
+		if fd_input_size != fd_comp_all_size :
+			fd_is_cut = True
+			err_stor.append([col_r + 'Error: Detected incomplete firmware size 0x%X, expected 0x%X!' % (fd_input_size, fd_comp_all_size) + col_e, False])
+		else :
+			fd_is_cut = False
+		
+		return True, reading, file_end, start_man_match, end_man_match, start_fd_match, end_fd_match, fd_count, fd_comp_all_size, fd_is_ich, fd_is_cut
 	
 	else :
-		return False, reading, file_end, start_man_match, end_man_match, 0, 0, 0, 0, False
+		return False, reading, file_end, start_man_match, end_man_match, 0, 0, 0, 0, False, False
 
 # Analyze Intel Flash Descriptor (FD) Regions
 def fd_anl_rgn(start_fd_match, end_fd_match, fd_is_ich) :
@@ -9411,7 +9420,7 @@ for file_in in source :
 			mea_exit(0)
 		
 		# Detect Intel Flash Descriptor (FD)
-		fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich = \
+		fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich,fd_is_cut = \
 		fd_anl_init(reading,file_end,start_man_match,end_man_match)
 		
 		# Analyze Intel Flash Descriptor Regions
@@ -9500,7 +9509,7 @@ for file_in in source :
 	# Engine firmware found (for > break), Manifest analysis
 	
 	# Detect Intel Flash Descriptor (FD)
-	fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich = \
+	fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich,fd_is_cut = \
 	fd_anl_init(reading,file_end,start_man_match,end_man_match)
 	
 	# Store Initial Manifest Offset for CSSPS EXTR RSA Signatures Hash
@@ -10164,11 +10173,10 @@ for file_in in source :
 		
 		# Last $FPT entry has size, scan for uncharted partitions
 		else :
-			
 			# Due to 4K $FPT Partition alignment, Uncharted can start after 0x0 to 0x1000 bytes
 			if not fd_exist and not cse_lt_struct and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
 				p_end_last_back = p_end_last # Store $FPT-based p_end_last offset for CSME 12+ FWUpdate Support detection
-				uncharted_match = cpd_pat.search(reading[p_end_last:p_end_last + 0x1004]) # Should be within the next 4K bytes
+				uncharted_match = cpd_pat.search(reading[p_end_last:p_end_last + 0x100B]) # Should be within the next 4K bytes
 				if uncharted_match : p_end_last += uncharted_match.start() # Adjust p_end_last to actual Uncharted start
 			
 			# ME8-10 WCOD/LOCL but works for ME7, TXE1-2, SPS2-3 even though these end at last $FPT entry
@@ -10316,6 +10324,8 @@ for file_in in source :
 		if fd_me_rgn_exist :
 			if eng_fw_end > me_fd_size :
 				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e, False]
+			elif eng_fw_end < me_fd_size and fd_is_cut :
+				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e, True]
 			elif eng_fw_end < me_fd_size :
 				# Extra data at Engine FD region padding
 				padd_size_fd = me_fd_size - eng_fw_end

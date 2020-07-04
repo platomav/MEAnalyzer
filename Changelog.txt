@@ -1,3 +1,17 @@
+v1.138.4
+
+Improved incomplete input firmware detection
+Fixed FD Flash Component Total Size detection
+Fixed CSE $FPT Uncharted Partitions detection
+
+r202
+
+CSME 14.0.37.1165_COR_LP_BA_PRD_EXTR-Y
+CSME 12.0.67.1579_COR_H_BA_PRD_EXTR-Y
+CSME 12.0.66.1574_SLM_H_BA_PRD_EXTR
+CSME 11.8.78.3681_SLM_H_DA_PRD_EXTR
+CSME 11.8.78.3681_SLM_LP_C_NPDM_PRD_EXTR
+
 v1.138.1
 
 Improved CSE $FPT Uncharted Partitions detection
