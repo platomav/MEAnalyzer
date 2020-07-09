@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.138.4'
+title = 'ME Analyzer v1.138.7'
 
 import os
 import re
@@ -2623,7 +2623,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - Client System Informatio
 	_fields_ = [
 		("Tag",				uint32_t),		# 0x00
 		("Size",			uint32_t),		# 0x04
-		("FWSKUCaps",		uint32_t),		# 0x08 (System Tools User Guide > NVAR > OEMSkuRule)
+		("FWSKUCaps",		uint32_t),		# 0x08 (ConfigRuleSettings)
 		("FWSKUCapsReserv",	uint32_t*7),	# 0x0C
 		("FWSKUAttrib",		uint64_t),		# 0x28
 		# 0x30
@@ -2681,7 +2681,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - Client System Informatio
 class CSE_Ext_0C_FWSKUAttrib(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('CSESize', uint64_t, 4), # CSESize * 0.5MB, always 0
-		('SKUType', uint64_t, 3), # 0 COR, 1 CON, 2 SLM, 3 SVR (?)
+		('SKUType', uint64_t, 3), # 0 COR, 1 CON, 2 SLM, 3 SPS
 		('Lewisburg', uint64_t, 1), # 0 11.0-12, 1 11.20-22
 		('M3', uint64_t, 1), # 0 CON & SLM, 1 COR
 		('M0', uint64_t, 1), # 1 CON & SLM & COR
@@ -8190,8 +8190,9 @@ def copy_on_msg() :
 		
 		# Check if same file already exists
 		if os.path.isfile(check_name) :
-			with open(check_name, 'br') as file :
-				if adler32(file.read()) == adler32(reading) : return
+			with open(file_in, 'rb') as in_file : input_adler32 = adler32(in_file.read())
+			with open(check_name, 'rb') as same_file : same_adler32 = adler32(same_file.read())
+			if input_adler32 == same_adler32 : return
 			
 			check_name += '_%d' % cur_count
 		
@@ -8390,14 +8391,12 @@ def fovd_clean(fovdtype) :
 def fw_types(fw_type) :
 	type_db = 'NaN'
 	
-	if variant in ['SPS','CSSPS'] and fw_type in ['Region','Region, Stock','Region, Extracted'] : # SPS --> Region (EXTR at DB)
-		fw_type = 'Region'
-		type_db = 'EXTR'
-	elif fw_type == 'Region, Extracted' : type_db = 'EXTR'
-	elif fw_type == 'Region, Stock' or fw_type == 'Region' : type_db = 'RGN'
+	if fw_type == 'Extracted' : type_db = 'EXTR'
+	elif fw_type == 'Stock' : type_db = 'RGN'
 	elif fw_type == 'Update' : type_db = 'UPD'
 	elif fw_type == 'Operational' : type_db = 'OPR'
 	elif fw_type == 'Recovery' : type_db = 'REC'
+	elif fw_type == 'Partial Update' : type_db = 'PFU'
 	elif fw_type == 'Independent' and variant.startswith('PMC') : type_db = 'PMC'
 	elif fw_type == 'Independent' and variant.startswith('PCHC') : type_db = 'PCHC'
 	elif fw_type == 'Unknown' : type_db = 'UNK'
@@ -8579,15 +8578,14 @@ def get_csme12_sku(sku_init, fw_0C_sku0, fw_0C_sku2, sku, sku_result, sku_stp, d
 	elif pos_sku_tbl != 'Unknown' :
 		sku_result = pos_sku_tbl # SKU Platform retrieved from MFS (Best)
 	elif (variant,major,minor,hotfix) == ('CSME',12,0,0) and build >= 7000 and year < 0x2018 and month < 0x8 : # CSME 12 Alpha only
-		fw_0C_dict = {0: 'H', 1: 'LP'} # 00 = H, 01 = LP, 10 = ?, 11 = ?
+		fw_0C_dict = {0: 'H', 1: 'LP'} # 00 = H, 01 = LP, 10 = N/A, 11 = N/A
 		sku_result = fw_0C_dict[fw_0C_sku2] if fw_0C_sku2 in fw_0C_dict else 'Unknown' # SKU Platform retrieved from Extension 12 (Best)
 	else :
-		fw_0C_dict = {1: 'H', 2: 'LP'} # 00 = ?, 01 = H/V, 10 = LP/N, 11 = ?
-		fw_0C_plat = int('{0:032b}'.format(fw_0C_sku0)[22:24], 2) # Bits 22-23 of SKU Capabilities
-		sku_result = fw_0C_dict[fw_0C_plat] if fw_0C_plat in fw_0C_dict else 'Unknown' # SKU Platform retrieved from SKU Capabilities (Risky)
+		fw_0C_dict = {1: 'H', 2: 'LP'} # 00 = N/A, 01 = H/V, 10 = LP/N, 11 = N/A
+		fw_0C_plat = int('{0:032b}'.format(fw_0C_sku0)[22:24], 2) # Bit 22 = LP/N, Bit 23 = H/V (ConfigRuleSettings > FID_LP & FID_H)
+		sku_result = fw_0C_dict[fw_0C_plat] if fw_0C_plat in fw_0C_dict else 'Unknown' # SKU Platform retrieved from SKU Capabilities (2nd Best)
 		if (variant,major,minor,sku_result) == ('CSME',14,5,'H') : sku_result = 'V' # Adjust CSME 14.5 SKU Platform from H to V
 		elif (variant,major,sku_init,sku_result) == ('CSME',13,'Slim','LP') : sku_result = 'N' # Adjust CSME 13 SLM SKU Platform from LP to N
-		warn_stor.append([col_m + 'Warning: The detected SKU Platform (%s) may be unreliable!' % sku_result + col_e, True])
 	
 	sku = '%s %s' % (sku_init, sku_result) # Adjust final SKU to add Platform
 	
@@ -10367,42 +10365,42 @@ for file_in in source :
 	# Firmware Type detection (Stock, Extracted, Update)
 	if ifwi_exist : # IFWI
 		fitc_ver_found = True
-		fw_type = 'Region, Extracted'
+		fw_type = 'Extracted'
 		fitc_major = bpdt_hdr.FitMajor
 		fitc_minor = bpdt_hdr.FitMinor
 		fitc_hotfix = bpdt_hdr.FitHotfix
 		fitc_build = bpdt_hdr.FitBuild
 	elif rgn_exist : # SPS 1-3 have their own firmware Types
-		if variant == 'SPS' : fw_type = 'Region' # SPS is built manually so EXTR
+		if variant == 'SPS' : fw_type = 'Extracted' # SPS is built manually so EXTR
 		elif variant == 'ME' and (2 <= major <= 7) :
 			# Check 1, FOVD partition
-			if (major >= 3 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Region, Extracted'
+			if (major >= 3 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Extracted'
 			else :
 				# Check 2, EFFS/NVKR strings
 				fitc_match = re.compile(br'\x4B\x52\x4E\x44\x00').search(reading) # KRND. detection = FITC, 0x00 adds old ME RGN support
 				if fitc_match is not None :
 					if major == 4 : fw_type_fix = True # ME4-Only Fix 3
-					else : fw_type = 'Region, Extracted'
+					else : fw_type = 'Extracted'
 				elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
-				else : fw_type = 'Region, Stock'
+				else : fw_type = 'Stock'
 		elif (variant == 'ME' and major >= 8) or variant in ['CSME','CSTXE','CSSPS','TXE','GSC'] :
 			# Check 1, FITC Version
 			if fpt_hdr.FitBuild in [0x0,0xFFFF] : # 0000/FFFF --> clean CS(ME)/CS(TXE)
-				fw_type = 'Region, Stock'
+				fw_type = 'Stock'
 				
 				# Check 2, FOVD partition
-				if not fovd_clean('new') : fw_type = 'Region, Extracted'
+				if not fovd_clean('new') : fw_type = 'Extracted'
 				
 				# Check 3, CSTXE FIT placeholder $FPT Header entries
-				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] == b'\xFF' * 0x24 : fw_type = 'Region, Extracted'
+				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] == b'\xFF' * 0x24 : fw_type = 'Extracted'
 				
 				# Check 4, CSME 13+ FWUpdate EXTR has placeholder $FPT ROM-Bypass Vectors 0-3 (0xFF instead of 0x00 padding)
 				# If not enough (should be OK), MEA could further check if FTUP is empty and/or if PMCP/PCOD & PCHC exist or not
-				if variant == 'CSME' and major >= 13 and reading[fpt_start:fpt_start + 0x10] == b'\xFF' * 0x10 : fw_type = 'Region, Extracted'
+				if variant == 'CSME' and major >= 13 and reading[fpt_start:fpt_start + 0x10] == b'\xFF' * 0x10 : fw_type = 'Extracted'
 			else :
 				# Get FIT/FITC version used to build the image
 				fitc_ver_found = True
-				fw_type = 'Region, Extracted'
+				fw_type = 'Extracted'
 				fitc_major = fpt_hdr.FitMajor
 				fitc_minor = fpt_hdr.FitMinor
 				fitc_hotfix = fpt_hdr.FitHotfix
@@ -10425,7 +10423,7 @@ for file_in in source :
 		if fpt_chk_calc != fpt_chk_file: fpt_chk_fail = True
 		
 		# CSME 12-14, CSTXE 3-4 and CSSPS 5 EXTR $FPT Checksum is usually wrong (0x00 placeholder or same as in RGN), ignore
-		if fw_type == 'Region, Extracted' and ((variant == 'CSME' and major in (12,13,14)) or (variant == 'CSTXE' and major in (3,4))
+		if fw_type == 'Extracted' and ((variant == 'CSME' and major in (12,13,14)) or (variant == 'CSTXE' and major in (3,4))
 		or (variant == 'CSSPS' and major == 5)) :
 			fpt_chk_fail = False
 		
@@ -10547,8 +10545,8 @@ for file_in in source :
 							me2_type_fix = int.from_bytes(reading[netip_start:netip_end], 'big')
 							me2_type_exp = int.from_bytes(b'\x00' * (netip_size - 0x1), 'big')
 							
-				if me2_type_fix != me2_type_exp : fw_type = 'Region, Extracted'
-				else : fw_type = 'Region, Stock'
+				if me2_type_fix != me2_type_exp : fw_type = 'Extracted'
+				else : fw_type = 'Stock'
 			
 			# ME2-Only Fix 2 : Identify ICH Revision B0 firmware SKUs
 			me2_sku_fix = ['FF4DAEACF679A7A82269C1C722669D473F7D76AD3DFDE12B082A0860E212CD93',
@@ -10615,8 +10613,8 @@ for file_in in source :
 						me3_type_fix2a = int.from_bytes(reading[fpt_start + effs_start + end_me3f2_match - 0x30:fpt_start + effs_start + end_me3f2_match - 0x20], 'big')
 						me3_type_fix2b = int.from_bytes(reading[fpt_start + effs_start + end_me3f2_match + 0x30:fpt_start + effs_start + end_me3f2_match + 0x40], 'big')
 
-				if len(me3_type_fix1) > 2 or me3_type_fix3 != 0x10 * 0xFF or me3_type_fix2a != 0x10 * 0xFF or me3_type_fix2b != 0x10 * 0xFF : fw_type = 'Region, Extracted'
-				else : fw_type = 'Region, Stock'
+				if len(me3_type_fix1) > 2 or me3_type_fix3 != 0x10 * 0xFF or me3_type_fix2a != 0x10 * 0xFF or me3_type_fix2b != 0x10 * 0xFF : fw_type = 'Extracted'
+				else : fw_type = 'Stock'
 			
 			# ME3-Only Fix 2 : Detect AMT ROMB UPD image correctly (very vague, may not always work)
 			if fw_type == 'Update' and release == 'Pre-Production' : # Debug Flag detected at $MAN but PRE vs BYP is needed for UPD (not RGN)
@@ -10701,8 +10699,8 @@ for file_in in source :
 					me4_type_fix2 = (re.compile(br'\x47\x50\x49\x4F\x31\x30\x4F\x77\x6E\x65\x72')).search(effs_data) # GPIO10Owner detection
 					me4_type_fix3 = (re.compile(br'\x41\x70\x70\x52\x75\x6C\x65\x2E\x30\x33\x2E\x30\x30\x30\x30\x30\x30')).search(effs_data) # AppRule.03.000000 detection
 				
-					if len(me4_type_fix1) > 5 or me4_type_fix2 is not None or me4_type_fix3 is not None : fw_type = "Region, Extracted"
-					else : fw_type = 'Region, Stock'
+					if len(me4_type_fix1) > 5 or me4_type_fix2 is not None or me4_type_fix3 is not None : fw_type = "Extracted"
+					else : fw_type = 'Stock'
 			
 			# Placed here in order to comply with Fix 2 above in case it is triggered
 			db_maj,db_min,db_hot,db_bld = check_upd('Latest_ME_4_%s' % sku_db)
@@ -10772,8 +10770,8 @@ for file_in in source :
 			# ME6-Only Fix 1 : ME6 Ignition does not work with KRND
 			if 'Ignition' in sku and rgn_exist :
 				ign_pat = (re.compile(br'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x6D\x3C\x75\x6D')).findall(reading) # Clean $MINIFAD checksum
-				if len(ign_pat) < 2 : fw_type = "Region, Extracted" # 2 before NFTP & IGRT
-				else : fw_type = "Region, Stock"
+				if len(ign_pat) < 2 : fw_type = "Extracted" # 2 before NFTP & IGRT
+				else : fw_type = "Stock"
 			
 			# ME6-Only Fix 2 : Ignore errors at ROMB (Region present, FTPR tag & size missing)
 			if release == "ROM-Bypass" :
@@ -11366,6 +11364,9 @@ for file_in in source :
 	elif variant.startswith('PCHC') : # PCHC ICP, CMP, TGP
 		name_db = '%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db)
+	elif fw_type == 'Partial Update' :
+		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
+		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
 	elif variant == 'CSME' and major >= 12 and type_db == 'EXTR' and sku_db.startswith('COR') :
 		name_db = '%s_%s_%s_%s-%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, ['N','Y'][int(fwu_iup_exist)], rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s-%s' % (fw_ver(major,minor,hotfix,build), sku_db, rel_db, type_db, ['N','Y'][int(fwu_iup_exist)])

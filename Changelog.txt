@@ -1,3 +1,14 @@
+v1.138.7
+
+Improved Stock/Extracted firmware Type display
+Improved LMS Partial Update firmware renaming
+Fixed input file copying when messages exist
+
+r203
+
+CSME 12.0.68.1606_CON_H_BA_PRD_EXTR
+CSME 11.8.78.3689_CON_H_DA_PRD_EXTR
+
 v1.138.4
 
 Improved incomplete input firmware detection
