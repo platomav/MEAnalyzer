@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.138.7'
+title = 'ME Analyzer v1.139.0'
 
 import os
 import re
@@ -4411,6 +4411,33 @@ class RBE_PM_Metadata_R2(ctypes.LittleEndianStructure) : # R2 - RBEP > rbe or FT
 		('VEN_ID',			uint16_t),		# 0x06 8086
 		('SizeUncomp',		uint32_t),		# 0x08
 		('SizeComp',		uint32_t),		# 0x0C
+		('Hash',			uint32_t*8),	# 0x10 SHA-256 LE
+		# 0x30
+	]
+	
+	def mod_print(self) :
+		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'RBE/PM Module "Metadata"' + col_e
+		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
+		pt.add_row(['Device ID', '0x%X' % self.DEV_ID])
+		pt.add_row(['Vendor ID', '0x%X' % self.VEN_ID])
+		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
+		pt.add_row(['Size Compressed', '0x%X' % self.SizeComp])
+		pt.add_row(['Hash', Hash])
+		
+		return pt
+		
+class RBE_PM_Metadata_R3(ctypes.LittleEndianStructure) : # R3 - RBEP > rbe or FTPR > pm Module "Metadata"
+	_pack_ = 1
+	_fields_ = [
+		('Unknown0',		uint32_t),		# 0x00
+		('DEV_ID',			uint16_t),		# 0x04
+		('VEN_ID',			uint16_t),		# 0x06 8086
+		('SizeUncomp',		uint32_t),		# 0x08
+		('SizeComp',		uint32_t),		# 0x0C
 		('BSSSize',			uint32_t),		# 0x10
 		('CodeSizeUncomp',	uint32_t),		# 0x14
 		('CodeBaseAddress',	uint32_t),		# 0x18
@@ -4441,8 +4468,8 @@ class RBE_PM_Metadata_R2(ctypes.LittleEndianStructure) : # R2 - RBEP > rbe or FT
 		pt.add_row(['Hash', Hash])
 		
 		return pt
-		
-class RBE_PM_Metadata_R3(ctypes.LittleEndianStructure) : # R3 - RBEP > rbe or FTPR > pm Module "Metadata"
+
+class RBE_PM_Metadata_R4(ctypes.LittleEndianStructure) : # R4 - RBEP > rbe or FTPR > pm Module "Metadata"
 	_pack_ = 1
 	_fields_ = [
 		('Unknown0',		uint32_t),		# 0x00
@@ -7966,22 +7993,27 @@ def get_bpdt(buffer, offset) :
 	
 # Get RBEP > rbe and/or FTPR > pm Module "Metadata"
 def get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes) :
-	rbe_pm_patt_256 = re.compile(br'\x86\x80.{70}\x86\x80.{70}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-256 "Metadata" pattern
-	rbe_pm_patt_384_rbe = re.compile(br'\x86\x80.{86}\x86\x80.{86}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-384 rbe "Metadata" pattern
-	rbe_pm_patt_384_pm = re.compile(br'\x86\x80.{62}\x86\x80.{62}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-384 pm "Metadata" pattern
+	rbe_pm_patt_256_1 = re.compile(br'\x86\x80.{70}\x86\x80.{70}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-256 "Metadata" pattern 1
+	rbe_pm_patt_256_2 = re.compile(br'\x86\x80.{46}\x86\x80.{46}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-256 "Metadata" pattern 2
+	rbe_pm_patt_384_1 = re.compile(br'\x86\x80.{86}\x86\x80.{86}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-384 "Metadata" pattern 1
+	rbe_pm_patt_384_2 = re.compile(br'\x86\x80.{62}\x86\x80.{62}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-384 "Metadata" pattern 2
 	
-	if rbe_pm_patt_256 :
-		rbe_pm_patt_start = rbe_pm_patt_256.start()
+	if rbe_pm_patt_256_1 :
+		rbe_pm_patt_start = rbe_pm_patt_256_1.start()
 		rbe_pm_struct_name = RBE_PM_Metadata
 		rbe_pm_struct_size = ctypes.sizeof(RBE_PM_Metadata)
-	elif rbe_pm_patt_384_rbe :
-		rbe_pm_patt_start = rbe_pm_patt_384_rbe.start()
+	elif rbe_pm_patt_256_2 :
+		rbe_pm_patt_start = rbe_pm_patt_256_2.start()
 		rbe_pm_struct_name = RBE_PM_Metadata_R2
 		rbe_pm_struct_size = ctypes.sizeof(RBE_PM_Metadata_R2)
-	elif rbe_pm_patt_384_pm :
-		rbe_pm_patt_start = rbe_pm_patt_384_pm.start()
+	elif rbe_pm_patt_384_1 :
+		rbe_pm_patt_start = rbe_pm_patt_384_1.start()
 		rbe_pm_struct_name = RBE_PM_Metadata_R3
 		rbe_pm_struct_size = ctypes.sizeof(RBE_PM_Metadata_R3)
+	elif rbe_pm_patt_384_2 :
+		rbe_pm_patt_start = rbe_pm_patt_384_2.start()
+		rbe_pm_struct_name = RBE_PM_Metadata_R4
+		rbe_pm_struct_size = ctypes.sizeof(RBE_PM_Metadata_R4)
 	else :
 		return rbe_pm_met_hashes
 	
