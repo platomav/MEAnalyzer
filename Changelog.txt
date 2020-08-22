@@ -1,3 +1,35 @@
+v1.148.0
+
+Restructured CSE Extension Analysis method
+Restructured CSE File System FTBL parsing
+Added CSE USB Type C Physical (PHY) support
+Added CSME 13.30 (LKF) full firmware support
+Added CSSPS 4 & 5 firmware SKU Type detection
+Added CSE OEM Configuration Partition parsing
+Improved CSE Extension 12 & 15 SKU detection
+Improved CSE, PMC & PHY compatibility checks
+Fixed uncharted $FPT Partition size detection
+Fixed known RSA Public Keys manual correction
+
+r208
+
+CSME 14.0.39.1367_CON_LP_BA_PRD_EXTR
+CSME 14.0.39.1367_COR_LP_BA_PRD_EXTR-Y
+CSME 14.0.33.1125_SLM_H_A_PRD_EXTR
+CSME 13.30.1.1075_LIT_LP_B_SPI_PRD_EXTR
+CSME 13.0.37.1556_CON_LP_D_PRD_EXTR
+CSME 11.22.79.1722_COR_H_BA_PRD_RGN
+CSME 11.8.79.3722_COR_LP_C_YPDM_PRD_RGN
+CSME 11.8.78.3681_CON_LP_C_YPDM_PRD_RGN
+PMC LKF_133.0.10.1046_LP_B_PRD
+PMC LKF_133.0.10.1042_LP_B_PRD
+PMC LKF_133.0.10.1040_LP_B_PRD
+PHY LKF_S_10.227.203.1144_PRD
+PHY LKF_S_10.227.203.1143_PRD
+PHY LKF_S_10.227.203.1142_PRD
+PCHC CMP_14.0.0.1002_PRD
+PCHC LKF_13.30.0.1005_PRD
+
 r207
 
 CSME 14.0.39.1339_CON_LP_BA_PRD_EXTR

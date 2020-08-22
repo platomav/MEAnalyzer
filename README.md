@@ -13,7 +13,7 @@ Intel Engine Firmware Analysis Tool
 
 ## **A. About ME Analyzer**
 
-ME Analyzer is a tool which parses Intel Engine, PMC & PCHC firmware images from the (Converged Security) Management Engine, (Converged Security) Trusted Execution Engine, (Converged Security) Server Platform Services, Power Management Controller & Platform Controller Hub Configuration families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) code & file system, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), CSE File Table (FTBL), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
+ME Analyzer is a tool which parses Intel Engine, PMC, PCHC & PHY firmware images from the (Converged Security) Management Engine, (Converged Security) Trusted Execution Engine, (Converged Security) Server Platform Services, Power Management Controller & Platform Controller Hub Configuration families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform etc. It is capable of detecting new/unknown firmware, checking firmware health, Updated/Outdated status and many more. ME Analyzer is also a powerful Engine firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) code & file system, Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), CSE File Table (FTBL), advanced Size detection etc. Moreover, with the help of its extensive database, ME Analyzer is capable of uniquely categorizing all supported Engine firmware as well as check for any firmware which have not been stored at the Intel Engine Firmware Repositories yet.
 
 #### **A1. ME Analyzer Features**
 
@@ -25,6 +25,7 @@ ME Analyzer is a tool which parses Intel Engine, PMC & PCHC firmware images from
 - Detection of Security Version Numbers (SVN), Version Control Number (VCN)
 - Detection of Power Management Controller (PMC) firmware Version, SKU etc
 - Detection of Platform Controller Hub Configuration (PCHC) firmware Version etc
+- Detection of USB Type C Physical (PHY) firmware Version, SKU etc
 - Detection of whether the imported Engine firmware is updated or not
 - Detection of unusual Engine firmware (Corrupted, Compressed, OEM etc)
 - Ability to fully unpack CSE firmware CSME 11+, CSTXE 3+ and CSSPS 4+
@@ -32,7 +33,6 @@ ME Analyzer is a tool which parses Intel Engine, PMC & PCHC firmware images from
 - Advanced detection & validation of Engine region's firmware Size
 - Ability to detect & analyze Integrated Firmware Images (IFWI/BPDT)
 - Ability to analyze multiple files by drag & drop or by input path
-- Detection of unique Apple Macintosh Engine firmware "Slim" SKUs
 - Detection of multiple Engine regions in input file, number only
 - Ability to detect & categorize firmware which require attention
 - Reports all firmware which are not found at the Engine Firmware Repositories
@@ -44,7 +44,7 @@ ME Analyzer is a tool which parses Intel Engine, PMC & PCHC firmware images from
 
 #### **A2. Engine Firmware Repository Database**
 
-ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine Firmware Repositories](http://www.win-raid.com/t832f39-Intel-Management-amp-Trusted-Execution-Engine-Firmware-Repository.html) is a collection of every (CS)ME, (CS)TXE, (CS)SPS, PMC & PCHC firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities, check for updated firmware etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine firmware that are available to us. This accommodates primarily three actions: a) Detect each firmware's Family via unique identifier keys, b) Check whether the imported firmware is up to date and c) Help find new Engine firmware sooner by reporting them at the [Intel Management Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t596f39-Intel-Management-Engine-Drivers-Firmware-amp-System-Tools.html) or [Intel Trusted Execution Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t624f39-Intel-Trusted-Execution-Engine-Drivers-Firmware-amp-System-Tools.html) threads respectively.
+ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine Firmware Repositories](http://www.win-raid.com/t832f39-Intel-Management-amp-Trusted-Execution-Engine-Firmware-Repository.html) is a collection of every (CS)ME, (CS)TXE, (CS)SPS, PMC, PCHC & PHY firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities, check for updated firmware etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine firmware that are available to us. This accommodates primarily three actions: a) Detect each firmware's Family via unique identifier keys, b) Check whether the imported firmware is up to date and c) Help find new Engine firmware sooner by reporting them at the [Intel Management Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t596f39-Intel-Management-Engine-Drivers-Firmware-amp-System-Tools.html) or [Intel Trusted Execution Engine: Drivers, Firmware & System Tools](http://www.win-raid.com/t624f39-Intel-Trusted-Execution-Engine-Drivers-Firmware-amp-System-Tools.html) threads respectively.
 
 ## **B. How to use ME Analyzer**
 
