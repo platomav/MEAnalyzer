@@ -6,7 +6,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.148.0'
+title = 'ME Analyzer v1.148.4'
 
 import os
 import re
@@ -1812,7 +1812,7 @@ class CSE_Ext_00_Mod(ctypes.LittleEndianStructure) : # R1 - (INDEPENDENT_PARTITI
 		("Name",			char*4),		# 0x00
 		("Version",			uint32_t),		# 0x04
 		("UserID",			uint16_t),		# 0x08
-		("Reserved",		uint16_t),		# 0x0A
+		("GroupID",			uint16_t),		# 0x0A (Guess, not in XML)
 		# 0x0C
 	]
 	
@@ -1823,7 +1823,7 @@ class CSE_Ext_00_Mod(ctypes.LittleEndianStructure) : # R1 - (INDEPENDENT_PARTITI
 		pt.add_row(['Name', self.Name.decode('utf-8')])
 		pt.add_row(['Version', '0x%X' % self.Version])
 		pt.add_row(['User ID', '0x%0.4X' % self.UserID])
-		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		pt.add_row(['Group ID', '0x%0.4X' % self.GroupID])
 		
 		return pt
 		
@@ -8148,7 +8148,7 @@ def get_struct(input_stream, start_offset, class_name, param_list = None) :
 		
 		for error in err_stor : print('\n' + error[0])
 		
-		if not param.extr_mea : copy_on_msg() # Close input and copy it in case of messages
+		if not param.extr_mea : copy_on_msg(err_stor + warn_stor + note_stor) # Close input and copy it in case of messages
 		
 		mea_exit(1)
 	
@@ -8307,11 +8307,11 @@ def adler32(data) :
 	
 # Copy input file if there are worthy Notes, Warnings or Errors
 # Must be called at the end of analysis to gather any generated messages
-def copy_on_msg() :
+def copy_on_msg(msg_all) :
 	copy = False
 	
 	# Detect if any copy-worthy generated message exists
-	for message in (err_stor + warn_stor + note_stor) :
+	for message in msg_all :
 		if message[1] : copy = True
 	
 	#if err_stor or warn_stor or note_stor : copy = True # Copy on any message (Debug/Research)
@@ -9447,6 +9447,7 @@ for file_in in source :
 	pmc_ext15_info = [0, '', ('',''), '']
 	phy_ext15_info = [0, '', ('',''), '']
 	pchc_ext15_info = [0, '', ('',''), '']
+	msg_set = set()
 	msg_dict = {}
 	msg_entries = {}
 	ftbl_blob_dict = {}
@@ -9708,7 +9709,7 @@ for file_in in source :
 		else :
 			print('\n%s' % no_man_text)
 			
-		if not param.extr_mea : copy_on_msg() # Close input and copy it in case of messages
+		if not param.extr_mea : copy_on_msg(err_stor + warn_stor + note_stor) # Close input and copy it in case of messages
 		
 		continue # Next input file
 
@@ -11287,27 +11288,31 @@ for file_in in source :
 			x1,x2,x3,x4,x5,x6,x7,x8,x9,x10,x11,sku_size,x13 = sku_attrib.get_flags()
 			
 		if major in [0,1] :
-			if sku_size * 0.5 in (1.5,2.0) :
-				if minor == 0 :
-					sku = '1.25MB'
-					sku_db = '1.25MB'
-				else :
-					sku = '1.375MB'
-					sku_db = '1.375MB'
+			
+			if sku_size * 0.5 == 1.0 :
+				sku = '1MB'
+				sku_db = '1MB'
+				platform = 'CGM'
+			elif sku_size * 0.5 in (1.5,2.0) :
+				sku = '1.25MB' if minor == 0 else '1.375MB'
+				sku_db = '1.25MB' if minor == 0 else '1.375MB'
+				platform = 'BYT'
 			elif sku_size * 0.5 in (2.5,3.0) :
 				sku = '3MB'
 				sku_db = '3MB'
+				platform = 'BYT'
 			else :
 				sku = col_r + 'Unknown' + col_e
 			
-			if rsa_key_hash in ['6B8B10107E20DFD45F6C521100B950B78969B4AC9245D90DE3833E0A082DF374','86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894'] :
+			if rsa_key_hash == '6B8B10107E20DFD45F6C521100B950B78969B4AC9245D90DE3833E0A082DF374' :
 				sku += ' M/D'
 				sku_db += '_MD'
 			elif rsa_key_hash == '613421A156443F1C038DDE342FF6564513A1818E8CC23B0E1D7D7FB0612E04AC' :
 				sku += ' I/T'
 				sku_db += '_IT'
-			
-			platform = 'BYT'
+			elif rsa_key_hash == '9167A40A5097C10FEB7D2195992BA3B8A84E631A10A9A696C3114EB8C03EDF40' :
+				sku += ' N/W'
+				sku_db += '_NW'
 				
 		elif major == 2 :
 			if sku_size * 0.5 == 1.5 :
@@ -11746,11 +11751,12 @@ for file_in in source :
 		
 		if nvm_db : msg_pt.add_row(['NVM Compatibility', ext15_info[3]])
 		
-		if ((variant in ['ME','CSME','GSC'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith(('PMC','PCHC','PHY'))) and not is_partial_upd :
+		if ((variant in ['ME','CSME'] and major >= 8) or variant.startswith(('TXE','CSTXE','CSSPS','GSC','PMC','PCHC','PHY'))) and not is_partial_upd :
 			msg_pt.add_row(['TCB Security Version Number', svn])
 			
-		if not is_partial_upd : msg_pt.add_row(['ARB Security Version Number', ext15_info[0]])
-			
+		if ((variant in ['CSME'] and major >= 12) or variant.startswith(('CSTXE','CSSPS','GSC','PMC','PCHC','PHY'))) and not is_partial_upd :
+			msg_pt.add_row(['ARB Security Version Number', ext15_info[0]])
+		
 		if ((variant in ['ME','CSME','GSC'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith(('PMC','PCHC','PHY'))) and not is_partial_upd :
 			msg_pt.add_row(['Version Control Number', vcn])
 		
@@ -11896,21 +11902,23 @@ for file_in in source :
 	
 	if fd_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Descriptors detected!' % fd_count + col_e, True])
 	
-	# Print Error/Warning/Note Messages
-	msg_stor = err_stor + warn_stor + note_stor
-	for msg_idx in range(len(msg_stor)) :
-		print('\n' + msg_stor[msg_idx][0])
-		if param.write_html :
-			with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_stor[msg_idx][0])))
-		if param.write_json :
-			msg_entries['Entry %0.4d' % msg_idx] = ansi_escape.sub('', str(msg_stor[msg_idx][0]))
+	msg_all = err_stor + warn_stor + note_stor
+	for msg_idx in range(len(msg_all)) :
+		msg_tuple = tuple(msg_all[msg_idx])
+		if msg_tuple not in msg_set:
+			msg_set.add(msg_tuple)
+			print('\n' + msg_all[msg_idx][0])
+			if param.write_html :
+				with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_all[msg_idx][0])))
+			if param.write_json :
+				msg_entries['Entry %0.4d' % msg_idx] = ansi_escape.sub('', str(msg_all[msg_idx][0]))
 	
 	if param.write_json :
 		msg_dict['Messages'] = msg_entries
 		with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % json.dumps(msg_dict, indent=4))
 	
 	# Close input and copy it in case of messages
-	if not param.extr_mea : copy_on_msg()
+	if not param.extr_mea : copy_on_msg(msg_all)
 	
 	# Show MEA help screen only once
 	if param.help_scr : mea_exit(0)

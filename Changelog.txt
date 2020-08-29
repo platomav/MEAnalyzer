@@ -1,3 +1,17 @@
+v1.148.4
+
+Improved CSME 14.5 File System parsing
+Improved removal of duplicate messages
+Improved TXE 1 firmware SKU detection
+Fixed unneeded ARB SVN field display
+
+r209
+
+CSME 14.5.25.1163_CON_V_A_PRD_EXTR
+CSME 14.5.12.1111_CON_V_A_PRD_RGN
+CSME 13.30.10.1147_LIT_LP_B_SPI_PRD_EXTR
+CSME 12.0.3.1091_CON_LP_B_PRD_RGN
+
 v1.148.0
 
 Restructured CSE Extension Analysis method
