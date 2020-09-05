@@ -1071,7 +1071,7 @@ class MFS_Volume_Header(ctypes.LittleEndianStructure) : # MFS Volume Header
 	_fields_ = [
 		('Signature',		uint32_t),		# 0x00
 		('FTBLDictionary',	uint8_t),		# 0x04 0A = CON, 0B = COR, 0C = SLM etc
-		('FTBLPlatform',	uint8_t),		# 0x05 01 = ICP, 02 = CMP-H/LP/N, 03 = LKF, 04 = TGP, 05 = CMP-V etc
+		('FTBLPlatform',	uint8_t),		# 0x05 01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc
 		('FTBLReserved',	uint16_t),		# 0x06
 		('VolumeSize',		uint32_t),		# 0x08 System + Data
 		('FileRecordCount',	uint16_t),		# 0x0C Supported by FAT
@@ -7043,7 +7043,7 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 	vol_ftbl_pl = check_ftbl_pl(vol_ftbl_pl, ftbl_dict) # Check if MFS Volume FTBL Platform exists
 	vol_ftbl_id = check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) # Check if MFS Volume FTBL Dictionary exists
 	ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag (0A = CON, 0B = COR, 0C = SLM etc)
-	ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag (01 = ICP, 02 = CMP-H/LP/N, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
+	ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag (01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
 	
 	if ftbl_plat_id not in ftbl_dict or ftbl_dict_id not in ftbl_dict[ftbl_plat_id] :
 		if ftbl_dict : mfs_tmp_page = mfs_anl_msg(col_m + 'Warning: File Table %s > %s does not exist!' % (ftbl_plat_id,ftbl_dict_id) + col_e, '', True, False, False, [])
@@ -7218,7 +7218,7 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 			vol_ftbl_id = check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) # Check if MFS Volume FTBL Dictionary exists
 			
 			ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag (0A = CON, 0B = COR, 0C = SLM etc)
-			ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag (01 = ICP, 02 = CMP-H/LP/N, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
+			ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag (01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
 			ftbl_rec_id = '%0.8X' % rec_id # FTBL File/Record ID (10002000, 10046A39, 12090300 etc)
 			
 			if ftbl_plat_id not in ftbl_dict or ftbl_dict_id not in ftbl_dict[ftbl_plat_id] :
@@ -7480,7 +7480,7 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 				pmc_variant = 'PMCICP'
 			elif pmcc_version == 0 and mn2_info[0] == 140 and mn2_info[11] == 5 : # 0 CMP-V
 				pmc_variant = 'PMCCMPV'
-			elif pmcc_version == 0 and mn2_info[0] == 140 : # 0 CMP-H/LP/N (After CMP-V)
+			elif pmcc_version == 0 and mn2_info[0] == 140 : # 0 CMP-H/LP (After CMP-V)
 				pmc_variant = 'PMCCMP'
 			elif pmcc_version == 0 and mn2_info[0] == 150 : # 0 TGP
 				pmc_variant = 'PMCTGP'
@@ -7665,7 +7665,7 @@ def pchc_anl(mn2_info, cpd_mod_info) :
 				pchc_variant = 'PCHCTGP'
 			elif (mn2_info[0],mn2_info[1]) == (14,5) : # CMP-V
 				pchc_variant = 'PCHCCMPV'
-			elif (mn2_info[0],mn2_info[1]) == (14,0) : # CMP-H/LP/N
+			elif (mn2_info[0],mn2_info[1]) == (14,0) : # CMP-H/LP
 				pchc_variant = 'PCHCCMP'
 			elif (mn2_info[0],mn2_info[1]) == (13,30) : # LKF
 				pchc_variant = 'PCHCLKF'
@@ -8812,7 +8812,7 @@ def get_variant() :
 				elif mod == 'IntelRec' and (major,minor) == (14,5) : # CMP-V
 					variant = 'PCHCCMPV'
 					break
-				elif mod == 'IntelRec' and (major,minor) == (14,0) : # CMP-H/LP/N
+				elif mod == 'IntelRec' and (major,minor) == (14,0) : # CMP-H/LP
 					variant = 'PCHCCMP'
 					break
 				elif mod == 'IntelRec' and (major,minor) == (13,30) : # LKF
@@ -8833,7 +8833,7 @@ def get_variant() :
 				elif mod == 'PMCC000' and major == 140 and is_meu and mn2_ftpr_hdr.MEU_Minor == 5 : # 0 CMP-V
 					variant = 'PMCCMPV'
 					break
-				elif mod == 'PMCC000' and major == 140 : # 0 CMP-H/LP/N (After CMP-V)
+				elif mod == 'PMCC000' and major == 140 : # 0 CMP-H/LP (After CMP-V)
 					variant = 'PMCCMP'
 					break
 				elif mod == 'PMCC000' and major == 150 : # 0 TGP
