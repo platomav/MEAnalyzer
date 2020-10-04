@@ -1,3 +1,61 @@
+v1.160.0
+
+Added CSE EFS File System support
+Added CSE Extension 23 (FDv) support
+Added CSE Flash Descriptor RSA support
+Added CSE Boot & Data Redundancy support
+Added CSE Key, UTOK, MFS $MN2 RSA checks
+Improved CSE DnX R2 with SHA-384 support
+Improved Flash Descriptor detection
+Improved Flash Partition Table detection
+Improved CSE MFS/EFS FTBL/EFST parsing
+Improved CSE MFS Backup R2 parsing
+Improved CSE Extension 21 Knob IDs
+Improved CSE Extension 12 SKU info
+Fixed CSE OEM Configuration detection
+Fixed CSE Layout Table Size detection
+Applied various fixes & improvements
+
+r212
+
+CSME 15.0.1.1345_CON_LP_B_PRD_RGN
+CSME 15.0.1.1345_COR_LP_B_PRD_RGN
+CSME 15.0.0.1320_CON_LP_B_PRD_EXTR
+CSME 15.0.0.1305_COR_LP_B_PRD_EXTR-Y
+CSME 14.5.25.1229_CON_V_A_PRD_EXTR
+CSME 14.0.45.1389_CON_H_A_PRD_EXTR
+CSME 14.0.36.1158_CON_H_A_PRD_RGN
+CSME 14.0.36.1158_COR_H_A_PRD_RGN
+CSME 14.0.35.1147_CON_LP_BA_PRD_RGN
+CSME 14.0.35.1147_COR_LP_BA_PRD_RGN
+CSME 13.0.37.1556_CON_LP_D_PRD_RGN
+CSME 13.0.37.1556_SLM_N_A_PRD_EXTR
+CSME 13.0.35.1508_CON_LP_D_PRD_RGN
+CSME 13.0.32.1478_CON_LP_D_PRD_RGN
+CSME 12.0.70.1652_CON_H_BA_PRD_EXTR
+CSME 12.0.69.1656_CON_H_BA_PRD_EXTR
+CSME 12.0.68.1606_SLM_H_BA_PRD_EXTR
+CSME 12.0.68.1606_SLM_LP_C_PRD_EXTR
+CSME 12.0.61.1543_CON_H_BA_PRD_EXTR
+CSME 12.0.61.1543_COR_H_BA_PRD_EXTR-N
+CSME 12.0.61.1543_CON_LP_C_PRD_EXTR
+CSME 12.0.61.1543_COR_LP_C_PRD_EXTR-N
+CSME 11.8.80.3746_CON_H_DA_PRD_RGN
+CSME 11.8.79.3722_CON_LP_C_YPDM_PRD_RGN
+CSME 11.8.78.3681_COR_H_DA_PRD_RGN
+CSME 11.8.78.3681_COR_LP_C_NPDM_PRD_RGN
+CSME 11.8.78.3681_COR_LP_C_YPDM_PRD_RGN
+CSME 11.8.75.3641_CON_H_DA_PRD_EXTR
+CSME 11.8.75.3641_COR_H_DA_PRD_EXTR
+CSTXE 3.1.75.2351_B_PRD_RGN
+PMC TGP_150.1.20.1024_LP_C_PRD
+PMC TGP_150.1.20.1022_LP_C_PRD
+PMC TGP_150.1.20.1021_LP_C_PRD
+PMC TGP_150.1.20.1020_LP_C_PRD
+PMC TGP_150.1.20.1018_LP_C_PRD
+PMC CNP_300.1.20.1028_LP_C_PRD
+PCHC TGP_15.0.0.1014_PRD
+
 r211
 
 CSME 14.0.33.1125_COR_H_A_PRD_RGN
@@ -2447,7 +2505,7 @@ Improved detection of ME 11.0 SKL-SPT firmware
 Improved detection of ME 11.x Partial Update images
 Fixed wrong database version display in special cases
 Fixed wrong UEFI Strip -msg output in special cases
-Performance improvements and redundand checks removal
+Performance improvements and redundant checks removal
 
 r49
 
@@ -2627,8 +2685,8 @@ Added detection of some extra Intel Engine Firmware specific UEFI GUIDs
 Added option to disable Intel Engine Firmware UEFI GUIDs UEFIFind detection (-disuf)
 Added proper naming of unknown TXE RSA Signature hash at UEFI Strip mode
 Removed the early AMD Platform Secure Processor (PSP) firmware detection from MEA
-Fixed encoding crash error when any non-Engine firmware file was inputed
-Fixed crash error when analysing ME 11.0 Partial Update images
+Fixed encoding crash error when any non-Engine firmware file was inputted
+Fixed crash error when analyzing ME 11.0 Partial Update images
 Fixed issue that caused UEFI Strip mode to not show ME 11.0 PCH Stepping
 Fixed Multi-Analyze issue when ME 11.0 Kernel Analysis (-dker) was enabled
 
