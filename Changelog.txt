@@ -1,3 +1,28 @@
+v1.172.3
+
+Added firmware 4K alignment padding check
+Added AMI BIOS Guard (PFAT) warning check
+Added 3rd-party dependency install checks
+Fixed CSME 12.0 & PMC compatibility check
+Fixed input file copy when messages exist
+Fixed Flash Partition Table pattern range
+MEA now requires PLTable 1.0.2 or newer
+
+r215
+
+CSME 15.0.3.1402_CON_LP_B_PRD_EXTR
+CSME 15.0.2.1377_COR_LP_B_PRD_EXTR-Y
+CSME 14.0.45.1389_COR_H_A_PRD_EXTR-Y
+CSME 14.0.45.1389_CON_LP_BA_PRD_EXTR
+CSME 14.0.45.1389_COR_LP_BA_PRD_EXTR-Y
+CSME 12.0.70.1652_COR_LP_C_PRD_EXTR-Y
+CSME 11.22.80.1734_COR_H_BA_PRD_RGN
+CSME 11.12.80.1734_CON_H_A_PRD_RGN
+CSME 11.12.80.1734_COR_H_A_PRD_RGN
+CSME 11.8.80.3746_COR_H_DA_PRD_RGN
+CSTXE 3.1.80.2400_B_PRD_EXTR
+ME 6.2.0.1019_1.5MB_PRD_EXTR
+
 r214
 
 CSME 15.0.10.1405_COR_LP_B_PRD_EXTR-Y

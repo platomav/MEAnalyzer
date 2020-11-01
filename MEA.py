@@ -6,11 +6,31 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.170.0'
+title = 'ME Analyzer v1.172.3'
+
+import sys
+
+# Detect Python version
+mea_py = sys.version_info
+if mea_py < (3,7) :
+	sys.stdout.write('%s\n\nError: Python >= 3.7 required, not %d.%d!\n' % (title, mea_py[0], mea_py[1]))
+	if '-exit' not in sys.argv : (raw_input if mea_py[0] <= 2 else input)('\nPress enter to exit')
+	sys.exit(1)
+
+# Detect OS platform
+mea_os = sys.platform
+if mea_os == 'win32' :
+	cl_wipe = 'cls'
+	sys.stdout.reconfigure(encoding='utf-8') # Fix Windows Unicode console redirection
+elif mea_os.startswith('linux') or mea_os == 'darwin' or mea_os.find('bsd') != -1 :
+	cl_wipe = 'clear'
+else :
+	print('%s\n\nError: Unsupported platform "%s"!\n' % (title, mea_os))
+	if '-exit' not in sys.argv : input('Press enter to exit')
+	sys.exit(1)
 
 import os
 import re
-import sys
 import lzma
 import json
 import struct
@@ -18,12 +38,21 @@ import ctypes
 import shutil
 import hashlib
 import inspect
-import crccheck
-import colorama
 import itertools
 import traceback
 import subprocess
-import prettytable
+import importlib.util
+
+# Check code dependency installation
+for depend in ['colorama','crccheck','pltable'] :
+	if not importlib.util.find_spec(depend) :
+		print('%s\n\nError: Dependency "%s" is missing!\n       Install via "pip3 install %s"\n' % (title, depend, depend))
+		if '-exit' not in sys.argv : input('Press enter to exit')
+		sys.exit(1)
+
+import pltable
+import colorama
+import crccheck
 
 # Initialize and setup Colorama
 colorama.init()
@@ -34,31 +63,6 @@ col_g = colorama.Fore.GREEN + colorama.Style.BRIGHT
 col_y = colorama.Fore.YELLOW + colorama.Style.BRIGHT
 col_m = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
 col_e = colorama.Fore.RESET + colorama.Style.RESET_ALL
-
-# Detect OS platform
-mea_os = sys.platform
-if mea_os == 'win32' :
-	cl_wipe = 'cls'
-elif mea_os.startswith('linux') or mea_os == 'darwin' or mea_os.find('bsd') != -1 :
-	cl_wipe = 'clear'
-else :
-	print(col_r + '\nError: Unsupported platform "%s"!\n' % mea_os + col_e)
-	if '-exit' not in sys.argv : input('Press enter to exit')
-	colorama.deinit()
-	sys.exit(1)
-
-# Detect Python version
-mea_py = sys.version_info
-try :
-	assert mea_py >= (3,7)
-except :
-	print(col_r + '\nError: Python >= 3.7 required, not %d.%d!\n' % (mea_py[0],mea_py[1]) + col_e)
-	if '-exit' not in sys.argv : input('Press enter to exit')
-	colorama.deinit()
-	sys.exit(1)
-	
-# Fix Windows Unicode console redirection
-if mea_os == 'win32' : sys.stdout.reconfigure(encoding='utf-8')
 
 # Set ctypes Structure types
 char = ctypes.c_char
@@ -8488,7 +8492,7 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 		pmc_platform = 'LKF'
 		
 		# 133.1.10.1003 = LKF + LP + PCH Compatibility B + PMC Maintenance 0 + PMC Revision 1003
-		if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 LP (?), 1 LP, 2 H, 3 N
+		if mn2_info[1] in pch_sku_val : pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 LP (SoC), 1 LP, 2 H, 3 N
 		pmc_pch_rev = '%s%d' % (pch_rev_val[mn2_info[2] // 10], mn2_info[2] % 10) # 21 = PCH C PMC 1
 		
 		# Check if PMCLKF firmware is the latest
@@ -8575,7 +8579,7 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 # Verify CSE FTPR/OPR & stitched PMC compatibility
 def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
 	if (variant,major,minor) in pmc_dict :
-		if (variant,major) == ('CSME',12) and pmc_pch_gen != 300 : return None # Ignore CSME 12 Alpha PMC
+		if (variant,major,minor,pmc_platform) == ('CSME',12,0,'CNP') and pmc_pch_gen != 300 : return None # Ignore CSME 12.0 Alpha CNP PMC
 		
 		if pmc_mn2_signed != release or pmc_pch_gen not in pmc_dict[(variant,major,minor)] or pmc_pch_sku != sku_result \
 		or (sku_stp != 'NaN' and pmc_pch_rev[0] not in sku_stp) :
@@ -8829,7 +8833,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 					if symbol == '' :
 						HUFFMAN_UNKNOWNS[mapping_type][codeword_len].add(codeword)
 						return [0x7F]
-					elif re.match('^(\?\?)+$', symbol) :
+					elif re.match(r'^(\?\?)+$', symbol) :
 						HUFFMAN_UNKNOWNS[mapping_type][codeword_len].add(codeword)
 						return list(itertools.repeat(0x7F, int(len(symbol) / 2)))
 					else :
@@ -9137,14 +9141,14 @@ def struct_json(structure) :
 
 # Initialize PrettyTable
 def ext_table(row_col_names,header,padd) :
-	pt = prettytable.PrettyTable(row_col_names)
-	pt.set_style(prettytable.UNICODE_LINES)
+	pt = pltable.PrettyTable(row_col_names)
+	pt.set_style(pltable.UNICODE_LINES)
 	pt.xhtml = True
 	pt.header = header # Boolean
 	pt.left_padding_width = padd
 	pt.right_padding_width = padd
-	pt.hrules = prettytable.ALL
-	pt.vrules = prettytable.ALL
+	pt.hrules = pltable.ALL
+	pt.vrules = pltable.ALL
 	
 	return pt
 	
@@ -10284,7 +10288,7 @@ man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOT
 cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14]', re.DOTALL) # $CPD pattern
 
 # Intel Engine firmware Flash Partition Table pattern ($FPT)
-fpt_pat = re.compile(br'\x24\x46\x50\x54.\x00\x00\x00', re.DOTALL) # $FPT pattern
+fpt_pat = re.compile(br'\x24\x46\x50\x54[\x01-\x7F]\x00\x00\x00') # $FPT pattern
 
 # Intel Engine firmware Boot Partition Descriptor Table pattern (BPDT)
 bpdt_pat = re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01\x02][\x00\x01].{16}(.\x00.\x00.{3}\x00.{3}\x00){3}', re.DOTALL) # BPDT pattern
@@ -10298,6 +10302,7 @@ for file_in in source :
 	nvm_db = ''
 	fw_type = ''
 	upd_rslt = ''
+	no_man_text = ''
 	reading_msg = ''
 	me2_type_fix = ''
 	me2_type_exp = ''
@@ -10311,7 +10316,6 @@ for file_in in source :
 	sku_init_db = 'NaN'
 	pdm_status = 'NaN'
 	fuj_version = 'NaN'
-	no_man_text = 'NaN'
 	variant = 'Unknown'
 	variant_p = 'Unknown'
 	sku_result = 'Unknown'
@@ -10438,7 +10442,6 @@ for file_in in source :
 	sku_slim = 0
 	fd_count = 0
 	fpt_count = 0
-	mod_align = 0
 	cse_in_id = 0
 	fpt_start = 0
 	mfs_start = -1
@@ -10492,6 +10495,7 @@ for file_in in source :
 	p_end_last_back = -1
 	cse_lt_flags_red = 0
 	cse_lt_flags_res = 0
+	eng_fw_align = 0x1000
 	mod_end = 0xFFFFFFFF
 	p_max_size = 0xFFFFFFFF
 	eng_fw_end = 0xFFFFFFFF
@@ -10512,6 +10516,9 @@ for file_in in source :
 	# Store input file buffer to RAM, will change if Flash Descriptor is detected
 	with open(file_in, 'rb') as in_file : reading = in_file.read()
 	file_end = len(reading)
+	
+	# Detect if image is AMI BIOS Guard (PFAT) protected
+	ami_pfat = True if reading[0x8:0x10] == b'_AMIPFAT' else False
 	
 	# Detect Intel Engine firmware
 	for man_range in list(man_pat.finditer(reading)) :
@@ -10678,22 +10685,19 @@ for file_in in source :
 			
 			# ME Region is Fujitsu UMEM compressed
 			if fuj_version != 'NaN' :
-				no_man_text = 'Found' + col_y + ' Fujitsu Compressed ' + col_e + ('Intel Engine firmware v%s' % fuj_version)
-				
 				if param.extr_mea : no_man_text = 'NaN %s_NaN_UMEM %s NaN NaN' % (fuj_version, fuj_version)
+				else : no_man_text = 'Detected' + col_y + ' Fujitsu Compressed ' + col_e + ('Intel Engine firmware v%s' % fuj_version)
 			
 			# ME Region is X58 ROMB Test
 			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Found' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
-				
 				if param.extr_mea : no_man_text = 'NaN NaN_NaN_X58 NaN NaN NaN'
+				else : no_man_text = 'Detected' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
 			
 			# ME Region is Unknown
 			else :
-				no_man_text = 'Found' + col_y + ' unidentifiable ' + col_e + 'Intel Engine firmware'
-				
 				if param.extr_mea : no_man_text = 'NaN NaN_NaN_UNK NaN NaN NaN' # For UEFI Strip (-extr)
-		
+				else : no_man_text = 'Detected' + col_y + ' unidentifiable ' + col_e + 'Intel Engine firmware'
+			
 		# Engine Region does not exist
 		else :
 			fuj_version = fuj_umem_ver(0) # Check if ME Region is Fujitsu UMEM compressed (me_fd_start is 0x0, no SPI FD)
@@ -10701,15 +10705,13 @@ for file_in in source :
 			
 			# Image is ME Fujitsu UMEM compressed
 			if fuj_version != 'NaN' :
-				no_man_text = 'Found' + col_y + ' Fujitsu Compressed ' + col_e + ('Intel Engine firmware v%s' % fuj_version)
-				
 				if param.extr_mea : no_man_text = 'NaN %s_NaN_UMEM %s NaN NaN' % (fuj_version, fuj_version)
+				else : no_man_text = 'Detected' + col_y + ' Fujitsu Compressed ' + col_e + ('Intel Engine firmware v%s' % fuj_version)
 			
 			# Image is X58 ROMB Test
 			elif reading[:0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Found' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
-				
-				if param.extr_mea : no_man_text = "NaN NaN_NaN_X58 NaN NaN NaN"
+				if param.extr_mea : no_man_text = 'NaN NaN_NaN_X58 NaN NaN NaN'
+				else : no_man_text = 'Detected' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
 			
 			# Image contains some Engine Flash Partition Table ($FPT)
 			elif fw_start_match is not None :
@@ -10718,19 +10720,26 @@ for file_in in source :
 				
 				if fpt_hdr.FitBuild not in (0x0,0xFFFF) :
 					fitc_ver = '%s.%s.%s.%s' % (fpt_hdr.FitMajor, fpt_hdr.FitMinor, fpt_hdr.FitHotfix, fpt_hdr.FitBuild)
-					no_man_text = 'Found' + col_y + ' Unknown ' + col_e + ('Intel Engine Flash Partition Table v%s' % fitc_ver)
 					
 					if param.extr_mea : no_man_text = 'NaN %s_NaN_FPT %s NaN NaN' % (fitc_ver, fitc_ver) # For UEFI Strip (-extr)
+					else : no_man_text = 'Detected' + col_y + ' Unknown ' + col_e + ('Intel Engine Flash Partition Table v%s' % fitc_ver)
 				
 				else :
-					no_man_text = 'Found' + col_y + ' Unknown ' + col_e + 'Intel Engine Flash Partition Table'
-					
 					if param.extr_mea : no_man_text = 'NaN NaN_NaN_FPT NaN NaN NaN' # For UEFI Strip (-extr)
+					else : no_man_text = 'Detected' + col_y + ' Unknown ' + col_e + 'Intel Engine Flash Partition Table'
 				
 			# Image does not contain any kind of Intel Engine firmware
 			else :
 				no_man_text = 'File does not contain Intel Engine firmware'
-
+		
+		# Image is AMI BIOS Guard (PFAT) protected
+		if ami_pfat :
+			if param.extr_mea :
+				no_man_text = "NaN NaN_NaN_PFAT NaN NaN NaN"
+			else :
+				no_man_text = 'Detected' + col_y + ' AMI BIOS Guard (PFAT) ' + col_e + 'protected image, prior extraction required!'
+				no_man_text += '\n\nUse "AMI BIOS Guard Extractor" from https://github.com/platomav/BIOSUtilities'
+		
 		# Print filename when not in UEFIStrip mode
 		if not param.extr_mea and not param.print_msg :
 			print()
@@ -10738,19 +10747,35 @@ for file_in in source :
 			msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
 			print(msg_pt)
 		
-		if param.extr_mea :
-			if no_man_text != 'NaN' : print(no_man_text)
-			else : pass
+		if param.extr_mea and no_man_text :
+			print(no_man_text)
 		elif param.print_msg :
 			print('MEA: %s\n' % no_man_text) # UEFIStrip, one empty line at the beginning
 		else :
 			print('\n%s' % no_man_text)
 			
-		if not param.extr_mea : copy_on_msg(err_stor + warn_stor + note_stor) # Close input and copy it in case of messages
+		no_man_copy = True if no_man_text and 'does not contain' not in no_man_text else False
+		if not param.extr_mea : copy_on_msg([no_man_text] if no_man_copy else []) # Close input and copy it in case of messages
 		
 		continue # Next input file
 
 	# Engine firmware found (for > break), Manifest analysis
+	
+	# Skip AMI BIOS Guard (PFAT) protected images
+	if ami_pfat :
+		# Print filename when not in UEFIStrip mode
+		if not param.extr_mea and not param.print_msg :
+			print()
+			msg_pt = ext_table([], False, 1)
+			msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
+			print(msg_pt)
+		
+		print('\nDetected' + col_y + ' AMI BIOS Guard (PFAT) ' + col_e + 'protected image, prior extraction required!' + \
+			  '\n\nUse "AMI BIOS Guard Extractor" from https://github.com/platomav/BIOSUtilities')
+		
+		if not param.extr_mea : copy_on_msg(['PFAT']) # Close input and copy it in case of messages
+		
+		continue # Next input file
 	
 	# Detect Intel Flash Descriptor (FD)
 	fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich,fd_is_cut,reading_msg = \
@@ -11483,10 +11508,15 @@ for file_in in source :
 						mod_start += 0x50
 			
 			# For Engine alignment & size, remove fpt_start (included in mod_end_max < mod_end < p_offset_last)
-			mod_align = (mod_end_max - fpt_start) % 0x1000 # 4K alignment on Engine size only
+			eng_fw_align -= (mod_end_max - fpt_start) % 0x1000 # 4K alignment Size of entire Engine firmware
 			
-			if mod_align > 0 : eng_fw_end = mod_end + 0x1000 - mod_align - fpt_start
-			else : eng_fw_end = mod_end
+			if eng_fw_align != 0x1000 :
+				eng_fw_end = mod_end + eng_fw_align - fpt_start
+				
+				if reading[p_end_last:p_end_last + eng_fw_align] not in [b'', b'\xFF' * eng_fw_align] :
+					warn_stor.append([col_m + 'Warning: File has data in firmware 4K alignment padding!' + col_e, True])
+			else :
+				eng_fw_end = mod_end
 		
 		# Last $FPT entry has size, scan for uncharted partitions
 		else :
@@ -11618,10 +11648,15 @@ for file_in in source :
 			p_end_last = cse_lt_size + max(p_end_last,cse_lt_dp_size) + cse_lt_bp_size
 		
 		# For Engine alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)
-		mod_align = (p_end_last - fpt_start) % 0x1000 # 4K alignment on Engine size only
+		eng_fw_align -= (p_end_last - fpt_start) % 0x1000 # 4K alignment Size of entire Engine firmware
 		
-		if mod_align > 0 : eng_fw_end = p_end_last + 0x1000 - mod_align - fpt_start
-		else : eng_fw_end = p_end_last - fpt_start
+		if eng_fw_align != 0x1000 :
+			eng_fw_end = p_end_last + eng_fw_align - fpt_start
+			
+			if reading[p_end_last:p_end_last + eng_fw_align] not in [b'', b'\xFF' * eng_fw_align] :
+				warn_stor.append([col_m + 'Warning: File has data in firmware 4K alignment padding!' + col_e, True])
+		else :
+			eng_fw_end = p_end_last - fpt_start
 		
 	# Detect Firmware Data inconsistency (eng_fw_end dependent)
 	if rgn_exist or cse_lt_struct :
@@ -11650,10 +11685,10 @@ for file_in in source :
 			padd_size_file = file_end - eng_fw_end
 			
 			if eng_fw_end > file_end :
-				if eng_fw_end == file_end + 0x1000 - mod_align :
+				if eng_fw_end == file_end + eng_fw_align :
 					# Firmware ends at last $FPT entry but is not 4K aligned, can be ignored (CSME12+)
 					if param.check : # Add alignment padding when missing (Debug/Research)
-						with open('__PADDED__' + os.path.basename(file_in), 'wb') as o : o.write(reading + b'\xFF' * (0x1000 - mod_align))
+						with open('__PADDED__' + os.path.basename(file_in), 'wb') as o : o.write(reading + b'\xFF' * eng_fw_align)
 				else :
 					eng_size_text = [col_m + 'Warning: Firmware size exceeds file, possible data loss!' + col_e, False]
 			elif eng_fw_end < file_end :
