@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.173.0'
+title = 'ME Analyzer v1.174.0'
 
 import sys
 
@@ -404,6 +404,82 @@ class GSC_Info_IUP(ctypes.LittleEndianStructure) : # GSC Independent Update Part
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['SVN', self.SVN])
 		pt.add_row(['VCN', self.VCN])
+		
+		return pt
+		
+class GSC_OPROM_Header(ctypes.LittleEndianStructure) : # GSC Optional ROM Header (igsc_oprom.h > oprom_header_ext_v2)
+	_pack_ = 1
+	_fields_ = [
+		('Signature',		uint16_t),		# 0x00 AA55
+		('ImageSize',		uint16_t),		# 0x02 Multiple of 512, includes Headers
+		('InitFuncEntrPnt',	uint32_t),		# 0x04
+		('SubSystem',		uint16_t),		# 0x08
+		('MachineType',		uint16_t),		# 0x0A
+		('CompressionType',	uint16_t),		# 0x0C
+		('Reserved',		uint64_t),		# 0x0E
+		('EFIImageOffset',	uint16_t),		# 0x16
+		('PCIDataHdrOff',	uint16_t),		# 0x18
+		('OPROMPayloadOff',	uint16_t),		# 0x1A
+		# 0x1C
+	]
+	
+	def gsc_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'GSC Optional ROM Header' + col_e
+		pt.add_row(['Signature', '%0.4X' % self.Signature])
+		pt.add_row(['Image Size', '0x%X' % self.ImageSize * 512])
+		pt.add_row(['Init Funcion Entry Point', '0x%X' % self.InitFuncEntrPnt])
+		pt.add_row(['Sub System', '0x%X' % self.SubSystem])
+		pt.add_row(['Machine Type', '0x%X' % self.MachineType])
+		pt.add_row(['Compression Type', '0x%X' % self.CompressionType])
+		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		pt.add_row(['EFI Image Offset', '0x%X' % self.EFIImageOffset])
+		pt.add_row(['PCI Data Header Offset', '0x%X' % self.PCIDataHdrOff])
+		pt.add_row(['OPROM Payload Offset', '0x%X' % self.OPROMPayloadOff])
+		
+		return pt
+		
+class GSC_OPROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Optional ROM PCI Data Header (igsc_oprom.h > oprom_pci_data)
+	_pack_ = 1
+	_fields_ = [
+		('Signature',		uint32_t),		# 0x00 PCIR
+		('VEN_ID',			uint16_t),		# 0x04
+		('DEV_ID',			uint16_t),		# 0x06
+		('DevListPointer',	uint16_t),		# 0x08
+		('PCIDataHdrLen',	uint16_t),		# 0x0A
+		('PCIDataHdrRev',	uint8_t),		# 0x0C
+		('ClassCode',		uint8_t*3),		# 0x0D
+		('ImageSize',		uint16_t),		# 0x10 Multiple of 512, includes Headers
+		('RevisionLevel',	uint16_t),		# 0x12
+		('CodeType',		uint8_t),		# 0x14
+		('LastImageMark',	uint8_t),		# 0x15
+		('MaxRuntimeImgLen',uint16_t),		# 0x16
+		('ConfUtlCodHdrPtr',uint16_t),		# 0x18 Config Utility Code Header Pointer
+		('DMTFCLPEntPntPtr',uint16_t),		# 0x1A DMTF CLP Entry Point Pointer
+		# 0x1C
+	]
+	
+	def gsc_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		ClassCode = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.ClassCode))
+		
+		pt.title = col_y + 'GSC Optional ROM PCI Data Header' + col_e
+		pt.add_row(['Signature', self.Signature.decode('utf-8')])
+		pt.add_row(['Vendor ID', '%0.4X' % self.VEN_ID])
+		pt.add_row(['Device ID', '%0.4X' % self.DEV_ID])
+		pt.add_row(['Device List Pointer', '0x%X' % self.DevListPointer])
+		pt.add_row(['Header Size', '0x%X' % self.PCIDataHdrLen])
+		pt.add_row(['Header Revision', self.PCIDataHdrRev])
+		pt.add_row(['Class Code', '0x%s' % ClassCode])
+		pt.add_row(['Image Size', '0x%X' % self.ImageSize * 512])
+		pt.add_row(['Revision Level', '0x%X' % self.RevisionLevel])
+		pt.add_row(['Code Type', '0x%X' % self.CodeType])
+		pt.add_row(['Last Image Marker', '0x%X' % self.LastImageMark])
+		pt.add_row(['Maximum Runtime Image Size', '0x%X' % self.MaxRuntimeImgLen])
+		pt.add_row(['Config Utility Code Header Pointer', '0x%X' % self.ConfUtlCodHdrPtr])
+		pt.add_row(['DMTF CLP Entry Point Pointer', '0x%X' % self.DMTFCLPEntPntPtr])
 		
 		return pt
 
@@ -2663,7 +2739,7 @@ class CSE_Ext_07(ctypes.LittleEndianStructure) : # R1 - Device Types (DeviceIds)
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 7, Device Types' + col_e
+		pt.title = col_y + 'Extension 7, Devices' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		
@@ -2683,6 +2759,21 @@ class CSE_Ext_07_Mod(ctypes.LittleEndianStructure) : # R1 - (Device)
 		pt.title = col_y + 'Extension 7, Device' + col_e
 		pt.add_row(['Device ID', '0x%0.8X' % self.DeviceID])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
+		
+		return pt
+		
+class CSE_Ext_07_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (Device)
+	_pack_ = 1
+	_fields_ = [
+		("DeviceID",		uint32_t),		# 0x00
+		# 0x04
+	]
+	
+	def ext_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 7, Device' + col_e
+		pt.add_row(['Device ID', '0x%0.8X' % self.DeviceID])
 		
 		return pt
 
@@ -5675,7 +5766,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				hdr_rev_tag = '' # CSE Extension Header Revision Tag
 				mod_rev_tag = '' # CSE Extension Module Revision Tag
 				
-				if (variant,major) == ('GSC',100) or (variant,anl_meu_major) == ('PMC',100) :
+				if (variant,major) == ('GSC',100) or (variant,anl_meu_major) in [('PMC',100),('OPROM',100)] :
 					if ext_tag in ext_tag_rev_hdr_gsc100 : hdr_rev_tag = ext_tag_rev_hdr_gsc100[ext_tag]
 					if ext_tag in ext_tag_rev_mod_gsc100 : mod_rev_tag = ext_tag_rev_mod_gsc100[ext_tag]
 				elif (variant,major) in [('CSME',15),('CSME',16)] or (variant,anl_major) in [('PMC',150),('PMC',160),('PCHC',15),('PCHC',16)] or mn2_rsa_key_len == 0x180 :
@@ -6943,8 +7034,6 @@ def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_ini
 # noinspection PyUnusedLocal
 def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl) :
 	mfs_buffer_init = reading[mfs_start:mfs_end] # MFS Initial Buffer
-	mfs_signature = mfs_buffer_init[:0x4] # Store MFS Signature Tag (MFS 0x877855AA or MFSB 0x4D465342)
-	mfsb_reserved = True if mfs_buffer_init[0x8:0x20] == b'\xFF' * 0x18 else False # Check MFSB Reserved area
 	sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix) # Get CSE File System Integrity Table Structure Size
 	config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix) # Get CSE File System Configuration Record Structure Size
 	page_size = 0x2000 # MFS Page Length
@@ -6967,15 +7056,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl) :
 	all_chunks_dict = {} # MFS Total Chunk Index & Data Dictionary
 	intel_cfg_hash_mfs = None # Store MFS Low Level File 6 Hash
 	mfs_buffer_sorted = b'' # MFS Total Sorted Pages Contents Buffer
-	
-	# Verify that MFS/MFSB Partition can be parsed by mfs_anl
-	if mfs_signature not in (b'\x87\x78\x55\xAA',b'\x4D\x46\x53\x42') : # Check 1st System Page MFS/MFSB Signature Tag
-		mfs_anl_msg(col_r + 'Error: Skipped MFS partition at 0x%X, unrecognizable format!' % mfs_start + col_e, 'error', True, False, False, [])
-		
-		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size, vol_ftbl_pl
+	mfs_signature1 = mfs_buffer_init[:0x4] # Store 1st MFS Signature Tag (MFS 0x877855AA or MFSB 0x4D465342 or Scratch)
+	mfs_signature2 = mfs_buffer_init[page_size:page_size + 0x4] # Store 2nd MFS Signature Tag (MFS 0x877855AA or Scratch)
+	mfsb_reserved = True if mfs_buffer_init[0x8:0x20] == b'\xFF' * 0x18 else False # Check MFSB Reserved area
 	
 	# Check if MFS is in MFS Backup R0 state
-	elif mfs_signature == b'\x4D\x46\x53\x42' and mfsb_reserved : # MFSB Tag & MFSB R0 Reserved = 0xFF * 24
+	if mfs_signature1 == b'\x4D\x46\x53\x42' and mfsb_reserved : # MFSB Tag & MFSB R0 Reserved = 0xFF * 24
 		mfsb_hdr = get_struct(mfs_buffer_init, 0, MFS_Backup_Header_R0) # MFSB Header R0 Structure
 		if param.me11_mod_extr :
 			print('\n%s' % mfsb_hdr.mfs_print()) # Print Structure Info during CSE Unpacking
@@ -7001,7 +7087,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl) :
 		mfs_buffer_init += b'\xFF' * (- len(mfs_buffer_init) % 0x2000) # Append EOF Alignment Padding based on MFS Page Size of 0x2000
 	
 	# Check if MFS is in MFS Backup R1 state
-	elif mfs_signature == b'\x4D\x46\x53\x42' : # MFSB Tag & MFSB R0 Reserved != 0xFF * 24
+	elif mfs_signature1 == b'\x4D\x46\x53\x42' : # MFSB Tag & MFSB R0 Reserved != 0xFF * 24
 		mfsb_hdr = get_struct(mfs_buffer_init, 0, MFS_Backup_Header_R1) # MFSB Header R1 Structure
 		if param.me11_mod_extr :
 			print('\n%s' % mfsb_hdr.mfs_print()) # Print Structure Info during CSE Unpacking
@@ -7104,6 +7190,13 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl) :
 					mfs_txt(man_pt, file_9_folder, os.path.join(file_9_folder + 'FTPR.man'), 'a', False) # Store MFS Manifest Backup Extension Info
 				
 		return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size, vol_ftbl_pl
+	
+	# Verify that MFS Partition can be parsed by mfs_anl
+	elif b'\x87\x78\x55\xAA' not in (mfs_signature1, mfs_signature2) : # Check 1st & 2nd System Page MFS Signature Tag
+		mfs_anl_msg(col_r + 'Error: Skipped MFS partition at 0x%X, unrecognizable format!' % mfs_start + col_e, 'error', True, False, False, [])
+		
+		if not param.me11_mod_extr : raise() # Try-Except used outside of unp86, trigger exception to show Error at MFS state
+		else : return mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final, vol_ftbl_id, config_rec_size, vol_ftbl_pl
 	
 	# MFS Size related Variable Initialization (must be after MFSB R0)
 	mfs_size = len(mfs_buffer_init) # MFS Total Length
@@ -8796,7 +8889,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 	elif (cse_variant,cse_major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSSPS',5),('GSC',100)] : dict_version = 12
 	else :
 		# CSTXE, CSSPS 1/IGN, PMC, PCHC & PHY firmware do not use Huffman compression, skip error message
-		if cse_variant != 'CSTXE' and (cse_variant,cse_major) != ('CSSPS',1) and not cse_variant.startswith(('PMC','PCHC','PHY')) and verbosity in ['all','error'] :
+		if cse_variant != 'CSTXE' and (cse_variant,cse_major) != ('CSSPS',1) and not cse_variant.startswith(('PMC','PCHC','PHY','OPROM')) and verbosity in ['all','error'] :
 			if param.me11_mod_bug : input_col(col_r + '\nNo Huffman dictionary for {0} {1}'.format(cse_variant, cse_major) + col_e)
 			else : print(col_r + '\nNo Huffman dictionary for {0} {1}'.format(cse_variant, cse_major) + col_e)
 		
@@ -9793,8 +9886,9 @@ def get_variant() :
 				elif mod == 'PMCC006' : variant = 'PMCGLKB' # 6 GLK B
 				elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
 				elif mod.startswith('PCOD') and is_meu and mn2_ftpr_hdr.MEU_Major == 100 : variant = 'PMCDG01' # DG1
+				elif mod == 'VBT' and is_meu and mn2_ftpr_hdr.MEU_Major == 100 : variant = 'OPROMDG1' # DG1
 			
-			if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY detected
+			if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY/OPROM detected
 		
 		elif reading[end_man_match + 0x270 + 0x80:end_man_match + 0x270 + 0x84] == b'$MME' :
 			# $MME: ME2-5/SPS1 = 0x50, ME6-10/SPS2-3 = 0x60, TXE1-2 = 0x80
@@ -9805,7 +9899,7 @@ def get_variant() :
 			variant = 'SPS'
 		
 		else :
-			variant = 'ME' # Default fallback, no CSE/TXE/SPS/GSC/PMC/PCHC/PHY detected
+			variant = 'ME' # Default fallback, no CSE/TXE/SPS/GSC/PMC/PCHC/PHY/OPROM detected
 	
 	# Create Variant display-friendly text
 	if variant == 'CSME' : variant_p = 'CSE ME'
@@ -9815,6 +9909,7 @@ def get_variant() :
 	elif variant.startswith('PHY') : variant_p = 'PHY'
 	elif variant.startswith('PMC') : variant_p = 'PMC'
 	elif variant.startswith('PCHC') : variant_p = 'PCHC'
+	elif variant.startswith('OPROM') : variant_p = 'OPROM'
 	elif variant in ['ME','TXE','SPS'] : variant_p = variant
 	
 	return variant, variant_p, var_rsa_db
@@ -9848,11 +9943,11 @@ ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2'
 # CSME 15 Revised Extension Modules
 ext_tag_rev_mod_csme15 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R2', 0x10:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
-# GSC 100 Revised Extensions
+# GSC/OPROM 100 Revised Extensions
 ext_tag_rev_hdr_gsc100 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
-# GSC 100 Revised Extension Modules
-ext_tag_rev_mod_gsc100 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R2', 0x10:'_R2', 0x18:'_R3', 0x1A:'_R3'}
+# GSC/OPROM 100 Revised Extension Modules
+ext_tag_rev_mod_gsc100 = {0x1:'_R2', 0x7:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R2', 0x10:'_R2', 0x18:'_R3', 0x1A:'_R3'}
 
 # CSSPS 5 Revised Extensions
 ext_tag_rev_hdr_cssps5 = {0xF:'_R2'}
@@ -9971,6 +10066,7 @@ ext_dict = {
 			'CSE_Ext_05_Mod' : CSE_Ext_05_Mod,
 			'CSE_Ext_06_Mod' : CSE_Ext_06_Mod,
 			'CSE_Ext_07_Mod' : CSE_Ext_07_Mod,
+			'CSE_Ext_07_Mod_R2' : CSE_Ext_07_Mod_R2,
 			'CSE_Ext_08_Mod' : CSE_Ext_08_Mod,
 			'CSE_Ext_09_Mod' : CSE_Ext_09_Mod,
 			'CSE_Ext_0B_Mod' : CSE_Ext_0B_Mod,
@@ -10045,7 +10141,7 @@ key_dict = {
 			100 : 'GSC PMC',
 			101 : 'GSC PHY',
 			102 : 'USB Type C Controller',
-			103 : 'Optional ROM',
+			103 : 'OROM',
 			104 : 'HUC Production',
 			105 : 'HUC Debug',
 			}
@@ -10545,27 +10641,28 @@ for file_in in source :
 		(start_man_match, end_man_match) = man_range.span()
 		start_man_match += 0xB # Add 8680.{9} sanity check before .$MN2 or .$MAN
 		
-		pr_man_0 = (reading[end_man_match + 0x374:end_man_match + 0x378]) # FTPR/MFTP,OPR (CSME 15 +, CSTXE 5 +, CSSPS 6 +)
-		pr_man_1 = (reading[end_man_match + 0x274:end_man_match + 0x278]) # FTPR,OPR (CSME 11 - 13, CSTXE 3 - 4, CSSPS 4 - 5.0.3)
-		pr_man_2 = (reading[end_man_match + 0x264:end_man_match + 0x266]) # FT,OP (ME 6 - 10 Part 1, TXE 0 - 2 Part 1, SPS 2 - 3 Part 1)
-		pr_man_3 = (reading[end_man_match + 0x266:end_man_match + 0x268]) # PR,xx (ME 6 - 10 Part 2, TXE 0 - 2 Part 2)
-		pr_man_4 = (reading[end_man_match + 0x28C:end_man_match + 0x293]) # BRINGUP (ME 2 - 5)
-		pr_man_5 = (reading[end_man_match + 0x2DC:end_man_match + 0x2E7]) # EpsRecovery,EpsFirmware (SPS 1)
-		pr_man_6 = (reading[end_man_match + 0x270:end_man_match + 0x277]) # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
-		pr_man_7 = (reading[end_man_match + 0x33C:end_man_match + 0x340]) # $MMX (ME 6 BYP Part 2)
-		pr_man_8 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL)).search(reading[:0x10]) # $CPD LOCL detection
-		pr_man_9 = (re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F')).search(reading[0x290:0x299]) # $MMEWCOD_ detection
-		pr_man_10 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL)).search(reading[:0x10]) # $CPD PMCP detection
-		pr_man_11 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL)).search(reading[:0x10]) # $CPD PCOD detection
-		pr_man_12 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL)).search(reading[:0x10]) # $CPD PCHC detection
-		pr_man_13 = (re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL)).search(reading[:0x10]) # $CPD SPHY detection
-		pr_man_14 = (reading[end_man_match - 0x38:end_man_match - 0x31]) # bup_rcv (CSSPS 5.0.3 +)
-		pr_man_15 = (reading[end_man_match + 0x26C:end_man_match + 0x270]) # FTPR (CSSPS 1 Ignition)
+		pr_man_0 = reading[end_man_match + 0x374:end_man_match + 0x378] # FTPR/MFTP,OPR (CSME 15 +, CSTXE 5 +, CSSPS 6 +)
+		pr_man_1 = reading[end_man_match + 0x274:end_man_match + 0x278] # FTPR,OPR (CSME 11 - 13, CSTXE 3 - 4, CSSPS 4 - 5.0.3)
+		pr_man_2 = reading[end_man_match + 0x264:end_man_match + 0x266] # FT,OP (ME 6 - 10 Part 1, TXE 0 - 2 Part 1, SPS 2 - 3 Part 1)
+		pr_man_3 = reading[end_man_match + 0x266:end_man_match + 0x268] # PR,xx (ME 6 - 10 Part 2, TXE 0 - 2 Part 2)
+		pr_man_4 = reading[end_man_match + 0x28C:end_man_match + 0x293] # BRINGUP (ME 2 - 5)
+		pr_man_5 = reading[end_man_match + 0x2DC:end_man_match + 0x2E7] # EpsRecovery,EpsFirmware (SPS 1)
+		pr_man_6 = reading[end_man_match + 0x270:end_man_match + 0x277] # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
+		pr_man_7 = reading[end_man_match + 0x33C:end_man_match + 0x340] # $MMX (ME 6 BYP Part 2)
+		pr_man_8 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL).search(reading[:0x10]) # $CPD LOCL detection
+		pr_man_9 = re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F').search(reading[0x290:0x299]) # $MMEWCOD_ detection
+		pr_man_10 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL).search(reading[:0x10]) # $CPD PMCP detection
+		pr_man_11 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL).search(reading[:0x10]) # $CPD PCOD detection
+		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading[:0x10]) # $CPD PCHC detection
+		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading[:0x10]) # $CPD SPHY detection
+		pr_man_14 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
+		pr_man_15 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
+		pr_man_16 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
 		
 		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
-		if any(p in (pr_man_0, pr_man_1, pr_man_2 + pr_man_3, pr_man_2 + pr_man_6 + pr_man_7, pr_man_4, pr_man_5, pr_man_6 + pr_man_7, pr_man_14, pr_man_15) \
-		for p in (b'FTPR', b'MFTP', b'OPR\x00', b'BRINGUP', b'EpsRecovery', b'EpsFirmware', b'OP$MMEBUP\x00\x00\x00\x00', b'$MMEBUP$MMX', b'bup_rcv')) \
+		if any(p in (pr_man_0, pr_man_1, pr_man_2 + pr_man_3, pr_man_2 + pr_man_6 + pr_man_7, pr_man_4, pr_man_5, pr_man_6 + pr_man_7, pr_man_14, pr_man_15, pr_man_16) \
+		for p in (b'FTPR', b'MFTP', b'OROM', b'OPR\x00', b'BRINGUP', b'EpsRecovery', b'EpsFirmware', b'OP$MMEBUP\x00\x00\x00\x00', b'$MMEBUP$MMX', b'bup_rcv')) \
 		or pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 :
 			# Recovery Manifest found
 			break
@@ -11842,7 +11939,7 @@ for file_in in source :
 	if (variant == 'ME' and major >= 8) or variant == 'TXE' :
 		pvbit_match = (re.compile(br'\x24\x44\x41\x54.{20}\x49\x46\x52\x50', re.DOTALL)).search(reading[start_man_match:]) # $DAT + [0x14] + IFRP detection
 		if pvbit_match : pvbit = reading[start_man_match + pvbit_match.start() + 0x10]
-	elif variant in ['CSME','CSTXE','CSSPS','GSC'] or variant.startswith(('PMC','PCHC','PHY')) :
+	elif variant in ['CSME','CSTXE','CSSPS','GSC'] or variant.startswith(('PMC','PCHC','PHY','OPROM')) :
 		pvbit = mn2_flags_pvbit
 	
 	if variant == 'ME' : # Management Engine
@@ -12816,6 +12913,47 @@ for file_in in source :
 				eng_size_text = [col_y + 'Note: File size exceeds PHY %s firmware, unneeded padding!' % platform + col_e, False] # warn_stor
 			else :
 				eng_size_text = [col_m + 'Warning: File size exceeds PHY %s firmware, data in padding!' % platform + col_e, True]
+				
+	elif variant.startswith('OPROM') : # Option ROM
+		
+		print(col_m + '\nOPROM is WIP...' + col_e)
+		
+		# Firmware Unpacking for all OPROM
+		if param.me11_mod_extr :
+			cse_unpack('OPROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+		
+		continue # Next input file
+		
+		# Detect CSE Firmware Attributes
+		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
+		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
+		= ext_anl(reading, '$MN2', start_man_match, file_end, ['OPROM',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+		
+		#phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,upd_found,phy_platform,phy_date,phy_svn, phy_pvbit,phy_meu_ver \
+		#= phy_anl(cpd_mn2_info, cpd_mod_attr)
+		
+		#release = phy_mn2_signed
+		#rel_db = phy_mn2_signed_db
+		#mn2_meu_ver = phy_meu_ver
+		#date = phy_date
+		#svn = phy_svn
+		#sku = phy_sku
+		#sku_db = phy_sku
+		#pvbit = phy_pvbit
+		#platform = phy_platform
+		fw_type = 'Independent'
+		
+		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get OPROM firmware size
+		
+		# Check OPROM firmware size
+		if eng_fw_end > file_end :
+			eng_size_text = [col_m + 'Warning: OPROM %s firmware size exceeds file, possible data loss!' % platform + col_e, True]
+		elif eng_fw_end < file_end :
+			padd_size_pmc = file_end - eng_fw_end
+			if reading[eng_fw_end:file_end] == padd_size_pmc * b'\xFF' :
+				eng_size_text = [col_y + 'Note: File size exceeds OPROM %s firmware, unneeded padding!' % platform + col_e, False] # warn_stor
+			else :
+				eng_size_text = [col_m + 'Warning: File size exceeds OPROM %s firmware, data in padding!' % platform + col_e, True]
 	
 	# Partial Firmware Update adjustments
 	if pr_man_8 or pr_man_9 :
