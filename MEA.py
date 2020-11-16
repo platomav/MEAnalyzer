@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.174.0'
+title = 'ME Analyzer v1.174.1'
 
 import sys
 
@@ -10640,6 +10640,7 @@ for file_in in source :
 	for man_range in list(man_pat.finditer(reading)) :
 		(start_man_match, end_man_match) = man_range.span()
 		start_man_match += 0xB # Add 8680.{9} sanity check before .$MN2 or .$MAN
+		reading_16 = reading[:0x10] # Read & Store the first 0x10 buffer bytes
 		
 		pr_man_0 = reading[end_man_match + 0x374:end_man_match + 0x378] # FTPR/MFTP,OPR (CSME 15 +, CSTXE 5 +, CSSPS 6 +)
 		pr_man_1 = reading[end_man_match + 0x274:end_man_match + 0x278] # FTPR,OPR (CSME 11 - 13, CSTXE 3 - 4, CSSPS 4 - 5.0.3)
@@ -10649,23 +10650,31 @@ for file_in in source :
 		pr_man_5 = reading[end_man_match + 0x2DC:end_man_match + 0x2E7] # EpsRecovery,EpsFirmware (SPS 1)
 		pr_man_6 = reading[end_man_match + 0x270:end_man_match + 0x277] # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
 		pr_man_7 = reading[end_man_match + 0x33C:end_man_match + 0x340] # $MMX (ME 6 BYP Part 2)
-		pr_man_8 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL).search(reading[:0x10]) # $CPD LOCL detection
+		pr_man_8 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL).search(reading_16) # $CPD LOCL detection
 		pr_man_9 = re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F').search(reading[0x290:0x299]) # $MMEWCOD_ detection
-		pr_man_10 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL).search(reading[:0x10]) # $CPD PMCP detection
-		pr_man_11 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL).search(reading[:0x10]) # $CPD PCOD detection
-		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading[:0x10]) # $CPD PCHC detection
-		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading[:0x10]) # $CPD SPHY detection
+		pr_man_10 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL).search(reading_16) # $CPD PMCP detection
+		pr_man_11 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL).search(reading_16) # $CPD PCOD detection
+		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading_16) # $CPD PCHC detection
+		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD SPHY detection
 		pr_man_14 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
 		pr_man_15 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
 		pr_man_16 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
 		
 		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
-		if any(p in (pr_man_0, pr_man_1, pr_man_2 + pr_man_3, pr_man_2 + pr_man_6 + pr_man_7, pr_man_4, pr_man_5, pr_man_6 + pr_man_7, pr_man_14, pr_man_15, pr_man_16) \
-		for p in (b'FTPR', b'MFTP', b'OROM', b'OPR\x00', b'BRINGUP', b'EpsRecovery', b'EpsFirmware', b'OP$MMEBUP\x00\x00\x00\x00', b'$MMEBUP$MMX', b'bup_rcv')) \
-		or pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 :
-			# Recovery Manifest found
-			break
+		# Break if a valid Recovery Manifest is found
+		if pr_man_0 in (b'FTPR', b'MFTP', b'OPR\x00') : break
+		elif pr_man_1 in (b'FTPR', b'OPR\x00') : break
+		elif pr_man_2 + pr_man_3 == b'FTPR' : break
+		elif pr_man_2 + pr_man_6 + pr_man_7 == b'OP$MMEBUP\x00\x00\x00\x00' : break
+		elif pr_man_4 == b'BRINGUP' : break
+		elif pr_man_5 in (b'EpsRecovery', b'EpsFirmware') : break
+		elif pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' : break
+		elif pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 : break
+		elif pr_man_14 == b'bup_rcv' : break
+		elif pr_man_15 == b'FTPR' : break
+		elif pr_man_16 == b'OROM' : break
+		
 	else :
 		# Recovery Manifest not found (for > finish)
 		

@@ -1,3 +1,11 @@
+v1.174.1
+
+Fixed main Engine firmware detection
+
+r218
+
+CSME 12.0.71.1681_COR_LP_C_PRD_EXTR-Y
+
 v1.174.0
 
 Improved CSE/GSC Extension 7
