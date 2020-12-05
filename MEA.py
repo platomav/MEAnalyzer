@@ -7,26 +7,26 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.174.1'
+title = 'ME Analyzer v1.174.6'
 
 import sys
 
 # Detect Python version
-mea_py = sys.version_info
-if mea_py < (3,7) :
-	sys.stdout.write('%s\n\nError: Python >= 3.7 required, not %d.%d!\n' % (title, mea_py[0], mea_py[1]))
-	if '-exit' not in sys.argv : (raw_input if mea_py[0] <= 2 else input)('\nPress enter to exit')
+sys_py = sys.version_info
+if sys_py < (3,7) :
+	sys.stdout.write('%s\n\nError: Python >= 3.7 required, not %d.%d!\n' % (title, sys_py[0], sys_py[1]))
+	if '-exit' not in sys.argv : (raw_input if sys_py[0] <= 2 else input)('\nPress enter to exit')
 	sys.exit(1)
 
 # Detect OS platform
-mea_os = sys.platform
-if mea_os == 'win32' :
+sys_os = sys.platform
+if sys_os == 'win32' :
 	cl_wipe = 'cls'
 	sys.stdout.reconfigure(encoding='utf-8') # Fix Windows Unicode console redirection
-elif mea_os.startswith('linux') or mea_os == 'darwin' or mea_os.find('bsd') != -1 :
+elif sys_os.startswith('linux') or sys_os == 'darwin' or sys_os.find('bsd') != -1 :
 	cl_wipe = 'clear'
 else :
-	print('%s\n\nError: Unsupported platform "%s"!\n' % (title, mea_os))
+	print('%s\n\nError: Unsupported platform "%s"!\n' % (title, sys_os))
 	if '-exit' not in sys.argv : input('Press enter to exit')
 	sys.exit(1)
 
@@ -95,12 +95,12 @@ def mea_help() :
 # Process MEA Parameters
 class MEA_Param :
 
-	def __init__(self, mea_os, source) :
+	def __init__(self, sys_os, source) :
 	
 		self.all = ['-?','-skip','-extr','-msg','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-ftbl','-rcfg','-check']
 		self.win = ['-extr','-msg'] # Windows only
 		
-		if mea_os == 'win32' : self.val = self.all
+		if sys_os == 'win32' : self.val = self.all
 		else : self.val = [item for item in self.all if item not in self.win]
 		
 		self.help_scr = False
@@ -139,7 +139,7 @@ class MEA_Param :
 			if i == '-check' : self.check = True # Hidden
 			
 			# Windows only options
-			if mea_os == 'win32' :
+			if sys_os == 'win32' :
 				if i == '-extr' : self.extr_mea = True # Hidden
 				if i == '-msg' : self.print_msg = True # Hidden
 			
@@ -463,8 +463,6 @@ class GSC_OPROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Optional ROM PCI 
 	def gsc_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		ClassCode = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.ClassCode))
-		
 		pt.title = col_y + 'GSC Optional ROM PCI Data Header' + col_e
 		pt.add_row(['Signature', self.Signature.decode('utf-8')])
 		pt.add_row(['Vendor ID', '%0.4X' % self.VEN_ID])
@@ -472,7 +470,7 @@ class GSC_OPROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Optional ROM PCI 
 		pt.add_row(['Device List Pointer', '0x%X' % self.DevListPointer])
 		pt.add_row(['Header Size', '0x%X' % self.PCIDataHdrLen])
 		pt.add_row(['Header Revision', self.PCIDataHdrRev])
-		pt.add_row(['Class Code', '0x%s' % ClassCode])
+		pt.add_row(['Class Code', '0x%X' % int.from_bytes(self.ClassCode, 'little')])
 		pt.add_row(['Image Size', '0x%X' % self.ImageSize * 512])
 		pt.add_row(['Revision Level', '0x%X' % self.RevisionLevel])
 		pt.add_row(['Code Type', '0x%X' % self.CodeType])
@@ -845,9 +843,9 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		version = '%d.%d.%d.%d' % (self.Major,self.Minor,self.Hotfix,self.Build)
 		meu_version = '%d.%d.%d.%d' % (self.MEU_Major,self.MEU_Minor,self.MEU_Hotfix,self.MEU_Build)
 		
-		RSAPublicKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RSAPublicKey))
-		RSASignature = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RSASignature))
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		PublicKeySize = self.PublicKeySize * 4
+		RSAPublicKey = '%0.*X' % (PublicKeySize * 2, int.from_bytes(self.RSAPublicKey, 'little'))
+		RSASignature = '%0.*X' % (PublicKeySize * 2, int.from_bytes(self.RSASignature, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -869,8 +867,8 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
 		pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
 		pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 15 else Reserved])
-		pt.add_row(['RSA Public Key Size', '0x%X' % (self.PublicKeySize * 4)])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		pt.add_row(['RSA Public Key Size', '0x%X' % PublicKeySize])
 		pt.add_row(['RSA Exponent Size', '0x%X' % (self.ExponentSize * 4)])
 		pt.add_row(['RSA Public Key', '%s [...]' % RSAPublicKey[:8]])
 		pt.add_row(['RSA Exponent', '0x%X' % self.RSAExponent])
@@ -927,9 +925,9 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		version = '%d.%d.%d.%d' % (self.Major,self.Minor,self.Hotfix,self.Build)
 		meu_version = '%d.%d.%d.%d' % (self.MEU_Major,self.MEU_Minor,self.MEU_Hotfix,self.MEU_Build)
 		
-		RSAPublicKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RSAPublicKey))
-		RSASignature = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.RSASignature))
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		PublicKeySize = self.PublicKeySize * 4
+		RSAPublicKey = '%0.*X' % (PublicKeySize * 2, int.from_bytes(self.RSAPublicKey, 'little'))
+		RSASignature = '%0.*X' % (PublicKeySize * 2, int.from_bytes(self.RSASignature, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -952,8 +950,8 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
 		pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
 		pt.add_row(['General Data', '0x%0.8X' % self.GeneralData])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 14 else Reserved])
-		pt.add_row(['RSA Public Key Size', '0x%X' % (self.PublicKeySize * 4)])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		pt.add_row(['RSA Public Key Size', '0x%X' % PublicKeySize])
 		pt.add_row(['RSA Exponent Size', '0x%X' % (self.ExponentSize * 4)])
 		pt.add_row(['RSA Public Key', '%s [...]' % RSAPublicKey[:8]])
 		pt.add_row(['RSA Exponent', '0x%X' % self.RSAExponent])
@@ -1453,7 +1451,7 @@ class MFS_Home_Record_0x1C(ctypes.LittleEndianStructure) : # MFS Home Directory 
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11 = self.get_flags()
 		
-		UnknownSalt = ''.join('%0.4X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.UnknownSalt))
+		UnknownSalt = '0x%0.*X' % (0x6 * 2, int.from_bytes(self.UnknownSalt, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -1472,7 +1470,7 @@ class MFS_Home_Record_0x1C(ctypes.LittleEndianStructure) : # MFS Home Directory 
 		pt.add_row(['Access Mode Unknown 0', '{0:01b}b'.format(f8)])
 		pt.add_row(['Access Mode Unknown 1', '{0:01b}b'.format(f11)])
 		pt.add_row(['Integrity Salt', '0x%0.4X' % f2])
-		pt.add_row(['Unknown Salt', '0x%s' % UnknownSalt])
+		pt.add_row(['Unknown Salt', UnknownSalt])
 		
 		return pt
 		
@@ -1539,8 +1537,8 @@ class MFS_Integrity_Table_0x34(ctypes.LittleEndianStructure) : # MFS Integrity T
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8 = self.get_flags()
 		
-		HMACSHA256 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HMACSHA256))
-		ARValues_Nonce = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.ARValues_Nonce))
+		HMACSHA256 = '%0.*X' % (0x20 * 2, int.from_bytes(self.HMACSHA256, 'little'))
+		ARValues_Nonce = '%0.*X' % (0x10 * 2, int.from_bytes(self.ARValues_Nonce, 'little'))
 		ARRandom, ARCounter = struct.unpack_from('<II', self.ARValues_Nonce, 0)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
@@ -1601,8 +1599,8 @@ class MFS_Integrity_Table_0x28(ctypes.LittleEndianStructure) : # MFS Integrity T
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8,f9 = self.get_flags()
 		
-		HMACMD5 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HMACMD5))
-		Unknown = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Unknown))
+		HMACMD5 = '%0.*X' % (0x10 * 2, int.from_bytes(self.HMACMD5, 'little'))
+		Unknown = '0x%0.*X' % (0xC * 2, int.from_bytes(self.Unknown, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -1619,7 +1617,7 @@ class MFS_Integrity_Table_0x28(ctypes.LittleEndianStructure) : # MFS Integrity T
 		pt.add_row(['Flags Unknown 4', '{0:02b}b'.format(f9)])
 		pt.add_row(['Anti-Replay Random Value', '0x%0.8X' % self.ARRandom])
 		pt.add_row(['Anti-Replay Counter Value', '0x%0.8X' % self.ARCounter])
-		pt.add_row(['Unknown', '0x%s' % Unknown])
+		pt.add_row(['Unknown', Unknown])
 		
 		return pt
 		
@@ -1678,14 +1676,14 @@ class MFS_Backup_Header_R0(ctypes.LittleEndianStructure) : # MFS Backup Header R
 	]
 	
 	def mfs_print(self) :
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Reserved = '%0.*X' % (0x18 * 2, int.from_bytes(self.Reserved, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'MFS Backup Header' + col_e
 		pt.add_row(['Signature', '0x%0.8X' % self.Signature])
 		pt.add_row(['CRC32', '0x%0.8X' % self.CRC32])
-		pt.add_row(['Reserved', '0xFF * 24' if Reserved == 'FFFFFFFF' * 6 else Reserved])
+		pt.add_row(['Reserved', '0x' + 'FF * 24' if Reserved == 'FF' * 24 else Reserved])
 		
 		return pt
 		
@@ -2003,14 +2001,14 @@ class UTFL_Header(ctypes.LittleEndianStructure) : # Unlock Token Flags (DebugTok
 	]
 	
 	def hdr_print(self) :
-		Reserved = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Reserved = '%0.*X' % (0x1B * 2, int.from_bytes(self.Reserved, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Unlock Token Flags' + col_e
 		pt.add_row(['Tag', self.Tag.decode('utf-8')])
 		pt.add_row(['Delayed Authentication Mode', ['No','Yes'][self.DelayedAuthMode]])
-		pt.add_row(['Reserved', '0x0' if Reserved in ('00' * 27,'FF' * 27) else Reserved])
+		pt.add_row(['Reserved', '0x' + '00/FF * 27' if Reserved in ('00' * 27,'FF' * 27) else Reserved])
 		
 		return pt
 		
@@ -2055,7 +2053,7 @@ class CSE_Ext_00(ctypes.LittleEndianStructure) : # R1 - System Information (SYST
 	# Thus, the MFS Intel Configuration Hash must only be checked at non-Initialized MFS before any possible FWUpdate operations.
 	
 	def ext_print(self) :
-		IMGDefaultHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.IMGDefaultHash))
+		IMGDefaultHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.IMGDefaultHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2064,7 +2062,7 @@ class CSE_Ext_00(ctypes.LittleEndianStructure) : # R1 - System Information (SYST
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Minimum UMA Size', '0x%X' % self.MinUMASize])
 		pt.add_row(['Chipset Version', '0x%X' % self.ChipsetVersion])
-		pt.add_row(['Intel Config Hash', '%s' % IMGDefaultHash])
+		pt.add_row(['Intel Config Hash', IMGDefaultHash])
 		pt.add_row(['Pageable UMA Size', '0x%X' % self.PageableUMASize])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
@@ -2091,7 +2089,7 @@ class CSE_Ext_00_R2(ctypes.LittleEndianStructure) : # R2 - System Information (S
 	# Thus, the MFS Intel Configuration Hash must only be checked at non-Initialized MFS before any possible FWUpdate operations.
 	
 	def ext_print(self) :
-		IMGDefaultHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.IMGDefaultHash))
+		IMGDefaultHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.IMGDefaultHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2100,7 +2098,7 @@ class CSE_Ext_00_R2(ctypes.LittleEndianStructure) : # R2 - System Information (S
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Minimum UMA Size', '0x%X' % self.MinUMASize])
 		pt.add_row(['Chipset Version', '0x%X' % self.ChipsetVersion])
-		pt.add_row(['Intel Config Hash', '%s' % IMGDefaultHash])
+		pt.add_row(['Intel Config Hash', IMGDefaultHash])
 		pt.add_row(['Pageable UMA Size', '0x%X' % self.PageableUMASize])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
@@ -2374,8 +2372,8 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - Partition Information (M
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10 = self.get_flags()
 		
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
+		Reserved = '%0.*X' % (0x10 * 2, int.from_bytes(self.Reserved, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2384,7 +2382,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - Partition Information (M
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Partition Size', '0x%X' % self.PartitionSize])
-		pt.add_row(['Partition Hash', '%s' % Hash])
+		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
 		pt.add_row(['Partition Version', '%X.%X' % (self.PartitionVerMaj, self.PartitionVerMin)])
 		pt.add_row(['Data Format Version', '%d.%d' % (self.DataFormatMajor, self.DataFormatMinor)])
@@ -2399,7 +2397,7 @@ class CSE_Ext_03(ctypes.LittleEndianStructure) : # R1 - Partition Information (M
 		pt.add_row(['Partial Update Only', fvalue[f8]])
 		pt.add_row(['Not Measured', fvalue[f9]])
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
-		pt.add_row(['Reserved', '0xFF * 16' if Reserved == 'FF' * 16 else Reserved])
+		pt.add_row(['Reserved', '0x' + 'FF * 16' if Reserved == 'FF' * 16 else Reserved])
 		pt.add_row(['Unknown', '0x%X' % self.Unknown])
 		
 		return pt
@@ -2442,8 +2440,8 @@ class CSE_Ext_03_R2(ctypes.LittleEndianStructure) : # R2 - Partition Information
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10 = self.get_flags()
 		
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
+		Reserved = '%0.*X' % (0x10 * 2, int.from_bytes(self.Reserved, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2452,7 +2450,7 @@ class CSE_Ext_03_R2(ctypes.LittleEndianStructure) : # R2 - Partition Information
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
 		pt.add_row(['Partition Size', '0x%X' % self.PartitionSize])
-		pt.add_row(['Partition Hash', '%s' % Hash])
+		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
 		pt.add_row(['Partition Version', '%X.%X' % (self.PartitionVerMaj, self.PartitionVerMin)])
 		pt.add_row(['Data Format Version', '%d.%d' % (self.DataFormatMajor, self.DataFormatMinor)])
@@ -2467,7 +2465,7 @@ class CSE_Ext_03_R2(ctypes.LittleEndianStructure) : # R2 - Partition Information
 		pt.add_row(['Partial Update Only', fvalue[f8]])
 		pt.add_row(['Not Measured', fvalue[f9]])
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
-		pt.add_row(['Reserved', '0xFF * 16' if Reserved == 'FF' * 16 else Reserved])
+		pt.add_row(['Reserved', '0x' + 'FF * 16' if Reserved == 'FF' * 16 else Reserved])
 		pt.add_row(['Unknown', '0x%X' % self.Unknown])
 		
 		return pt
@@ -2513,7 +2511,7 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # R1 - Module Information (
 	]
 	
 	def ext_print(self) :
-		MetadataHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MetadataHash))
+		MetadataHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2579,7 +2577,8 @@ class CSE_Ext_05(ctypes.LittleEndianStructure) : # R1 - Process Attributes (MAN_
 		fvalue = ['No','Yes']
 		f1value = ['Reset System','Terminate Process']
 		f1,f2,f3,f4,f5,f6,f7,f8 = self.get_flags()
-		AllowedSysCalls = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.AllowedSysCalls))
+		
+		AllowedSysCalls = '%0.*X' % (0xC * 2, int.from_bytes(self.AllowedSysCalls, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2879,7 +2878,7 @@ class CSE_Ext_0A(ctypes.LittleEndianStructure) : # R1 - Module Attributes (MOD_A
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2916,7 +2915,7 @@ class CSE_Ext_0A_R2(ctypes.LittleEndianStructure) : # R2 - Module Attributes (MO
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -2996,7 +2995,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - Client System Informatio
 		sku_capabilities = self.get_skuc()
 		sku_capabilities_pt = self.skuc_pt(sku_capabilities)
 		
-		FWSKUCapsRes = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.FWSKUCapsRes))
+		FWSKUCapsRes = '%0.*X' % (0x1C * 2, int.from_bytes(self.FWSKUCapsRes, 'little'))
 		
 		if (self.variant,self.major) == ('CSME',11) and (self.minor > 0 or self.hotfix > 0 or (self.hotfix == 0 and self.build >= 1205 and self.build != 7101)) \
 		or (self.variant,self.major,self.minor,self.hotfix) == ('CSME',12,0,0) and self.build >= 7000 and self.year < 0x2018 and self.month < 0x8 :
@@ -3149,9 +3148,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # R1 - Key Manifest (KEY_MANIFE
 		# 0x24
 	]
 	
-	def ext_print(self) :
-		Reserved1 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved1))
-		
+	def ext_print(self) :		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 14, Key Manifest' + col_e
@@ -3162,7 +3159,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # R1 - Key Manifest (KEY_MANIFE
 		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
 		pt.add_row(['Key ID', '0x%0.2X' % self.KeyID])
 		pt.add_row(['Reserved 0', '0x%X' % self.Reserved0])
-		pt.add_row(['Reserved 1', '0x0' if Reserved1 == '00000000' * 4 else Reserved1])
+		pt.add_row(['Reserved 1', '0x%X' % int.from_bytes(self.Reserved1, 'little')])
 		
 		return pt
 
@@ -3182,14 +3179,13 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 		f1,f2 = self.get_flags()
 		hash_usages = self.get_usages()
 		
-		Reserved0 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved0))
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 14, Entry' + col_e
 		pt.add_row(['Hash Usages', ', '.join(map(str, hash_usages))])
-		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 4 else Reserved0])
+		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
 		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
 		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
@@ -3233,14 +3229,13 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 		f1,f2 = self.get_flags()
 		hash_usages = self.get_usages()
 		
-		Reserved0 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved0))
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 14, Entry' + col_e
 		pt.add_row(['Hash Usages', ', '.join(map(str, hash_usages))])
-		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 4 else Reserved0])
+		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
 		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
 		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
@@ -3296,8 +3291,6 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 	def ext_print(self) :
 		hash_usages = self.get_usages()
 		
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
-		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 15, Signed Package Information' + col_e
@@ -3307,7 +3300,7 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		pt.add_row(['Version Control Number', '%d' % self.VCN])
 		pt.add_row(['Hash Usages', ', '.join(map(str, hash_usages))])
 		pt.add_row(['ARB Security Version Number', '%d' % self.ARBSVN])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00' * 16 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 	
@@ -3348,8 +3341,6 @@ class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Inform
 		f1,f2,f3,f4,f5,f6 = self.get_flags()
 		hash_usages = self.get_usages()
 		
-		Reserved = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
-		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 15, Signed Package Information' + col_e
@@ -3365,7 +3356,7 @@ class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Inform
 		pt.add_row(['Firmware SKU Reserved', '0x%X' % f4])
 		pt.add_row(['NVM Compatibility', ext15_nvm_type[f5] if f5 in ext15_nvm_type else 'Unknown (%d)' % f5])
 		pt.add_row(['NVM Compatibility Reserved', '0x%X' % f6])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00' * 10 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 	
@@ -3442,7 +3433,7 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO
 	]
 	
 	def ext_print(self) :
-		MetadataHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MetadataHash))
+		MetadataHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3469,7 +3460,7 @@ class CSE_Ext_0F_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (SIGNED_PACKAGE_I
 	]
 	
 	def ext_print(self) :
-		MetadataHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MetadataHash))
+		MetadataHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3496,7 +3487,7 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 	]
 	
 	def ext_print(self) :
-		MetadataHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MetadataHash))
+		MetadataHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3521,15 +3512,13 @@ class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID (iUn
 	]
 	
 	def ext_print(self) :
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
-		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 16, Anti-Cloning SKU ID' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Revision', '%d' % self.Revision])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 		
@@ -3550,8 +3539,7 @@ class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID 
 	
 	def ext_print(self) :
 		Date = '%0.4X-%0.2X-%0.2X' % (self.Year, self.Month, self.Day)
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3562,7 +3550,7 @@ class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID 
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
 		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 		
@@ -3583,8 +3571,7 @@ class CSE_Ext_10_Mod_R2(ctypes.LittleEndianStructure) : # R2 - Anti-Cloning SKU 
 	
 	def ext_print(self) :
 		Date = '%0.4X-%0.2X-%0.2X' % (self.Year, self.Month, self.Day)
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3595,7 +3582,7 @@ class CSE_Ext_10_Mod_R2(ctypes.LittleEndianStructure) : # R2 - Anti-Cloning SKU 
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
 		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 
@@ -3614,9 +3601,7 @@ class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP, not in XML, 
 	]
 	
 	def ext_print(self) :
-		Reserved0 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved0))
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
-		Reserved1 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved1))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3624,11 +3609,11 @@ class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP, not in XML, 
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Unknown', '0x%X' % self.Unknown])
-		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 7 else Reserved0])
+		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Size Unknown', '0x%X' % self.SizeUnknown])
 		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
-		pt.add_row(['Reserved 1', '0x0' if Reserved1 == '00000000' * 4 else Reserved1])
+		pt.add_row(['Reserved 1', '0x%X' % int.from_bytes(self.Reserved1, 'little')])
 		
 		return pt
 		
@@ -3647,9 +3632,7 @@ class CSE_Ext_11_R2(ctypes.LittleEndianStructure) : # R2 - cAVS (ADSP, not in XM
 	]
 	
 	def ext_print(self) :
-		Reserved0 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved0))
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
-		Reserved1 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved1))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3657,11 +3640,11 @@ class CSE_Ext_11_R2(ctypes.LittleEndianStructure) : # R2 - cAVS (ADSP, not in XM
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Unknown', '0x%X' % self.Unknown])
-		pt.add_row(['Reserved 0', '0x0' if Reserved0 == '00000000' * 7 else Reserved0])
+		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Size Unknown', '0x%X' % self.SizeUnknown])
 		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
-		pt.add_row(['Reserved 1', '0x0' if Reserved1 == '00000000' * 4 else Reserved1])
+		pt.add_row(['Reserved 1', '0x%X' % int.from_bytes(self.Reserved1, 'little')])
 		
 		return pt
 		
@@ -3676,54 +3659,48 @@ class CSE_Ext_12(ctypes.LittleEndianStructure) : # R1 - Isolated Memory Ranges (
 	]
 	
 	def ext_print(self) :
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
-		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 18, Isolated Memory Ranges' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Module Count', '%d' % self.ModuleCount])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 
 class CSE_Ext_12_Mod(ctypes.LittleEndianStructure) : # R1 - (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
-		("Unknown00_04",	uint32_t),		# 0x00
-		("Unknown04_08",	uint32_t),		# 0x04
-		("Unknown08_0C",	uint32_t),		# 0x08
-		("Unknown0C_10",	uint32_t),		# 0x0C
-		("Unknown10_18",	uint32_t*2),	# 0x10 FFFFFFFFFFFFFFFF
-		("Unknown18_1C",	uint32_t),		# 0x18
-		("Unknown1C_20",	uint32_t),		# 0x1C
-		("Unknown20_28",	uint32_t*2),	# 0x20 FFFFFFFFFFFFFFFF
-		("Unknown28_2C",	uint32_t),		# 0x28
-		("Unknown2C_30",	uint32_t),		# 0x2C
-		("Unknown30_38",	uint32_t*2),	# 0x30 FFFFFFFFFFFFFFFF
+		('Unknown0',		uint32_t),		# 0x00
+		('Unknown1',		uint32_t),		# 0x04
+		('Unknown2',		uint32_t),		# 0x08
+		('Unknown3',		uint32_t),		# 0x0C
+		('Unknown4',		uint64_t),		# 0x10
+		('Unknown5',		uint32_t),		# 0x18
+		('Unknown6',		uint32_t),		# 0x1C
+		('Unknown7',		uint64_t),		# 0x20
+		('Unknown8',		uint32_t),		# 0x28
+		('Unknown9',		uint32_t),		# 0x2C
+		('Unknown10',		uint64_t),		# 0x30
 		# 0x38
 	]
 	
 	def ext_print(self) :
-		Unknown10_18 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Unknown10_18))
-		Unknown20_28 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Unknown20_28))
-		Unknown30_38 = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Unknown30_38))
-		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 18, Isolated Memory Range' + col_e
-		pt.add_row(['Unknown 00_04', '0x%X' % self.Unknown00_04])
-		pt.add_row(['Unknown 04_08', '0x%X' % self.Unknown04_08])
-		pt.add_row(['Unknown 08_0C', '0x%X' % self.Unknown08_0C])
-		pt.add_row(['Unknown 0C_10', '0x%X' % self.Unknown0C_10])
-		pt.add_row(['Unknown 10_18', '0xFF * 8' if Unknown10_18 == 'FFFFFFFF' * 2 else Unknown10_18])
-		pt.add_row(['Unknown 18_1C', '0x%X' % self.Unknown18_1C])
-		pt.add_row(['Unknown 1C_20', '0x%X' % self.Unknown1C_20])
-		pt.add_row(['Unknown 20_28', '0xFF * 8' if Unknown20_28 == 'FFFFFFFF' * 2 else Unknown20_28])
-		pt.add_row(['Unknown 28_2C', '0x%X' % self.Unknown28_2C])
-		pt.add_row(['Unknown 2C_30', '0x%X' % self.Unknown2C_30])
-		pt.add_row(['Unknown 30_38', '0xFF * 8' if Unknown30_38 == 'FFFFFFFF' * 2 else Unknown30_38])
+		pt.add_row(['Unknown 0', '0x%X' % self.Unknown0])
+		pt.add_row(['Unknown 1', '0x%X' % self.Unknown1])
+		pt.add_row(['Unknown 2', '0x%X' % self.Unknown2])
+		pt.add_row(['Unknown 3', '0x%X' % self.Unknown3])
+		pt.add_row(['Unknown 4', '0x%X' % self.Unknown4])
+		pt.add_row(['Unknown 5', '0x%X' % self.Unknown5])
+		pt.add_row(['Unknown 6', '0x%X' % self.Unknown6])
+		pt.add_row(['Unknown 7', '0x%X' % self.Unknown7])
+		pt.add_row(['Unknown 8', '0x%X' % self.Unknown8])
+		pt.add_row(['Unknown 9', '0x%X' % self.Unknown9])
+		pt.add_row(['Unknown 10', '0x%X' % self.Unknown10])
 		
 		return pt
 
@@ -3758,9 +3735,9 @@ class CSE_Ext_13(ctypes.LittleEndianStructure) : # R1 - Boot Policy (BOOT_POLICY
 	def ext_print(self) :
 		hash_alg = ['None','SHA-1','SHA-256']
 		
-		IBBLHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.IBBLHash)
-		IBBHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.IBBHash)
-		OBBHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.OBBHash)
+		IBBLHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.IBBLHash, 'big'))
+		IBBHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.IBBHash, 'big'))
+		OBBHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.OBBHash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3821,9 +3798,9 @@ class CSE_Ext_13_R2(ctypes.LittleEndianStructure) : # R2 - Boot Policy (BOOT_POL
 	def ext_print(self) :
 		hash_alg = ['None','SHA-1','SHA-256','SHA-384']
 		
-		IBBLHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.IBBLHash)
-		IBBHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.IBBHash)
-		OBBHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.OBBHash)
+		IBBLHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.IBBLHash, 'big'))
+		IBBHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.IBBHash, 'big'))
+		OBBHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.OBBHash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3879,9 +3856,8 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # R1 - DnX Manifest (DnxManifes
 		# 0xAC
 	]
 	
-	def ext_print(self) :
-		MachineID = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MachineID))
-		PublicKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.PublicKey))
+	def ext_print(self) :		
+		PublicKey = '%0.*X' % (0x100 * 2, int.from_bytes(self.PublicKey, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3894,9 +3870,9 @@ class CSE_Ext_14(ctypes.LittleEndianStructure) : # R1 - DnX Manifest (DnxManifes
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
 		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
 		pt.add_row(['Platform ID', '0x%0.4X' % self.PlatformID])
-		pt.add_row(['Machine ID', '0x0' if MachineID == '00000000' * 4 else MachineID])
+		pt.add_row(['Machine ID', '0x%X' % int.from_bytes(self.MachineID, 'little')])
 		pt.add_row(['Salt ID', '0x%0.8X' % self.SaltID])
-		pt.add_row(['Public Key', '%s [...]' % PublicKey[:7]])
+		pt.add_row(['Public Key', '%s [...]' % PublicKey[:8]])
 		pt.add_row(['Public Exponent', '0x%X' % self.PublicExponent])
 		pt.add_row(['IFWI Region Count', '%d' % self.IFWIRegionCount])
 		pt.add_row(['Flags', '0x%X' % self.Flags])
@@ -3950,8 +3926,7 @@ class CSE_Ext_14_R2(ctypes.LittleEndianStructure) : # R2 - DnX Manifest (DnxMani
 	def ext_print(self) :
 		hash_alg = ['None','SHA-1','SHA-256']
 		
-		MachineID = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MachineID))
-		PublicKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.PublicKey))
+		PublicKey = '%0.*X' % (0x100 * 2, int.from_bytes(self.PublicKey, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3964,9 +3939,9 @@ class CSE_Ext_14_R2(ctypes.LittleEndianStructure) : # R2 - DnX Manifest (DnxMani
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
 		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
 		pt.add_row(['Platform ID', '0x%0.4X' % self.PlatformID])
-		pt.add_row(['Machine ID', '0x0' if MachineID == '00000000' * 4 else MachineID])
+		pt.add_row(['Machine ID', '0x%X' % int.from_bytes(self.MachineID, 'little')])
 		pt.add_row(['Salt ID', '0x%0.8X' % self.SaltID])
-		pt.add_row(['Public Key', '%s [...]' % PublicKey[:7]])
+		pt.add_row(['Public Key', '%s [...]' % PublicKey[:8]])
 		pt.add_row(['Public Exponent', '0x%X' % self.PublicExponent])
 		pt.add_row(['IFWI Region Count', '%d' % self.IFWIRegionCount])
 		pt.add_row(['Flags', '0x%X' % self.Flags])
@@ -4032,8 +4007,7 @@ class CSE_Ext_14_R3(ctypes.LittleEndianStructure) : # R3 - DnX Manifest (DnxMani
 	def ext_print(self) :
 		hash_alg = ['None','SHA-1','SHA-256','SHA-384']
 		
-		MachineID = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.MachineID))
-		PublicKey = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.PublicKey))
+		PublicKey = '%0.*X' % (0x180 * 2, int.from_bytes(self.PublicKey, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4046,9 +4020,9 @@ class CSE_Ext_14_R3(ctypes.LittleEndianStructure) : # R3 - DnX Manifest (DnxMani
 		pt.add_row(['Reserved 1', '0x%X' % self.Reserved1])
 		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
 		pt.add_row(['Platform ID', '0x%0.4X' % self.PlatformID])
-		pt.add_row(['Machine ID', '0x0' if MachineID == '00000000' * 4 else MachineID])
+		pt.add_row(['Machine ID', '0x%X' % int.from_bytes(self.MachineID, 'little')])
 		pt.add_row(['Salt ID', '0x%0.8X' % self.SaltID])
-		pt.add_row(['Public Key', '%s [...]' % PublicKey[:7]])
+		pt.add_row(['Public Key', '%s [...]' % PublicKey[:8]])
 		pt.add_row(['Public Exponent', '0x%X' % self.PublicExponent])
 		pt.add_row(['IFWI Region Count', '%d' % self.IFWIRegionCount])
 		pt.add_row(['Flags', '0x%X' % self.Flags])
@@ -4084,7 +4058,7 @@ class CSE_Ext_14_HashArray(ctypes.LittleEndianStructure) : # R1 - DnX R2 Hashes 
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		HashArrHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HashArrHash))
+		HashArrHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.HashArrHash, 'little'))
 		
 		pt.title = col_y + 'Extension 20 R2, Hashes Array' + col_e
 		pt.add_row(['Hashes Array Size', '0x%X' % (self.HashArrSize * 4)])
@@ -4103,7 +4077,7 @@ class CSE_Ext_14_HashArray_R2(ctypes.LittleEndianStructure) : # R2 - DnX R2 Hash
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		HashArrHash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HashArrHash))
+		HashArrHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.HashArrHash, 'little'))
 		
 		pt.title = col_y + 'Extension 20 R2, Hashes Array' + col_e
 		pt.add_row(['Hashes Array Size', '0x%X' % (self.HashArrSize * 4)])
@@ -4159,8 +4133,6 @@ class CSE_Ext_15(ctypes.LittleEndianStructure) : # R1 - Unlock/Secure Token UTOK
 					}
 		f1,f2,f3,f4,f5,f6,f7 = self.get_flags()
 		
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
-		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 21, Unlock/Secure Token' + col_e
@@ -4179,7 +4151,7 @@ class CSE_Ext_15(ctypes.LittleEndianStructure) : # R1 - Unlock/Secure Token UTOK
 		pt.add_row(['Flags Reserved', '0x%X' % f7])
 		pt.add_row(['Expiration Seconds', '%d' % self.ExpirationSec])
 		pt.add_row(['Manufacturing Lot', '0x%X' % self.ManufLot])
-		pt.add_row(['Reserved', '0x0' if Reserved == '00000000' * 4 else Reserved])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 	
@@ -4216,13 +4188,11 @@ class CSE_Ext_15_PartID(ctypes.LittleEndianStructure) : # After CSE_Ext_15 (SECU
 		# 0x14
 	]
 	
-	def ext_print(self) :
-		PartID = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.PartID))
-		
+	def ext_print(self) :		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 21, Part ID' + col_e
-		pt.add_row(['Part ID', 'N/A' if PartID == '00000000' * 3 else PartID])
+		pt.add_row(['Part ID', '0x%X' % int.from_bytes(self.PartID, 'little')])
 		pt.add_row(['Nonce', '0x%X' % self.Nonce])
 		pt.add_row(['Time Base', '0x%X' % self.TimeBase])
 		
@@ -4324,9 +4294,7 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12 = self.get_flags()
 		
-		HashSize = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HashSize))
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4349,11 +4317,11 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		pt.add_row(['Not Measured', fvalue[f9]])
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
 		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
-		pt.add_row(['Hash Size', '0x%X' % int(HashSize, 16)])
+		pt.add_row(['Hash Size', '0x%X' % int.from_bytes(self.HashSize, 'little')])
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Ignore FWU Disable Policy', fvalue[f11]])
 		pt.add_row(['Flags Private Reserved', '0x%X' % f12])
-		pt.add_row(['Reserved', '0x%X' % int(Reserved, 16)])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 	
@@ -4396,9 +4364,7 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12 = self.get_flags()
 		
-		HashSize = ''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.HashSize))
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
-		Reserved = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Reserved))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4421,11 +4387,11 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		pt.add_row(['Not Measured', fvalue[f9]])
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
 		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
-		pt.add_row(['Hash Size', '0x%X' % int(HashSize, 16)])
+		pt.add_row(['Hash Size', '0x%X' % int.from_bytes(self.HashSize, 'little')])
 		pt.add_row(['Hash', Hash])
 		pt.add_row(['Ignore FWU Disable Policy', fvalue[f11]])
 		pt.add_row(['Flags Private Reserved', '0x%X' % f12])
-		pt.add_row(['Reserved', '0x%X' % int(Reserved, 16)])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 		
@@ -4499,7 +4465,7 @@ class CSE_Ext_17(ctypes.LittleEndianStructure) : # R1 - Flash Descriptor Hash (n
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt.title = col_y + 'Extension 23, Flash Descriptor Hash' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
@@ -4563,7 +4529,7 @@ class CSE_Ext_18_Mod(ctypes.LittleEndianStructure) : # R1 - USB Type C IO Manage
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4586,7 +4552,7 @@ class CSE_Ext_18_Mod_R2(ctypes.LittleEndianStructure) : # R2 - USB Type C IO Man
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4607,7 +4573,7 @@ class CSE_Ext_18_Mod_R3(ctypes.LittleEndianStructure) : # R3 - GSC IUP Manifest 
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4672,7 +4638,7 @@ class CSE_Ext_19_Mod(ctypes.LittleEndianStructure) : # R1 - USB Type C MG Hash (
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4695,7 +4661,7 @@ class CSE_Ext_19_Mod_R2(ctypes.LittleEndianStructure) : # R2 - USB Type C MG Has
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4754,7 +4720,7 @@ class CSE_Ext_1A_Mod(ctypes.LittleEndianStructure) : # R1 - USB Type C Thunderbo
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4777,7 +4743,7 @@ class CSE_Ext_1A_Mod_R2(ctypes.LittleEndianStructure) : # R2 - USB Type C Thunde
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4798,7 +4764,7 @@ class CSE_Ext_1A_Mod_R3(ctypes.LittleEndianStructure) : # R3 - GSC FWI Manifest 
 	]
 	
 	def ext_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in self.Hash)
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4818,7 +4784,7 @@ class CSE_Ext_1B(ctypes.LittleEndianStructure) : # R1 - GSC PCOD Initial Vector 
 	]
 	
 	def ext_print(self) :
-		Nonce = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Nonce))
+		Nonce = '%0.*X' % (0x10 * 2, int.from_bytes(self.Nonce, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4911,7 +4877,7 @@ class RBE_PM_Metadata(ctypes.LittleEndianStructure) : # R1 - RBEP > rbe or FTPR 
 	]
 	
 	def mod_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4944,7 +4910,7 @@ class RBE_PM_Metadata_R2(ctypes.LittleEndianStructure) : # R2 - RBEP > rbe or FT
 	]
 	
 	def mod_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4977,7 +4943,7 @@ class RBE_PM_Metadata_R3(ctypes.LittleEndianStructure) : # R3 - RBEP > rbe or FT
 	]
 	
 	def mod_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -5010,7 +4976,7 @@ class RBE_PM_Metadata_R4(ctypes.LittleEndianStructure) : # R4 - RBEP > rbe or FT
 	]
 	
 	def mod_print(self) :
-		Hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(self.Hash))
+		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -5815,7 +5781,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				special_mod_anl = False # Mark all Extension Modules which require special/unique processing
 				
 				if ext_tag == 0x0 :
-					intel_cfg_hash_ext = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.IMGDefaultHash))
+					intel_cfg_hash_len = len(ext_hdr.IMGDefaultHash) * 4
+					intel_cfg_hash_ext = '%0.*X' % (intel_cfg_hash_len * 2, int.from_bytes(ext_hdr.IMGDefaultHash, 'little'))
 					
 					# Validate CSME/CSSPS MFS Intel Configuration (Low Level File 6) Hash at Non-Initialized/Non-FWUpdated MFS
 					if intel_cfg_hash_mfs and mfs_found and mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and intel_cfg_hash_ext not in intel_cfg_hash_mfs :
@@ -5834,7 +5801,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				elif ext_tag == 0x3 :
 					ext_pname = ext_hdr.PartitionName.decode('utf-8') # Partition Name
 					ext_psize = ext_hdr.PartitionSize # Partition Size
-					ext_phash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Partition Hash
+					ext_phash_len = len(ext_hdr.Hash) * 4 # Partition Hash Length
+					ext_phash = '%0.*X' % (ext_phash_len * 2, int.from_bytes(ext_hdr.Hash, 'little')) # Partition Hash
 					vcn = ext_hdr.VCN # Version Control Number
 					in_id = ext_hdr.InstanceID # LOCL/WCOD identifier
 					if gmf_blob_info : gmf_blob_info[1] = in_id # Fill GMF Blobs Partition Instance ID (Not POR, just in case)
@@ -5856,7 +5824,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						met_name = mod_hdr.Name.decode('utf-8') + '.met'
 						# Some may include 03/0F/16, may have 03/0F/16 MetadataHash mismatch, may have Met name with ".met" included (GREAT WORK INTEL/OEMs...)
 						if met_name.endswith('.met.met') : met_name = met_name[:-4]
-						met_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(mod_hdr.MetadataHash)) # Metadata Hash
+						met_hash_len = len(mod_hdr.MetadataHash) * 4 # Metadata Hash Length
+						met_hash = '%0.*X' % (met_hash_len * 2, int.from_bytes(mod_hdr.MetadataHash, 'little')) # Metadata Hash
 						
 						cpd_ext_hash.append([cpd_name, met_name, met_hash])
 						
@@ -5869,7 +5838,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					mod_encr_type = ext_hdr.Encryption # Metadata's Module Encryption Type (0-1)
 					mod_comp_size = ext_hdr.SizeComp # Metadata's Module Compressed Size ($CPD Entry's Module Size is always Uncompressed)
 					mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (equal to $CPD Entry's Module Size)
-					mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Metadata's Module Hash
+					mod_hash_len = len(ext_hdr.Hash) * 4 # Metadata's Module Hash Length
+					mod_hash = '%0.*X' % (mod_hash_len * 2, int.from_bytes(ext_hdr.Hash, 'little')) # Metadata's Module Hash
 					
 					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], mod_comp_type, mod_encr_type, 0, mod_comp_size, mod_uncomp_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
 				
@@ -5881,7 +5851,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					fw_0C_sku0 = ext_hdr.get_skuc() # SKU Capabilities
 					
 					# Check if SKU Capabilities Reserved are actually reserved
-					skuc_res = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.FWSKUCapsRes))
+					skuc_res_len = len(ext_hdr.FWSKUCapsRes) * 4
+					skuc_res = '%0.*X' % (skuc_res_len * 2, int.from_bytes(ext_hdr.FWSKUCapsRes, 'little'))
 					if skuc_res != 'FF' * 28 :
 						cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with new SKU Capabilities at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
 					
@@ -5913,7 +5884,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						met_name = mod_hdr.Name.decode('utf-8') + '.met'
 						# Some may include 03/0F/16, may have 03/0F/16 MetadataHash mismatch, may have Met name with ".met" included (GREAT WORK INTEL/OEMs...)
 						if met_name.endswith('.met.met') : met_name = met_name[:-4]
-						met_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(mod_hdr.MetadataHash)) # Metadata Hash
+						met_hash_len = len(mod_hdr.MetadataHash) * 4 # Metadata Hash Length
+						met_hash = '%0.*X' % (met_hash_len * 2, int.from_bytes(mod_hdr.MetadataHash, 'little')) # Metadata Hash
 						
 						cpd_ext_hash.append([cpd_name, met_name, met_hash])
 						
@@ -5935,7 +5907,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						chunk_hdr = get_struct(buffer, cpd_mod_offset + chunk * mod_length, ext_struct_mod) # iUnit Chunk Metadata
 						iunit_chunk_size = chunk_hdr.Size # iUnit Module Chunk Size
 						if chunk == 0 : iunit_chunk_start = CSE_Ext_10_iUnit_offset + chunk_hdr.Unknown1 # First Chunk starts from a Base Address ?
-						iunit_chunk_hash_ext = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in chunk_hdr.Hash) # iUnit Module Chunk Intel Hash (BE)
+						iunit_chunk_hash_ext_len = len(chunk_hdr.Hash) * 4 # iUnit Module Chunk Intel Hash (BE) Length
+						iunit_chunk_hash_ext = '%0.*X' % (iunit_chunk_hash_ext_len * 2, int.from_bytes(chunk_hdr.Hash, 'big')) # iUnit Module Chunk Intel Hash (BE)
 						iunit_chunk_hash_mea = get_hash(buffer[iunit_chunk_start:iunit_chunk_start + iunit_chunk_size], len(iunit_chunk_hash_ext) // 2) # iUnit Module Chunk MEA Hash
 						iunit_chunk_valid.append(iunit_chunk_hash_mea == iunit_chunk_hash_ext) # Store iUnit Module Chunk(s) Hash validation results
 						iunit_chunk_start += iunit_chunk_size # Next iUnit Module Chunk starts at the previous plus its size
@@ -5950,14 +5923,16 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					mod_unk_size = ext_hdr.SizeUnknown # Metadata's Module Unknown Size (needs to be subtracted from SizeUncomp)
 					mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (SizeUnknown + SizeUncomp = $CPD Entry's Module Size)
 					mod_cpd_size = mod_uncomp_size - mod_unk_size # Should be the same as $CPD
-					mod_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.Hash) # Metadata's Module Hash (BE)
+					mod_hash_len = len(ext_hdr.Hash) * 4 # Metadata's Module Hash (BE) Length
+					mod_hash = '%0.*X' % (mod_hash_len * 2, int.from_bytes(ext_hdr.Hash, 'big')) # Metadata's Module Hash (BE)
 					
 					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, mod_cpd_size, mod_cpd_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
 				
 				elif ext_tag == 0x13 :
-					ibbl_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.IBBLHash) # IBBL Hash (BE)
-					ibb_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.IBBHash) # IBB Hash (BE)
-					obb_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in ext_hdr.OBBHash) # OBB Hash (BE)
+					hash_len = len(ext_hdr.IBBLHash) * 4 # IBBL/IBB/OBB Hash Length
+					ibbl_hash = '%0.*X' % (hash_len * 2, int.from_bytes(ext_hdr.IBBLHash, 'big')) # IBBL Hash (BE)
+					ibb_hash = '%0.*X' % (hash_len * 2, int.from_bytes(ext_hdr.IBBHash, 'big')) # IBB Hash (BE)
+					obb_hash = '%0.*X' % (hash_len * 2, int.from_bytes(ext_hdr.OBBHash, 'big')) # OBB Hash (BE)
 					if ibbl_hash not in ['00' * ext_hdr.IBBLHashSize, 'FF' * ext_hdr.IBBLHashSize] : cpd_mod_attr.append(['IBBL', 0, 0, 0, 0, 0, 0, ibbl_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
 					if ibb_hash not in ['00' * ext_hdr.IBBHashSize, 'FF' * ext_hdr.IBBHashSize] : cpd_mod_attr.append(['IBB', 0, 0, 0, 0, 0, 0, ibb_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
 					if obb_hash not in ['00' * ext_hdr.OBBHashSize, 'FF' * ext_hdr.OBBHashSize] : cpd_mod_attr.append(['OBB', 0, 0, 0, 0, 0, 0, obb_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
@@ -6026,7 +6001,9 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						hash_arr_part_struct = CSE_Ext_14_HashArray if mn2_rsa_key_len == 0x100 else CSE_Ext_14_HashArray_R2
 						hash_arr_part_hdr = get_struct(buffer, cpd_mod_offset + hash_arr_hdr_step, hash_arr_part_struct)
 						hash_arr_part_size = hash_arr_part_hdr.HashArrSize * 4 # Hashes Array file section size
-						hash_arr_part_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(hash_arr_part_hdr.HashArrHash)) # Hashes Array file section hash
+						hash_arr_part_hash_len = len(hash_arr_part_hdr.HashArrHash) * 4 # Hashes Array file section Hash Length
+						hash_arr_part_hash = '%0.*X' % (hash_arr_part_hash_len * 2, int.from_bytes(hash_arr_part_hdr.HashArrHash, 'little')) # Hashes Array file section Hash
+						
 						hash_arr_part_data_off = dnx_hash_arr_off + hash_arr_prev_part_size # Hashes Array file section data offset
 						hash_arr_part_data = buffer[hash_arr_part_data_off:hash_arr_part_data_off + hash_arr_part_size] # Hashes Array file section data
 						hash_arr_part_data_hash = get_hash(hash_arr_part_data, chunk_hash_size) # Hashes Array file section data hash
@@ -6118,8 +6095,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					if in_id == 0 : in_id = ext_hdr.InstanceID # LOCL/WCOD identifier (prefer CSE_Ext_03)
 					if gmf_blob_info : gmf_blob_info[1] = in_id # Fill GMF Blobs Partition Instance ID
 					ext_phalg = ext_hdr.HashAlgorithm # Partition Hash Algorithm
-					ext_phlen = int(''.join('%0.2X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.HashSize)), 16) # Partition Hash Size
-					ext_phash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash)) # Partition Hash
+					ext_phlen = int.from_bytes(ext_hdr.HashSize, 'little') # Partition Hash Length
+					ext_phash = '%0.*X' % (ext_phlen * 2, int.from_bytes(ext_hdr.Hash, 'little')) # Partition Hash
 					
 					# Verify Partition Hash ($CPD - $MN2 + Data)
 					if start_man_match != -1 and not single_man_name and not oem_config and not oem_signed and not fptemp_info[0] :
@@ -6135,7 +6112,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				elif ext_tag == 0x17 :
 					fd_ranges = [(ext_hdr.Range1Start,ext_hdr.Range1End),(ext_hdr.Range2Start,ext_hdr.Range2End),(ext_hdr.Range3Start,ext_hdr.Range3End),(ext_hdr.Range4Start,ext_hdr.Range4End),
 								 (ext_hdr.Range5Start,ext_hdr.Range5End),(ext_hdr.Range6Start,ext_hdr.Range6End),(ext_hdr.Range7Start,ext_hdr.Range7End),(ext_hdr.Range8Start,ext_hdr.Range8End)]
-					fd_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(ext_hdr.Hash))
+					fd_hash_len = len(ext_hdr.Hash) * 4
+					fd_hash = '%0.*X' % (fd_hash_len * 2, int.from_bytes(ext_hdr.Hash, 'little'))
 					
 					fd_info = [fd_hash,fd_ranges] # Store Flash Descriptor Verification Hash and Exclusion Ranges
 
@@ -6157,7 +6135,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
 						
 						tcss_type = mod_hdr.HashType # Numeric value which corresponds to specific TCSS module filename
-						tcss_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in mod_hdr.Hash) # Hash (BE)
+						tcss_hash_len = len(mod_hdr.Hash) * 4 # Hash (BE) Length
+						tcss_hash = '%0.*X' % (tcss_hash_len * 2, int.from_bytes(mod_hdr.Hash, 'big')) # Hash (BE)
 						
 						if tcss_type in tcss_types :
 							tcss_name = tcss_types[tcss_type] # Get TCSS Module Name based on its Type and $CPD Name
@@ -6187,7 +6166,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
 						
 						fwi_iup_name = mod_hdr.Name.decode('utf-8')
-						fwi_iup_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'big') for val in mod_hdr.Hash)
+						fwi_iup_hash_len = len(mod_hdr.Hash) * 4
+						fwi_iup_hash = '%0.*X' % (fwi_iup_hash_len * 2, int.from_bytes(mod_hdr.Hash, 'big'))
 						
 						fwi_iup_hashes.append([fwi_iup_name,fwi_iup_hash])
 						
@@ -7676,7 +7656,7 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 		# Initialize Unknown Integrity Salt
 		if not integrity and not unk_salt : unk_salt = ''
 		elif home_rec_size == 0x18 : unk_salt = '0x%0.4X' % file_rec.UnknownSalt
-		elif home_rec_size == 0x1C : unk_salt = '0x' + ''.join('%0.4X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(file_rec.UnknownSalt))
+		elif home_rec_size == 0x1C : unk_salt = '0x%0.*X' % (0x6 * 2, int.from_bytes(file_rec.UnknownSalt, 'little'))
 		else : unk_salt = '0x%X' % unk_salt
 		
 		# Initialize Integrity related variables
@@ -7699,8 +7679,8 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 					sec_unk0, sec_ar, sec_encr, sec_unk1, sec_ar_idx, sec_unk2, sec_svn, sec_unk3 = sec_hdr.get_flags()
 					
 					sec_unk_flags = '{0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3)
-					sec_hmac = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.HMACSHA256))
-					sec_encr_nonce = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.ARValues_Nonce)) if sec_encr else ''
+					sec_hmac = '%0.*X' % (0x20 * 2, int.from_bytes(sec_hdr.HMACSHA256, 'little'))
+					sec_encr_nonce = '%0.*X' % (0x10 * 2, int.from_bytes(sec_hdr.ARValues_Nonce, 'little')) if sec_encr else ''
 					sec_ar_random = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 0)[0] if sec_ar else ''
 					sec_ar_counter = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 4)[0] if sec_ar else ''
 					if not sec_encr : sec_svn = ''
@@ -7710,8 +7690,8 @@ def mfs_home_anl(mfs_files, file_buffer, file_records, root_folder, home_rec_siz
 					sec_unk0, sec_ar, sec_unk1, sec_encr, sec_unk2, sec_ar_idx, sec_unk3, sec_svn, sec_unk4 = sec_hdr.get_flags()
 					
 					sec_unk_flags = '{0:01b}b'.format(sec_unk0) + ' {0:01b}b'.format(sec_unk1) + ' {0:07b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3) + ' {0:02b}b'.format(sec_unk4)
-					sec_hmac = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.HMACMD5))
-					sec_unk = '0x' + ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.Unknown))
+					sec_hmac = '%0.*X' % (0x10 * 2, int.from_bytes(sec_hdr.HMACMD5, 'little'))
+					sec_unk = '0x%0.*X' % (0xC * 2, int.from_bytes(sec_hdr.Unknown, 'little'))
 					sec_ar_random = '0x%0.8X' % sec_hdr.ARRandom if sec_ar else ''
 					sec_ar_counter = '0x%0.8X' % sec_hdr.ARCounter if sec_ar else ''
 					if not sec_encr : sec_svn = ''
@@ -7883,8 +7863,8 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 							log_arpl = sec_ar # Always prefer Integrity Info > Anti-Replay value, if it exists
 							
 							sec_unk_flags = '{0:01b}b'.format(sec_unk0) + ' {0:01b}b'.format(sec_unk1) + ' {0:07b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3) + ' {0:02b}b'.format(sec_unk4)
-							sec_hmac = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.HMACMD5))
-							sec_unk = '0x' + ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(sec_hdr.Unknown))
+							sec_hmac = '%0.*X' % (0x10 * 2, int.from_bytes(sec_hdr.HMACMD5, 'little'))
+							sec_unk = '0x%0.*X' % (0xC * 2, int.from_bytes(sec_hdr.Unknown, 'little'))
 							sec_ar_random = '0x%0.8X' % sec_hdr.ARRandom if sec_ar else ''
 							sec_ar_counter = '0x%0.8X' % sec_hdr.ARCounter if sec_ar else ''
 							if not sec_encr or sec_svn == 0 : sec_svn = ''
@@ -8549,6 +8529,8 @@ def pmc_anl(mn2_info, cpd_mod_info) :
 	
 	elif pmc_variant == 'PMCLBG' :
 		pmc_platform = 'LBG'
+
+		warn_stor.append([col_m + 'Warning: PMC LBG (Whitley) is WIP!' + col_e, False])
 	
 	elif pmc_variant == 'PMCADP' :
 		pmc_platform = 'ADP'
@@ -8802,9 +8784,12 @@ def pchc_anl(mn2_info, cpd_mod_info) :
 		   mn2_info[8], mn2_info[9], pchc_meu_ver
 		   
 # Verify CSE FTPR/OPR & stitched PCHC compatibility
-def pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_gen_list, pchc_platform) :
-	if pchc_mn2_signed != release or (pchc_fw_major,pchc_fw_minor) not in pchc_gen_list :
-		warn_stor.append([col_m + 'Warning: Incompatible PCHC %s firmware detected!' % pchc_platform + col_e, False])
+def pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_platform) :
+	if (variant,major,minor) in pchc_dict :
+		if pchc_mn2_signed != release or (pchc_fw_major,pchc_fw_minor) not in pchc_dict[(variant,major,minor)] :
+			warn_stor.append([col_m + 'Warning: Incompatible PCHC %s firmware detected!' % pchc_platform + col_e, False])
+	else :
+		err_stor.append([col_r + 'Error: Could not verify %s %d.%d & PCHC %s firmware compatibility!' % (variant, major, minor, pchc_platform) + col_e, True])
 		
 # Analyze CSE PHY firmware
 def phy_anl(mn2_info, cpd_mod_info) :
@@ -9191,7 +9176,8 @@ def get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes) :
 	
 	for i in range(rbe_pm_met_count) :
 		rbe_pm_met = get_struct(rbe_pm_met_data, i * rbe_pm_struct_size, rbe_pm_struct_name) # Parse "Metadata" entries
-		rbe_pm_met_hash = ''.join('%0.8X' % int.from_bytes(struct.pack('<I', val), 'little') for val in reversed(rbe_pm_met.Hash)) # Get "Metadata" entry Hash
+		rbe_pm_met_hash_len = len(rbe_pm_met.Hash) * 4 # Get "Metadata" entry Hash Length
+		rbe_pm_met_hash = '%0.*X' % (rbe_pm_met_hash_len * 2, int.from_bytes(rbe_pm_met.Hash, 'little')) # Get "Metadata" entry Hash
 		rbe_pm_met_hashes.append(rbe_pm_met_hash) # Store each "Metadata" entry Hash for Modules w/o Metadata Hash validation
 	
 	return rbe_pm_met_hashes
@@ -10263,6 +10249,7 @@ pmc_dict = {
 			('CSME',13,0) : [130,400],
 			('CSME',13,30) : [133],
 			('CSME',14,0) : [140],
+			('CSME',14,1) : [140],
 			('CSME',14,5) : [140],
 			('CSME',15,0) : [150],
 			('CSME',16,0) : [160],
@@ -10274,6 +10261,17 @@ pmc_dict = {
 			('CSSPS',5,0) : [300],
 			('CSSPS',5,1) : [300],
 			('GSC',100,0) : [0,10],
+			}
+			
+# CSE & PCHC Compatibility
+pchc_dict = {
+			('CSME',13,0) : [(13,0)],
+			('CSME',13,30) : [(13,30)],
+			('CSME',14,0) : [(14,0)],
+			('CSME',14,1) : [(14,0)],
+			('CSME',14,5) : [(14,5)],
+			('CSME',15,0) : [(15,0)],
+			('CSME',16,0) : [(16,0)],
 			}
 			
 # CSE & PHY Compatibility
@@ -10308,7 +10306,7 @@ cse_known_bad_hashes = [
 ]
 
 # Get MEA Parameters from input
-param = MEA_Param(mea_os, sys.argv)
+param = MEA_Param(sys_os, sys.argv)
 
 # Get script location
 mea_dir = get_script_dir()
@@ -10332,8 +10330,8 @@ if not param.extr_mea and not param.print_msg :
 	
 	# Set console/shell window title
 	mea_title = '%s %s' % (title, mea_db_rev)
-	if mea_os == 'win32' : ctypes.windll.kernel32.SetConsoleTitleW(mea_title)
-	elif mea_os.startswith('linux') or mea_os == 'darwin' : sys.stdout.write('\x1b]2;' + mea_title + '\x07')
+	if sys_os == 'win32' : ctypes.windll.kernel32.SetConsoleTitleW(mea_title)
+	elif sys_os.startswith('linux') or sys_os == 'darwin' : sys.stdout.write('\x1b]2;' + mea_title + '\x07')
 
 if not param.skip_intro :
 	mea_hdr(mea_db_rev_p)
@@ -10356,7 +10354,7 @@ if not param.skip_intro :
 	input_var = re.split(''' (?=(?:[^'"]|'[^']*'|"[^"]*")*$)''', input_var.strip())
 	
 	# Get MEA Parameters based on given Options
-	param = MEA_Param(mea_os, input_var)
+	param = MEA_Param(sys_os, input_var)
 	
 	# Non valid parameters are treated as files
 	if input_var[0] != "" :
@@ -11033,7 +11031,9 @@ for file_in in source :
 			for all_part in cse_lt_part_all :
 				# Partition A starts before B but ends after B start
 				# Ignore partitions which have empty offset or size
-				if not part[4] and not all_part[4] and not any(s in [0,0xFFFFFFFF] for s in (part[1],part[2],all_part[1],all_part[2])) and (part[1] < all_part[1] < part[2]) :
+				# Ignore FPTB Boot 4 within $FPT Data (CSSPS 4.4)
+				if not part[4] and not all_part[4] and not any(s in [0,0xFFFFFFFF] for s in (part[1],part[2],all_part[1],all_part[2])) and (part[1] < all_part[1] < part[2]) \
+				and not ((part[0],all_part[0],reading[all_part[1]:all_part[1] + 0x4]) == ('Data','Boot 4',b'$FPT') and all_part[1] >= part[1] and all_part[3] <= part[3]) :
 					err_stor.append([col_r + 'Error: CSE LT partition %s (0x%0.6X - 0x%0.6X) overlaps with %s (0x%0.6X - 0x%0.6X)' % \
 									(part[0],part[1],part[2],all_part[0],all_part[1],all_part[2]) + col_e, True])
 					
@@ -11655,7 +11655,7 @@ for file_in in source :
 				eng_fw_end = mod_end + eng_fw_align - fpt_start
 				
 				if reading[p_end_last:p_end_last + eng_fw_align] not in [b'', b'\xFF' * eng_fw_align] :
-					warn_stor.append([col_m + 'Warning: File has data in firmware 4K alignment padding!' + col_e, True])
+					warn_stor.append([col_m + 'Warning: File has data in firmware 4K alignment padding!' + col_e, True if param.check else False])
 			else :
 				eng_fw_end = mod_end
 		
@@ -11795,7 +11795,7 @@ for file_in in source :
 			eng_fw_end = p_end_last + eng_fw_align - fpt_start
 			
 			if reading[p_end_last:p_end_last + eng_fw_align] not in [b'', b'\xFF' * eng_fw_align] :
-				warn_stor.append([col_m + 'Warning: File has data in firmware 4K alignment padding!' + col_e, True])
+				warn_stor.append([col_m + 'Warning: File has data in firmware 4K alignment padding!' + col_e, True if param.check else False])
 		else :
 			eng_fw_end = p_end_last - fpt_start
 		
@@ -12414,7 +12414,7 @@ for file_in in source :
 			pchc_pvbit,pchc_meu_ver = pchc_anl(pchc_mn2_ver, pchc_mod_attr)
 			
 			# Verify PCHC compatibility
-			pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, [(major,minor)], pchc_platform)
+			pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_platform)
 			
 		# Detected stitched PHY firmware
 		if phy_found :
@@ -12439,13 +12439,13 @@ for file_in in source :
 						huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error')
 						ker_decomp, huff_error = cse_huffman_decompress(reading[mod[3]:mod[3] + mod[4]], mod[4], mod[5], huff_shape, huff_sym, huff_unk, 'none')
 						
-						# 0F22D88D65F85B5E5DC355B8 (56AA|36AA for H, 60A0|004D for LP)
+						# 0F22D88D65F85B5E5DC355B8 (56AA|36AA for H, 60A0|004D|9C64 for LP)
 						sku_pat = re.compile(br'\x0F\x22\xD8\x8D\x65\xF8\x5B\x5E\x5D\xC3\x55\xB8').search(ker_decomp)
 						
 						if sku_pat :
 							sku_bytes = int.from_bytes(ker_decomp[sku_pat.end():sku_pat.end() + 0x1] + ker_decomp[sku_pat.end() + 0x17:sku_pat.end() + 0x18], 'big')
 							if sku_bytes in (0x56AA,0x36AA) : pos_sku_ker = 'H' # 0x36AA for 11.0.0.1126
-							elif sku_bytes in (0x60A0,0x004D) : pos_sku_ker = 'LP' # 0x004D for 11.0.0.1100
+							elif sku_bytes in (0x60A0,0x004D,0x9C64) : pos_sku_ker = 'LP' # 0x004D,0x9C64 for 11.0.0.1100,11.0.0.1109
 						
 						break # Skip rest of FTPR modules
 			
@@ -12518,6 +12518,8 @@ for file_in in source :
 			elif minor == 50 and not pch_init_final : platform = 'JSP' # Jasper Point
 			
 		elif major == 14 :
+			
+			if minor == 0 : upd_found = True # Superseded minor version
 			
 			if minor == 0 and not pch_init_final : platform = 'CMP-H/LP' # Comet Point H/LP
 			elif minor == 5 and not pch_init_final : platform = 'CMP-V' # Comet Point V
@@ -12743,7 +12745,7 @@ for file_in in source :
 			pchc_pvbit,pchc_meu_ver = pchc_anl(pchc_mn2_ver, pchc_mod_attr)
 			
 			# Verify PCHC compatibility
-			pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, [(major,minor)], pchc_platform)
+			pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_platform)
 			
 		# Detected stitched PHY firmware
 		if phy_found :
@@ -12759,6 +12761,7 @@ for file_in in source :
 			# FTPR Manifests with different RSA blocks, CSE LT Boot Partition 4 is actually CSE LT Data Backup (new IFWI revision I hope).
 			# The support for both 14nm+++++++++++++++++++++++++++++++++++++ and 10nm+ is probably the reason but the design is just silly.
 			# My sample is old so hopefully Intel has revised that terrible CSSPS before official Whitley release. New MFSB is cool though.
+			if minor == 4 : warn_stor.append([col_m + 'Warning: CSE SPS 4.4 (Whitley) is WIP!' + col_e, False])
 			
 			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
 		
@@ -12932,24 +12935,25 @@ for file_in in source :
 			cse_unpack('OPROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
 		
 		continue # Next input file
-		
+		'''
 		# Detect CSE Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
 		= ext_anl(reading, '$MN2', start_man_match, file_end, ['OPROM',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
 		
-		#phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,upd_found,phy_platform,phy_date,phy_svn, phy_pvbit,phy_meu_ver \
-		#= phy_anl(cpd_mn2_info, cpd_mod_attr)
+		phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,upd_found,phy_platform,phy_date,phy_svn, phy_pvbit,phy_meu_ver \
+		= phy_anl(cpd_mn2_info, cpd_mod_attr)
 		
-		#release = phy_mn2_signed
-		#rel_db = phy_mn2_signed_db
-		#mn2_meu_ver = phy_meu_ver
-		#date = phy_date
-		#svn = phy_svn
-		#sku = phy_sku
-		#sku_db = phy_sku
-		#pvbit = phy_pvbit
-		#platform = phy_platform
+		release = phy_mn2_signed
+		rel_db = phy_mn2_signed_db
+		mn2_meu_ver = phy_meu_ver
+		date = phy_date
+		svn = phy_svn
+		sku = phy_sku
+		sku_db = phy_sku
+		pvbit = phy_pvbit
+		platform = phy_platform
+		
 		fw_type = 'Independent'
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get OPROM firmware size
@@ -12963,6 +12967,7 @@ for file_in in source :
 				eng_size_text = [col_y + 'Note: File size exceeds OPROM %s firmware, unneeded padding!' % platform + col_e, False] # warn_stor
 			else :
 				eng_size_text = [col_m + 'Warning: File size exceeds OPROM %s firmware, data in padding!' % platform + col_e, True]
+		'''
 	
 	# Partial Firmware Update adjustments
 	if pr_man_8 or pr_man_9 :
@@ -13032,7 +13037,7 @@ for file_in in source :
 		name_db_p = '%s_%s%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db)
 	
 	if param.db_print_new :
-		with open(os.path.join(mea_dir, 'MEA_DB_NEW.txt'), 'a', encoding = 'utf-8') as db_file : db_file.write(name_db + '\n')
+		with open(os.path.join(mea_dir, 'MEA_PDB.txt'), 'a', encoding = 'utf-8') as db_file : db_file.write(name_db + '\n')
 		continue # Next input file
 	
 	# Search Database for firmware
@@ -13041,12 +13046,12 @@ for file_in in source :
 		for line in fw_db :
 			# Search the re-created file name without extension at the database
 			if name_db in line : fw_in_db_found = True # Known firmware, nothing new
-			if rsa_sig_hash in line and type_db == 'EXTR' and ('_RGN_' in line or '_EXTR-Y_' in line) :
+			if rsa_sig_hash in line and type_db == 'EXTR' and ('_RGN' in line or '_EXTR-Y' in line) :
 				rgn_over_extr_found = True # Same firmware found but of preferred type (RGN > EXTR, EXTR-Y > EXTR-N), nothing new
 				fw_in_db_found = True
 			# For ME 6.0 IGN, (CS)ME 7+, (CS)TXE
 			if rsa_sig_hash in line and type_db == 'UPD' and ((variant in ['ME','CSME'] and (major >= 7 or
-			(major == 6 and 'Ignition' in sku))) or variant in ['TXE','CSTXE']) and ('_RGN_' in line or '_EXTR_' in line) :
+			(major == 6 and 'Ignition' in sku))) or variant in ['TXE','CSTXE']) and ('_RGN' in line or '_EXTR' in line) :
 				rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
 			if rsa_sig_hash in line and (variant,type_db,sku_stp) == ('CSSPS','REC','Unknown') :
 				fw_in_db_found = True # REC w/o $FPT are not POR for CSSPS, notify only if REC w/ $FPT does not exist
