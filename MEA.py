@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2020 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.174.6'
+title = 'ME Analyzer v1.175.0'
 
 import sys
 
@@ -8806,16 +8806,36 @@ def phy_anl(mn2_info, cpd_mod_info) :
 	for mod in cpd_mod_info :
 		# Remember to also adjust get_variant for PHY Variants
 		
-		if mod[0] in ['dkltc_i','dklmp_i'] :
-			phy_variant = 'PHYS'
-			break # Found Dekel Type C or Multi PHY Module, skip the rest
+		if mod[0].startswith('dkl') and mn2_info[0] == 10 and mn2_info[10] == 13 : phy_variant = 'PHYSLKF'
+		elif mod[0] == 'pphy' and mn2_info[0] in (12,14,11) and mn2_info[10] == 15 : phy_variant = 'PHYPTGP'
+		elif mod[0] == 'pphy' and mn2_info[0] in (12,0) : phy_variant = 'PHYPCMP'
+			
+		if phy_variant != 'Unknown' : break # Found PHY, skip the rest
 	
-	if phy_variant == 'PHYS' :
+	if phy_variant == 'PHYPTGP' :
+		phy_platform = 'TGP'
+		phy_sku = 'P'
+		
+		# Check if PHYPTGP firmware is the latest using Date due to complex Version format
+		db_year,db_month,db_day,db_x = check_upd(('Latest_%s_%d' % (phy_variant, mn2_info[0])))
+		phy_year,phy_month,phy_day = list(map(int, mn2_info[7].split('-')))
+		if phy_year < db_year or (phy_year == db_year and (phy_month < db_month or (phy_month == db_month and phy_day < db_day))) : phy_upd_found = True
+		
+	elif phy_variant == 'PHYPCMP' :
+		phy_platform = 'CMP-H/LP'
+		phy_sku = 'P'
+		
+		# Check if PHYPCMP firmware is the latest using Date due to complex Version format
+		db_year,db_month,db_day,db_x = check_upd(('Latest_%s_%d' % (phy_variant, mn2_info[0])))
+		phy_year,phy_month,phy_day = list(map(int, mn2_info[7].split('-')))
+		if phy_year < db_year or (phy_year == db_year and (phy_month < db_month or (phy_month == db_month and phy_day < db_day))) : phy_upd_found = True
+	
+	elif phy_variant == 'PHYSLKF' :
 		phy_platform = 'LKF'
 		phy_sku = 'S'
 		
-		# Check if PHYS firmware is the latest using Date due to unknown Version format
-		db_year,db_month,db_day,db_x = check_upd(('Latest_%s' % phy_variant))
+		# Check if PHYSLKF firmware is the latest using Date due to complex Version format
+		db_year,db_month,db_day,db_x = check_upd(('Latest_%s_%d' % (phy_variant, mn2_info[0])))
 		phy_year,phy_month,phy_day = list(map(int, mn2_info[7].split('-')))
 		if phy_year < db_year or (phy_year == db_year and (phy_month < db_month or (phy_month == db_month and phy_day < db_day))) : phy_upd_found = True
 	
@@ -9530,7 +9550,7 @@ def fw_ver(major,minor,hotfix,build) :
 	elif variant.startswith('PCHC') :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, '{0:04d}'.format(build))
 	elif variant.startswith('PHY') :
-		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
+		version = '%s.%s.%s.%s' % (major, minor, hotfix, '{0:04d}'.format(build))
 	else :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
 	
@@ -9718,6 +9738,7 @@ def rsa_sig_val(man_hdr_struct, buffer, check_start) :
 # Fix early PRE firmware which are wrongly reported as PRD
 def release_fix(release, rel_db, rsa_key_hash) :
 	rsa_pre_keys = [
+	'543CA971F2E53A3E8AB3A3305487EA4A00426BF556BC617F995B09AAB3623769',
 	'F00916F0080505A5A377D5F013DAB6C82EB2952AC6AEADCCC104662CA206BA70',
 	'B48B05EAB48710FC0A0EC30AEBADE252D5CE4669E27244FEEB861C7E16688345',
 	'6F4BDE36CB1DD10A797CCE74BEA122F7609BA29630458E93586B2B447E58C38C',
@@ -9823,7 +9844,7 @@ def get_variant() :
 	elif variant == 'TBD4' and major in (300,3232) : variant = 'PMCCNP' # PRD
 	elif variant == 'TBD4' and major == 140 and is_meu and mn2_ftpr_hdr.MEU_Minor == 5 : variant = 'PMCCMPV' # PRD
 	elif variant == 'TBD4' and major == 140 : variant = 'PMCCMP' # PRD, After PMCCMPV
-	elif variant == 'TBD3' and reading[0xC:0x10] == b'SPHY' : variant = 'PHYS'
+	elif variant == 'TBD3' and reading[0xC:0x10] == b'SPHY' and major == 10 and is_meu and mn2_ftpr_hdr.MEU_Major == 13 : variant = 'PHYSLKF'
 	elif variant == 'TBD3' and major == 14 and minor == 5 and reading[0xC:0x10] == b'PCHC' : variant = 'PCHCCMPV'
 	elif variant == 'TBD3' and major == 14 and minor == 0 and reading[0xC:0x10] == b'PCHC' : variant = 'PCHCCMP'
 	elif variant == 'TBD3' and major == 13 and minor == 30 and reading[0xC:0x10] == b'PCHC' : variant = 'PCHCLKF'
@@ -9850,7 +9871,9 @@ def get_variant() :
 			for mod in cpd_mod_names :
 				if mod == 'fwupdate' : variant = 'CSME' # CSME
 				elif mod in ['bup_rcv', 'sku_mgr', 'manuf'] : variant = 'CSSPS' # REC, OPR, IGN
-				elif mod in ['dkltc_i','dklmp_i'] : variant = 'PHYS' # SPHY (LKF)
+				elif mod.startswith('dkl') and major == 10 and is_meu and mn2_ftpr_hdr.MEU_Major == 13 : variant = 'PHYSLKF' # SPHY (LKF)
+				elif mod == 'pphy' and major in (12,14,11) and is_meu and mn2_ftpr_hdr.MEU_Major == 15 : variant = 'PHYPTGP' # PPHY (TGP)
+				elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP-H/LP)
 				elif mod == 'IntelRec' and major == 16 : variant = 'PCHCADP' # ADP
 				elif mod == 'IntelRec' and major == 15 : variant = 'PCHCTGP' # TGP
 				elif mod == 'IntelRec' and (major,minor) == (14,5) : variant = 'PCHCCMPV' # CMP-V
@@ -10276,6 +10299,9 @@ pchc_dict = {
 			
 # CSE & PHY Compatibility
 phy_dict = {
+			('CSME',15,0) : ['P'],
+			('CSME',14,1) : ['P'],
+			('CSME',14,0) : ['P'],
 			('CSME',13,30) : ['S'],
 			}
 			
@@ -10295,6 +10321,7 @@ comp_dict = {
 	
 # CSE Known Bad Partition/Module Hashes
 cse_known_bad_hashes = [
+('1ECACBC6DA437574FAF920030B129DABFDF28ED7E06035859C23BF93C82EC659','50DEE8794273FF35CABC1C3DA66A0A92E1FE3F4E81959BBE4F1D0937B59ADC01'), # CSME 14.0.50.1394_CON_H_A_PRD > Extension 0x16
 ('B42458010144CB5708148C31590637372021FCBF21CE079679772FBD2990CF5F','CFB464D442FB477C1642B3C8F60809F764C727509A2112AB921430E2625ECB9B'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > mu_init
 ('89BFFD3CFAA25C0CA3AE4ABBDBFAA06F21566CEE653EF65401A80EAB36EB6F08','3A294E6196783ED22310AA3031706E7F6B774FCAFE479D5AFA1C6433E192652E'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > mu_d0d3
 ('B63D75602385A6CFE56EC8B79481E46074B1E39217F191B3C9AB961CE4A03139','3B3866517F1C3B1F07BA9692A8B1599F5DDAA24BFFB3F704C711F30D1E067288'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > umac_d0
@@ -10648,15 +10675,16 @@ for file_in in source :
 		pr_man_5 = reading[end_man_match + 0x2DC:end_man_match + 0x2E7] # EpsRecovery,EpsFirmware (SPS 1)
 		pr_man_6 = reading[end_man_match + 0x270:end_man_match + 0x277] # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
 		pr_man_7 = reading[end_man_match + 0x33C:end_man_match + 0x340] # $MMX (ME 6 BYP Part 2)
-		pr_man_8 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL).search(reading_16) # $CPD LOCL detection
-		pr_man_9 = re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F').search(reading[0x290:0x299]) # $MMEWCOD_ detection
-		pr_man_10 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL).search(reading_16) # $CPD PMCP detection
-		pr_man_11 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL).search(reading_16) # $CPD PCOD detection
-		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading_16) # $CPD PCHC detection
-		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD SPHY detection
-		pr_man_14 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
-		pr_man_15 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
-		pr_man_16 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
+		pr_man_8 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL).search(reading_16) # $CPD LOCL
+		pr_man_9 = re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F').search(reading[0x290:0x299]) # $MMEWCOD_
+		pr_man_10 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL).search(reading_16) # $CPD PMCP
+		pr_man_11 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL).search(reading_16) # $CPD PCOD
+		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading_16) # $CPD PCHC
+		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD SPHY
+		pr_man_14 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD PPHY
+		pr_man_15 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
+		pr_man_16 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
+		pr_man_17 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
 		
 		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
@@ -10668,10 +10696,10 @@ for file_in in source :
 		elif pr_man_4 == b'BRINGUP' : break
 		elif pr_man_5 in (b'EpsRecovery', b'EpsFirmware') : break
 		elif pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' : break
-		elif pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 : break
-		elif pr_man_14 == b'bup_rcv' : break
-		elif pr_man_15 == b'FTPR' : break
-		elif pr_man_16 == b'OROM' : break
+		elif pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 : break
+		elif pr_man_15 == b'bup_rcv' : break
+		elif pr_man_16 == b'FTPR' : break
+		elif pr_man_17 == b'OROM' : break
 		
 	else :
 		# Recovery Manifest not found (for > finish)
@@ -11183,7 +11211,7 @@ for file_in in source :
 			# Detect if firmware has Power Management Controller (PMCP/PCOD) partition
 			if p_name in ('PMCP','PCOD') and not p_empty :
 				pmcp_found = True
-				pmcp_fwu_found = True # CSME 12+ FWUpdate tool requires PMC
+				pmcp_fwu_found = True
 				pmcp_size = p_size
 				
 				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_ext15_info,x15,x16,x17,x18 = \
@@ -11192,16 +11220,16 @@ for file_in in source :
 			# Detect if firmware has Platform Controller Hub Configuration (PCHC) partition
 			if p_name == 'PCHC' and not p_empty :
 				pchc_found = True
-				pchc_fwu_found = True # CSME 13+ FWUpdate tool requires PCHC
+				pchc_fwu_found = True
 				pchc_size = p_size
 				
 				x0,pchc_mod_attr,x2,pchc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pchc_mn2_ver,x13,pchc_ext15_info,x15,x16,x17,x18 = \
 				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if firmware has USB Type C Physical (PHY) partition
-			if p_name == 'SPHY' and not p_empty :
+			if p_name in ('PPHY','SPHY') and not p_empty :
 				phy_found = True
-				phy_fwu_found = True # CSME 13.30 FWUpdate tool requires SPHY
+				phy_fwu_found = True
 				phy_size = p_size
 				
 				x0,phy_mod_attr,x2,phy_vcn,x4,x5,x6,x7,x8,x9,x10,x11,phy_mn2_ver,x13,phy_ext15_info,x15,x16,x17,x18 = \
@@ -11365,7 +11393,7 @@ for file_in in source :
 			# Detect if IFWI Primary includes PMC firmware (PMCP/PCOD) partition
 			if p_name in ('PMCP','PCOD') and not p_empty :
 				pmcp_found = True
-				pmcp_fwu_found = False # CSME 12+ FWUpdate tool requires PMC
+				pmcp_fwu_found = False
 				pmcp_size = p_size
 				
 				x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_ext15_info,x15,x16,x17,x18 = \
@@ -11374,16 +11402,16 @@ for file_in in source :
 			# Detect if firmware has Platform Controller Hub Configuration (PCHC) partition
 			if p_name == 'PCHC' and not p_empty :
 				pchc_found = True
-				pchc_fwu_found = True # CSME 13+ FWUpdate tool requires PCHC
+				pchc_fwu_found = True
 				pchc_size = p_size
 				
 				x0,pchc_mod_attr,x2,pchc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pchc_mn2_ver,x13,pchc_ext15_info,x15,x16,x17,x18 = \
 				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if firmware has USB Type C Physical (PHY) partition
-			if p_name == 'SPHY' and not p_empty :
+			if p_name in ('PPHY','SPHY') and not p_empty :
 				phy_found = True
-				phy_fwu_found = True # CSME 13.30 FWUpdate tool requires SPHY
+				phy_fwu_found = True
 				phy_size = p_size
 				
 				x0,phy_mod_attr,x2,phy_vcn,x4,x5,x6,x7,x8,x9,x10,x11,phy_mn2_ver,x13,phy_ext15_info,x15,x16,x17,x18 = \
@@ -11462,7 +11490,7 @@ for file_in in source :
 					# Detect if IFWI Secondary includes PMC firmware (PMCP/PCOD) partition
 					if s_p_name in ('PMCP','PCOD') and not s_p_empty :
 						pmcp_found = True
-						pmcp_fwu_found = False # CSME 12+ FWUpdate tool requires PMC
+						pmcp_fwu_found = False
 						pmcp_size = s_p_size
 						
 						x0,pmc_mod_attr,x2,pmc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pmc_mn2_ver,x13,pmc_ext15_info,x15,x16,x17,x18 = \
@@ -11471,16 +11499,16 @@ for file_in in source :
 					# Detect if IFWI Secondary includes PCHC firmware (PCHC) partition
 					if s_p_name == 'PCHC' and not s_p_empty :
 						pchc_found = True
-						pchc_fwu_found = False # CSME 13+ FWUpdate tool requires PCHC
+						pchc_fwu_found = False
 						pchc_size = s_p_size
 						
 						x0,pchc_mod_attr,x2,pchc_vcn,x4,x5,x6,x7,x8,x9,x10,x11,pchc_mn2_ver,x13,pchc_ext15_info,x15,x16,x17,x18 = \
 						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
 						
 					# Detect if IFWI Secondary includes USB Type C Physical firmware (PHY) partition
-					if s_p_name == 'SPHY' and not s_p_empty :
+					if s_p_name in ('PPHY','SPHY') and not s_p_empty :
 						phy_found = True
-						phy_fwu_found = False # CSME 13.30 FWUpdate tool requires SPHY
+						phy_fwu_found = False
 						phy_size = s_p_size
 						
 						x0,phy_mod_attr,x2,phy_vcn,x4,x5,x6,x7,x8,x9,x10,x11,phy_mn2_ver,x13,phy_ext15_info,x15,x16,x17,x18 = \
@@ -12547,8 +12575,8 @@ for file_in in source :
 		if major in [0,1] :
 			
 			if sku_size * 0.5 == 1.0 :
-				sku = '1MB'
-				sku_db = '1MB'
+				sku = '1MB N/W'
+				sku_db = '1MB_NW'
 				platform = 'CGM'
 			elif sku_size * 0.5 in (1.5,2.0) :
 				sku = '1.25MB' if minor == 0 else '1.375MB'
@@ -12567,14 +12595,13 @@ for file_in in source :
 			elif rsa_key_hash == '613421A156443F1C038DDE342FF6564513A1818E8CC23B0E1D7D7FB0612E04AC' :
 				sku += ' I/T'
 				sku_db += '_IT'
-			elif rsa_key_hash == '9167A40A5097C10FEB7D2195992BA3B8A84E631A10A9A696C3114EB8C03EDF40' :
-				sku += ' N/W'
-				sku_db += '_NW'
 				
 		elif major == 2 :
 			if sku_size * 0.5 == 1.5 :
 				sku = '1.375MB'
 				sku_db = '1.375MB'
+			else :
+				sku = col_r + 'Unknown' + col_e
 			
 			platform = 'BSW/CHT'
 			
@@ -12756,11 +12783,6 @@ for file_in in source :
 		
 		if major == 4 :
 			
-			# CSSPS 4.4 (Whitley) is a terrible Frankenstein firmware. Double $FPT within CSE LT padding, PMC for LBG with bad versioning,
-			# multiple FTPR Partitions with multiple Manifests (FTPR.man, FTPR2.man), FTPR loading rbe by crossing over to RBEP partition,
-			# FTPR Manifests with different RSA blocks, CSE LT Boot Partition 4 is actually CSE LT Data Backup (new IFWI revision I hope).
-			# The support for both 14nm+++++++++++++++++++++++++++++++++++++ and 10nm+ is probably the reason but the design is just silly.
-			# My sample is old so hopefully Intel has revised that terrible CSSPS before official Whitley release. New MFSB is cool though.
 			if minor == 4 : warn_stor.append([col_m + 'Warning: CSE SPS 4.4 (Whitley) is WIP!' + col_e, False])
 			
 			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
@@ -12934,7 +12956,6 @@ for file_in in source :
 		if param.me11_mod_extr :
 			cse_unpack('OPROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
 		
-		continue # Next input file
 		'''
 		# Detect CSE Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
@@ -12968,6 +12989,8 @@ for file_in in source :
 			else :
 				eng_size_text = [col_m + 'Warning: File size exceeds OPROM %s firmware, data in padding!' % platform + col_e, True]
 		'''
+		
+		continue # Next input file
 	
 	# Partial Firmware Update adjustments
 	if pr_man_8 or pr_man_9 :
@@ -13023,7 +13046,7 @@ for file_in in source :
 	elif variant.startswith('PCHC') : # PCHC ICP, LKF, CMP, TGP, ADP
 		name_db = '%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db)
-	elif variant.startswith('PHY') : # PHY S
+	elif variant.startswith('PHY') : # PHY S, P
 		name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], sku_db, fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s' % (phy_platform[:3], sku_db, fw_ver(major,minor,hotfix,build), rel_db)
 	elif fw_type == 'Partial Update' :

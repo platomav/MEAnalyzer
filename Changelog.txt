@@ -1,3 +1,17 @@
+v1.175.0
+
+Added CSE PHY P (CMP,TGP) IUP support
+Applied code fixes & improvements
+
+r222
+
+CSME 15.0.10.1447_CON_LP_B_PRD_EXTR
+CSME 15.0.10.1447_COR_LP_B_PRD_EXTR-Y
+CSME 14.0.50.1394_CON_H_A_PRD_EXTR
+GSC 100.0.5.1258_DG01_PRD_EXTR
+PMC CMP_140.2.01.1014_H_A_PRD
+PMC DG01_10.0.0.1025_PRD
+
 v1.174.6
 
 Improved CSE & PCHC compatibility check
