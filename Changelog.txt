@@ -1,3 +1,17 @@
+v1.176.0
+
+Added CSE IFWI 1.6, 1.7 & 2.0 ROMB detection
+Improved Engine FPT Checksum/CRC calculation
+Improved Engine Manifest Revision detection
+Applied various code fixes & improvements
+
+r223
+
+CSME 11.0.1.1001_COR_LP_C_NPDM_PRD_EXTR
+CSTXE 4.0.30.1386_B_PRD_RGN
+CSSPS 04.01.04.411_PU_SVR_PRD_OPR
+CSSPS 04.01.04.411_PU_SVR_BA_PRD_REC
+
 v1.175.0
 
 Added CSE PHY P (CMP,TGP) IUP support
