@@ -1,3 +1,17 @@
+v1.177.1
+
+Improved Partial Firmware Update handling
+Applied various static analysis code fixes
+
+r224
+
+CSME 15.0.10.1469_CON_LP_B_PRD_EXTR
+CSME 15.0.10.1469_COR_LP_B_PRD_EXTR-Y
+CSSPS 04.00.04.316_HA_SVR_PRD_REC
+CSSPS 04.00.04.316_HA_SVR_PRD_OPR
+SPS 03.00.03.100_GV_PRD_REC
+SPS 03.00.03.100_GV_PRD_OPR
+
 v1.176.0
 
 Added CSE IFWI 1.6, 1.7 & 2.0 ROMB detection
