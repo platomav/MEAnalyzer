@@ -1,3 +1,19 @@
+v1.177.3
+
+Fixed firmware 4K alignment padding check
+Applied various static analysis code fixes
+
+r225
+
+CSME 14.1.51.1528_CON_H_A_PRD_EXTR
+CSME 14.0.34.1139_COR_H_A_PRD_EXTR-N
+CSME 12.0.68.1606_CON_H_BA_PRD_RGN
+CSME 12.0.68.1606_COR_H_BA_PRD_RGN
+CSME 11.8.82.3838_COR_H_DA_PRD_RGN
+CSME 11.8.82.3838_CON_LP_C_NPDM_PRD_RGN
+CSME 11.8.81.3807_CON_LP_C_NPDM_PRD_RGN
+PHY CMP_P_12.14.210.2008_PRD
+
 v1.177.1
 
 Improved Partial Firmware Update handling
