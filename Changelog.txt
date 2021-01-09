@@ -1,3 +1,27 @@
+v1.180.0
+
+Added CSME 13.50 (JSP) & CSME 15.40 (EHL) support
+Added CSME 15 Initialized CSE File System support
+Added CSE EFS File System proper/fixed support
+Improved Flash Descriptor detection pattern
+Improved IFWI 1.6 CSE Layout Table detection
+Applied various static analysis code fixes
+
+r226
+
+CSME 15.40.0.2066_SVR_LP_A_SPI_PRD_RGN
+CSME 13.50.0.1189_ATM_N_A_PRD_EXTR
+CSME 12.0.68.1606_COR_LP_C_PRD_RGN
+CSME 11.8.82.3838_CON_H_DA_PRD_EXTR
+CSME 11.8.50.3420_CON_LP_C_NPDM_PRD_EXTR
+CSSPS 04.01.04.204_XX_SLM_B_PRD_REC
+CSSPS 04.01.04.204_XX_SLM_PRD_OPR
+CSSPS 04.00.04.316_HA_SVR_B_PRD_REC
+SPS 03.01.03.079_GR_PRD_REC
+SPS 03.01.03.079_GR_PRD_OPR
+PMC JSP_130.3.00.1025_N_A_PRD
+PCHC JSP_13.5.0.1009_PRD
+
 v1.177.3
 
 Fixed firmware 4K alignment padding check
