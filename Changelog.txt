@@ -1,3 +1,19 @@
+v1.186.0
+
+Improved CSE IUP (PMC, PCHC & PHY) detection
+Improved CSE Initialized File System analysis
+Applied various static analysis code fixes
+
+r228
+
+CSME 14.1.52.1560_CON_H_A_PRD_EXTR
+CSME 14.0.47.1516_CON_LP_BA_PRD_EXTR
+CSME 13.0.40.1738_CON_LP_D_PRD_EXTR
+ME 3.0.5.1125_AMT_PRD_EXTR
+PMC TGP_150.1.20.1030_LP_C_PRD
+PMC DG1_10.0.0.1026_PRD
+PHY CMP_P_12.14.211.2011_PRD
+
 v1.185.0
 
 Added CSE EFS File System proper/fixed support
