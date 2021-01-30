@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.186.0'
+title = 'ME Analyzer v1.186.2'
 
 import sys
 
@@ -8661,7 +8661,8 @@ def pmc_anl(mn2_info) :
 def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
 	if (variant,major,minor) in pmc_dict :
 		if (variant,major,minor,pmc_platform) == ('CSME',12,0,'CNP') and pmc_pch_gen != 300 : return # Ignore CSME 12.0 Alpha CNP PMC
-		if (variant,major,minor,pmc_platform,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'TGP','C','B') : sku_stp = 'Unknown' # Skip CSME 15.0 B w/ PMC C
+		if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'H','B','A') : sku_stp = 'Unknown' # Skip CSME 15.0 H A w/ PMC B
+		if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'LP','C','B') : sku_stp = 'Unknown' # Skip CSME 15.0 LP B w/ PMC C
 		
 		if pmc_mn2_signed != release or pmc_pch_gen not in pmc_dict[(variant,major,minor)] or pmc_pch_sku != sku_result \
 		or (sku_stp != 'Unknown' and pmc_pch_rev[0] not in sku_stp) :
@@ -9478,26 +9479,21 @@ def fuj_umem_ver(me_fd_start) :
 	
 	return version
 	
-# Check if Fixed Offset Variables (FOVD/NVKR) partition is dirty
-def fovd_clean(fovdtype) :
-	fovd_start = -1
-	fovd_empty = True
-	
+# Check if Fixed Offset Variables (FOVD/NVKR) Partition is dirty
+def fovd_clean(fovdtype) :	
 	for part in fpt_part_all :
 		if (fovdtype,part[0]) in [('new','FOVD'),('old','NVKR')] :
-			fovd_start = part[1]
-			fovd_empty = part[6]
-	
-	if (fovd_start,fovd_empty) != (-1,True) :
-		if fovdtype == 'new' : return False # Empty = Clean
-		
-		if fovdtype == 'old' :
-			if fovd_empty : return True
+			if part[6] : return True # Empty = Clean
 			
-			nvkr_size = int.from_bytes(reading[fovd_start + 0x19:fovd_start + 0x1C], 'little')
-			nvkr_data = reading[fovd_start + 0x1C:fovd_start + 0x1C + nvkr_size]
+			if fovdtype == 'new' : return False # Non-Empty = Dirty
 			
-			return bool(nvkr_data == b'\xFF' * nvkr_size)
+			if fovdtype == 'old' :
+				nvkr_size = int.from_bytes(reading[part[1] + 0x19:part[1] + 0x1C], 'little')
+				nvkr_data = reading[part[1] + 0x1C:part[1] + 0x1C + nvkr_size]
+				
+				return bool(nvkr_data == b'\xFF' * nvkr_size)
+			
+			break # FOVD/NVKR Partition found, skip the rest
 	
 	return True
 
