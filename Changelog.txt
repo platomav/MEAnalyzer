@@ -1,3 +1,7 @@
+r230
+
+CSME 14.0.47.1516_CON_H_A_PRD_EXTR
+
 v1.186.2
 
 Fixed (CS)ME EXTR Firmware Type detection
