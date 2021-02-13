@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.186.2'
+title = 'ME Analyzer v1.187.0'
 
 import sys
 
@@ -3019,7 +3019,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - Client System Informatio
 		for cap_idx in range(len(sku_capabilities)) :
 			skuc_print += ('%s, \n' if cap_idx > 0 and cap_idx % 10 == 0 else '%s, ') % sku_capabilities[cap_idx]
 		
-		return skuc_print.strip(', ') # Strip last comma
+		return skuc_print.strip(', ').strip(', \n') # Strip last comma
 	
 	def get_flags(self) :
 		flags = CSE_Ext_0C_GetFWSKUAttrib()
@@ -3456,7 +3456,7 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 	_fields_ = [
 		('Name',			char*12),		# 0x00
 		('Type',			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
-		('SVN',				uint8_t),		# 0x0D
+		('ModuleSVN',		uint8_t),		# 0x0D
 		('HashSize',		uint16_t),		# 0x0E
 		('MetadataSize',	uint32_t),		# 0x10
 		('MetadataHash',	uint32_t*12),	# 0x14 SHA-384
@@ -3471,7 +3471,7 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 		pt.title = col_y + 'Extension 15, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
 		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
-		pt.add_row(['Security Version Number', self.SVN])
+		pt.add_row(['Module SVN', self.ModuleSVN])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
 		pt.add_row(['Metadata Hash', MetadataHash])
@@ -3563,19 +3563,22 @@ class CSE_Ext_10_Mod_R2(ctypes.LittleEndianStructure) : # R2 - Anti-Cloning SKU 
 		
 		return pt
 
-class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP, not in XML, Reverse Engineered)
+class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP, sof_ri_info.py)
 	_pack_ = 1
 	_fields_ = [
-		("Tag",				uint32_t),		# 0x00
-		("Size",			uint32_t),		# 0x04
-		("Unknown",			uint32_t),		# 0x08 3
-		("Reserved0",		uint32_t*7),	# 0x0C
-		("Hash",			uint32_t*8),	# 0x28 SHA-256 Big Endian
-		("SizeUnknown",		uint32_t),		# 0x48 Maybe cache size?
-		("SizeUncomp",		uint32_t),		# 0x4C SizeUncomp - SizeUnknown = Actual ($CPD) Size
-		("Reserved1",		uint32_t*4),	# 0x50
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('IMRType',			uint32_t),		# 0x08
+		('Reserved',		uint32_t*6),	# 0x0C
+		('Version',			uint32_t),		# 0x24
+		('Hash',			uint32_t*8),	# 0x28 SHA-256 Big Endian
+		('OffsetBase',		uint32_t),		# 0x48
+		('OffsetLimit',		uint32_t),		# 0x4C OffsetLimit - OffsetBase = Actual ($CPD) Size
+		('Attributes',		uint32_t*4),	# 0x50
 		# 0x60
 	]
+	
+	# https://thesofproject.github.io/latest/developer_guides/debugability/ri-info/index.html
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
@@ -3585,28 +3588,32 @@ class CSE_Ext_11(ctypes.LittleEndianStructure) : # R1 - cAVS (ADSP, not in XML, 
 		pt.title = col_y + 'Extension 17, Clear Audio Voice Speech (aDSP)' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Unknown', '0x%X' % self.Unknown])
-		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
+		pt.add_row(['IMR Type', '0x%X' % self.IMRType])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		pt.add_row(['Version', '0x%X' % self.Version])
 		pt.add_row(['Hash', Hash])
-		pt.add_row(['Size Unknown', '0x%X' % self.SizeUnknown])
-		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
-		pt.add_row(['Reserved 1', '0x%X' % int.from_bytes(self.Reserved1, 'little')])
+		pt.add_row(['Offset Base', '0x%X' % self.OffsetBase])
+		pt.add_row(['Offset Limit', '0x%X' % self.OffsetLimit])
+		pt.add_row(['Attributes', '0x%X' % int.from_bytes(self.Attributes, 'little')])
 		
 		return pt
 		
-class CSE_Ext_11_R2(ctypes.LittleEndianStructure) : # R2 - cAVS (ADSP, not in XML, Reverse Engineered)
+class CSE_Ext_11_R2(ctypes.LittleEndianStructure) : # R2 - cAVS (ADSP, sof_ri_info.py)
 	_pack_ = 1
 	_fields_ = [
-		("Tag",				uint32_t),		# 0x00
-		("Size",			uint32_t),		# 0x04
-		("Unknown",			uint32_t),		# 0x08 3
-		("Reserved0",		uint32_t*7),	# 0x0C
-		("Hash",			uint32_t*12),	# 0x28 SHA-384 Big Endian
-		("SizeUnknown",		uint32_t),		# 0x58 Maybe cache size?
-		("SizeUncomp",		uint32_t),		# 0x5C SizeUncomp - SizeUnknown = Actual ($CPD) Size
-		("Reserved1",		uint32_t*4),	# 0x60
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('IMRType',			uint32_t),		# 0x08
+		('Reserved',		uint32_t*6),	# 0x0C
+		('Version',			uint32_t),		# 0x24
+		('Hash',			uint32_t*12),	# 0x28 SHA-384 Big Endian
+		('OffsetBase',		uint32_t),		# 0x58
+		('OffsetLimit',		uint32_t),		# 0x5C OffsetLimit - OffsetBase = Actual ($CPD) Size
+		('Attributes',		uint32_t*4),	# 0x60
 		# 0x70
 	]
+	
+	# https://thesofproject.github.io/latest/developer_guides/debugability/ri-info/index.html
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
@@ -3616,12 +3623,13 @@ class CSE_Ext_11_R2(ctypes.LittleEndianStructure) : # R2 - cAVS (ADSP, not in XM
 		pt.title = col_y + 'Extension 17, Clear Audio Voice Speech (aDSP)' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Unknown', '0x%X' % self.Unknown])
-		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
+		pt.add_row(['IMR Type', '0x%X' % self.IMRType])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		pt.add_row(['Version', '0x%X' % self.Version])
 		pt.add_row(['Hash', Hash])
-		pt.add_row(['Size Unknown', '0x%X' % self.SizeUnknown])
-		pt.add_row(['Size Uncompressed', '0x%X' % self.SizeUncomp])
-		pt.add_row(['Reserved 1', '0x%X' % int.from_bytes(self.Reserved1, 'little')])
+		pt.add_row(['Offset Base', '0x%X' % self.OffsetBase])
+		pt.add_row(['Offset Limit', '0x%X' % self.OffsetLimit])
+		pt.add_row(['Attributes', '0x%X' % int.from_bytes(self.Attributes, 'little')])
 		
 		return pt
 		
@@ -5894,13 +5902,11 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, CSE_Ext_10_iUnit_size, CSE_Ext_10_iUnit_size, 0, 0, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
 					
 				elif ext_tag == 0x11 :
-					mod_unk_size = ext_hdr.SizeUnknown # Metadata's Module Unknown Size (needs to be subtracted from SizeUncomp)
-					mod_uncomp_size = ext_hdr.SizeUncomp # Metadata's Module Uncompressed Size (SizeUnknown + SizeUncomp = $CPD Entry's Module Size)
-					mod_cpd_size = mod_uncomp_size - mod_unk_size # Should be the same as $CPD
+					mod_size = ext_hdr.OffsetLimit - ext_hdr.OffsetBase # cAVS Module Size = OffsetLimit - OffsetBase (should match $CPD Entry)
 					mod_hash_len = len(ext_hdr.Hash) * 4 # Metadata's Module Hash (BE) Length
 					mod_hash = '%0.*X' % (mod_hash_len * 2, int.from_bytes(ext_hdr.Hash, 'big')) # Metadata's Module Hash (BE)
 					
-					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, mod_cpd_size, mod_cpd_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
+					cpd_mod_attr.append([cpd_entry_name.decode('utf-8')[:-4], 0, 0, 0, mod_size, mod_size, 0, mod_hash, cpd_name, 0, mn2_sigs, cpd_offset, cpd_chk_info])
 				
 				elif ext_tag == 0x13 :
 					hash_len = len(ext_hdr.IBBLHash) * 4 # IBBL/IBB/OBB Hash Length
@@ -6309,7 +6315,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				# The check is skipped when IDLM partition (DLMP) is parsed because its $FPT size is wrong by Intel design.
 				if not msg_shown and ext_psize != -1 and part[0] == cpd_name and part[0] != 'DLMP' \
 				and part[1] == cpd_offset and part[3] == in_id and part[2] < (cpd_offset + ext_psize) :
-					cse_anl_err(col_r + 'Error: Detected CSE Extension 0x3/0x16 with smaller $FPT %s Partition Size!' % cpd_name + col_e, None)
+					cse_anl_err(col_r + 'Error: Size of %s Partition at $FPT is smaller than CSE Extension 0x3/0x16!' % cpd_name + col_e, None)
 					msg_shown = True # Partition related error, show only once
 			
 			# Detect BPDT Partition Size mismatch vs CSE_Ext_03/16
@@ -6320,7 +6326,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				# The check is skipped when IDLM partition (DLMP) is parsed because its BPDT size is wrong by Intel design.
 				if not msg_shown and ext_psize != -1 and part[0] == cpd_name and part[0] != 'DLMP' \
 				and part[1] == cpd_offset and part[6] == in_id and part[2] < (cpd_offset + ext_psize) :
-					cse_anl_err(col_r + 'Error: Detected CSE Extension 0x3/0x16 with smaller BPDT %s Partition Size!' % cpd_name + col_e, None)
+					cse_anl_err(col_r + 'Error: Size of %s Partition at BPDT is smaller than CSE Extension 0x3/0x16!' % cpd_name + col_e, None)
 					msg_shown = True # Partition related error, show only once
 					
 		# Key
@@ -9834,7 +9840,7 @@ ext_tag_rev_mod_csme12 = {0x1:'_R2', 0xD:'_R2'}
 ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2'}
 
 # CSME 15 Revised Extension Modules
-ext_tag_rev_mod_csme15 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R2', 0x10:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
+ext_tag_rev_mod_csme15 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R3', 0x10:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
 # GSC/OPROM 100 Revised Extensions
 ext_tag_rev_hdr_gsc100 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
@@ -10165,7 +10171,7 @@ pmc_dict = {
 			('CSME',12,0) : [300],
 			('CSME',13,0) : [130,400],
 			('CSME',13,30) : [133],
-			('CSME',13,50) : [130],
+			('CSME',13,50) : [135,130],
 			('CSME',14,0) : [140],
 			('CSME',14,1) : [140],
 			('CSME',14,5) : [140],

@@ -1,3 +1,18 @@
+v1.187.0
+
+Improved CSE Extension 17, thanks @skochinsky
+Improved CSME 13.50 & PMC 135 compatibility
+Applied small code fixes & improvements
+
+r231
+
+CSME 14.0.30.1112_CON_H_A_PRD_EXTR
+CSME 13.50.10.1252_ATM_N_A_PRD_EXTR
+CSME 11.8.83.3874_CON_LP_C_NPDM_PRD_RGN
+CSME 11.8.83.3874_COR_LP_C_NPDM_PRD_RGN
+PMC JSP_135.3.00.1028_N_A_PRD
+PCHC CMP_14.0.0.1001_PRD
+
 r230
 
 CSME 14.0.47.1516_CON_H_A_PRD_EXTR
