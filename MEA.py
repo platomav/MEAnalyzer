@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.187.0'
+title = 'ME Analyzer v1.189.0'
 
 import sys
 
@@ -1224,7 +1224,7 @@ class MFS_Volume_Header(ctypes.LittleEndianStructure) : # MFS Volume Header
 	_fields_ = [
 		('Signature',		uint32_t),		# 0x00
 		('FTBLDictionary',	uint8_t),		# 0x04 0A = CON, 0B = COR, 0C = SLM etc
-		('FTBLPlatform',	uint8_t),		# 0x05 01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc
+		('FTBLPlatform',	uint8_t),		# 0x05 01 = ICP, 02 = CMP, 03 = LKF, 04 = TGP, 05 = CMP-V etc
 		('FTBLReserved',	uint16_t),		# 0x06
 		('VolumeSize',		uint32_t),		# 0x08 System + Data
 		('FileRecordCount',	uint16_t),		# 0x0C Supported by FAT
@@ -1235,12 +1235,13 @@ class MFS_Volume_Header(ctypes.LittleEndianStructure) : # MFS Volume Header
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		is_ftbl = not (self.FTBLDictionary,self.FTBLPlatform,self.FTBLReserved) == (1,0,0)
+		plat_name = ftbl_efst_plat[self.FTBLPlatform] if self.FTBLPlatform in ftbl_efst_plat else 'Unknown'
 		
 		pt.title = col_y + 'MFS Volume Header' + col_e
 		pt.add_row(['Signature', '%0.8X' % self.Signature])
 		if is_ftbl :
 			pt.add_row(['FTBL Dictionary', '0x%0.2X' % self.FTBLDictionary])
-			pt.add_row(['FTBL Platform', '0x%0.2X' % self.FTBLPlatform])
+			pt.add_row(['FTBL Platform', '0x%0.2X (%s)' % (self.FTBLPlatform, plat_name)])
 			pt.add_row(['FTBL Reserved', '0x%X' % self.FTBLReserved])
 		else :
 			pt.add_row(['Revision', '%d' % self.FTBLDictionary])
@@ -5244,7 +5245,9 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							break
 							
 				if part_name in ['MFS','AFSP','MFSB'] :
-					mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl = mfs_anl(os.path.join(mod_f_path[:-4], ''),part_start,part_end,variant,vol_ftbl_id,vol_ftbl_pl) # Parse MFS
+					mfs_is_afs = part_name == 'AFSP' # Check if File System is MFS or AFS
+					mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl \
+					= mfs_anl(os.path.join(mod_f_path[:-4], ''),part_start,part_end,variant,vol_ftbl_id,vol_ftbl_pl,mfs_is_afs) # Parse MFS
 					for pt in mfs_info : mfs_txt(pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', False) # Print MFS Structure Info
 				
 				if part_name == 'FITC' : fitc_anl(mod_f_path, part_start, part_end, config_rec_size, vol_ftbl_id, vol_ftbl_pl)
@@ -5372,7 +5375,9 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 							break
 							
 				if part_name in ['MFS','AFSP','MFSB'] :
-					mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl = mfs_anl(os.path.join(mod_f_path[:-4], ''),part_start,part_end,variant,vol_ftbl_id,vol_ftbl_pl) # Parse MFS
+					mfs_is_afs = part_name == 'AFSP' # Check if File System is MFS or AFS
+					mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl \
+					= mfs_anl(os.path.join(mod_f_path[:-4], ''),part_start,part_end,variant,vol_ftbl_id,vol_ftbl_pl,mfs_is_afs) # Parse MFS
 					for pt in mfs_info : mfs_txt(pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', False) # Print MFS Structure Info
 					
 				if part_name == 'FITC' : fitc_anl(mod_f_path, part_start, part_end, config_rec_size, vol_ftbl_id, vol_ftbl_pl)
@@ -6912,16 +6917,19 @@ def cse_anl_err(ext_err_msg, checked_hashes) :
 		
 # Check if CSE File System FTBL/EFST Dictionary exists
 def check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) :
+	plat_name = ftbl_efst_plat[vol_ftbl_pl] if vol_ftbl_pl in ftbl_efst_plat else 'Unknown'
+	
 	if vol_ftbl_id == -1 :
 		msg_pad = '    ' if param.me11_mod_extr else '' # Message "Tab" spacing during unpacking
-		ftbl_id_msg = col_m + '%sWarning: Could not find any File System FTBL/EFST Dictionary, assuming 0A!' % msg_pad + col_e
+		ftbl_id_msg = col_m + '%sWarning: Could not find any File System Dictionary, assuming 0x0A!' % msg_pad + col_e
 		if param.me11_mod_extr : print('\n%s' % ftbl_id_msg)
 		else : warn_stor.append([ftbl_id_msg, False])
 		
 		vol_ftbl_id = 0xA # When MFS/AFS > Volume Header > vol_ftbl_id is missing, assume FTBL/EFST Dictionary of 0xA (CON)
 	elif '%0.2X' % vol_ftbl_id not in ftbl_dict['%0.2X' % vol_ftbl_pl] :
 		msg_pad = '    ' if param.me11_mod_extr else '' # Message "Tab" spacing during unpacking
-		ftbl_id_msg = col_m + '%sWarning: Could not find File System FTBL/EFST Dictionary %0.2X > %0.2X, assuming 0A!' % (msg_pad,vol_ftbl_pl,vol_ftbl_id) + col_e
+		ftbl_id_msg = col_m + '%sWarning: Could not find File System Dictionary 0x%0.2X (%s) > 0x%0.2X, assuming 0x0A!' % (
+					  msg_pad, vol_ftbl_pl, plat_name, vol_ftbl_id) + col_e
 		if param.me11_mod_extr : print('\n%s' % ftbl_id_msg)
 		else : warn_stor.append([ftbl_id_msg, False])
 		
@@ -6931,16 +6939,19 @@ def check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) :
 	
 # Check if CSE File System FTBL/EFST Platform exists
 def check_ftbl_pl(vol_ftbl_pl, ftbl_dict) :
+	plat_name = ftbl_efst_plat[vol_ftbl_pl] if vol_ftbl_pl in ftbl_efst_plat else 'Unknown'
+	
 	if vol_ftbl_pl == -1 :
 		msg_pad = '    ' if param.me11_mod_extr else '' # Message "Tab" spacing during unpacking
-		ftbl_pl_msg = col_m + '%sWarning: Could not find any File System FTBL/EFST Platform, assuming 01!' % msg_pad + col_e
+		ftbl_pl_msg = col_m + '%sWarning: Could not find any File System Platform, assuming 0x01 (ICP)!' % msg_pad + col_e
 		if param.me11_mod_extr : print('\n%s' % ftbl_pl_msg)
 		else : warn_stor.append([ftbl_pl_msg, False])
 		
 		vol_ftbl_pl = 0x1 # When MFS/AFS > Volume Header > vol_ftbl_pl is missing, assume FTBL/EFST Platform of 0x1 (ICP)
 	elif '%0.2X' % vol_ftbl_pl not in ftbl_dict :
 		msg_pad = '    ' if param.me11_mod_extr else '' # Message "Tab" spacing during unpacking
-		ftbl_pl_msg = col_m + '%sWarning: Could not find File System FTBL/EFST Platform %0.2X, assuming 01!' % (msg_pad,vol_ftbl_pl) + col_e
+		ftbl_pl_msg = col_m + '%sWarning: Could not find File System Platform 0x%0.2X (%s), assuming 0x01 (ICP)!' % (
+					  msg_pad, vol_ftbl_pl, plat_name) + col_e
 		if param.me11_mod_extr : print('\n%s' % ftbl_pl_msg)
 		else : warn_stor.append([ftbl_pl_msg, False])
 		
@@ -6982,7 +6993,7 @@ def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_ini
 	if mfs_found and not param.me11_mod_extr :
 		try :
 			# Get CSE File System Attributes
-			mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl = mfs_anl('NA',mfs_start,mfs_start + mfs_size,variant,vol_ftbl_id,vol_ftbl_pl)
+			mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl = mfs_anl('NA',mfs_start,mfs_start + mfs_size,variant,vol_ftbl_id,vol_ftbl_pl,mfs_is_afs)
 			
 			# CSE File System exists, determine its Configuration State
 			if any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) : mfs_state = 'Initialized'
@@ -6995,7 +7006,7 @@ def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_ini
 
 # Analyze & Extract CSE File Systems
 # noinspection PyUnusedLocal
-def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl) :
+def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, mfs_is_afs) :
 	mfs_buffer_init = reading[mfs_start:mfs_end] # MFS Initial Buffer
 	sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix) # Get CSE File System Integrity Table Structure Size
 	config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix) # Get CSE File System Configuration Record Structure Size
@@ -7381,16 +7392,18 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl) :
 			mfs_write(file_folder, file_path, mfs_file[1]) # Store MFS Low Level File
 		
 		# Parse MFS Low Level Files 1 (Unknown), 2-3 (Anti-Replay) and 4 (SVN Migration)
-		elif mfs_file[1] and mfs_file[0] in (1,2,3,4) :
-			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
+		# At AFSP, MFS Low Level Files 6 & 7 are not Intel & OEM Configurations (Unknown)
+		elif mfs_file[1] and ((mfs_file[0] in (1,2,3,4)) or (mfs_is_afs and mfs_file[0] in (6,7))) :
+			mfs_file_name = 'Unknown' if mfs_is_afs and mfs_file[0] in (6,7) else mfs_dict[mfs_file[0]]
+			if param.me11_mod_extr : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name) + col_e)
 			mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-			file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+			file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
 			file_data = mfs_file[1][:-sec_hdr_size] # MFS Low Level File Contents without Integrity
 			file_sec = mfs_file[1][-sec_hdr_size:] # MFS Low Level File Integrity without Contents
 			file_sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Low Level File Integrity Structure
 			if param.me11_mod_ext :
 				file_sec_ptv = file_sec_hdr.mfs_print() # MFS Low Level File Integrity Structure Info
-				file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_dict[mfs_file[0]]) # Adjust Integrity Structure Verbose Info Title
+				file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_file_name) # Adjust Integrity Structure Verbose Info Title
 				print('\n%s' % file_sec_ptv) # Print Integrity Structure Info during Verbose CSE Unpacking
 			file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Contents Path
 			file_sec_path = os.path.join(file_folder, 'Integrity.bin') # MFS Low Level File Integrity Path
@@ -7785,8 +7798,8 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 	file_data = mfs_file_data if mfs_file_data else b'' # MFS Home Directory File Contents
 	vol_ftbl_pl = check_ftbl_pl(vol_ftbl_pl, ftbl_dict) # Check if MFS Volume FTBL Platform exists
 	vol_ftbl_id = check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) # Check if MFS Volume FTBL Dictionary exists
-	ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag (0A = CON, 0B = COR, 0C = SLM etc)
-	ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag (01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
+	ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag
+	ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag
 	
 	if ftbl_plat_id not in ftbl_dict or ftbl_dict_id not in ftbl_dict[ftbl_plat_id] or 'FTBL' not in ftbl_dict[ftbl_plat_id][ftbl_dict_id] :
 		if ftbl_dict : _ = mfs_anl_msg(col_m + 'Warning: File Table %s > %s does not exist!' % (ftbl_plat_id,ftbl_dict_id) + col_e, '', True, False, False, [])
@@ -7977,8 +7990,8 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 			vol_ftbl_pl = check_ftbl_pl(vol_ftbl_pl, ftbl_dict) # Check if MFS Volume FTBL Platform exists
 			vol_ftbl_id = check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) # Check if MFS Volume FTBL Dictionary exists
 			
-			ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag (0A = CON, 0B = COR, 0C = SLM etc)
-			ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag (01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
+			ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL Dictionary ID Tag
+			ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL Platform ID Tag
 			ftbl_rec_id = '%0.8X' % rec_id # FTBL File/Record ID (10002000, 10046A39, 12090300 etc)
 			
 			if ftbl_plat_id not in ftbl_dict or ftbl_dict_id not in ftbl_dict[ftbl_plat_id] or 'FTBL' not in ftbl_dict[ftbl_plat_id][ftbl_dict_id] :
@@ -8233,9 +8246,11 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 	vol_ftbl_pl = check_ftbl_pl(vol_ftbl_pl, ftbl_dict) # Get FTBL/EFST Platform from MFS Volume and check existence
 	vol_ftbl_id = check_ftbl_id(vol_ftbl_id, ftbl_dict, vol_ftbl_pl) # Get FTBL/EFST Dictionary from MFS Volume and check existence
 	
-	ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL/EFST Dictionary ID Tag (0A = CON, 0B = COR, 0C = SLM etc)
-	ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL/EFST Platform ID Tag (01 = ICP, 02 = CMP-H/LP, 03 = LKF, 04 = TGP, 05 = CMP-V etc)
-	efst_dict_rev = '%0.2X' % sys_hdr.DictRevision # FTBL/EFST Dictionary Revision Tag (01 = 1st, 02 = 2nd etc)
+	plat_name = ftbl_efst_plat[vol_ftbl_pl] if vol_ftbl_pl in ftbl_efst_plat else 'Unknown' # Get FTBL/EFST Platform CodeName
+	
+	ftbl_dict_id = '%0.2X' % vol_ftbl_id # FTBL/EFST Dictionary ID Tag
+	ftbl_plat_id = '%0.2X' % vol_ftbl_pl # FTBL/EFST Platform ID Tag
+	efst_dict_rev = '%0.2X' % sys_hdr.DictRevision # FTBL/EFST Dictionary Revision Tag
 	
 	# Parse FTBL/EFST DB and extract EFS Files
 	if 'EFST' in ftbl_dict[ftbl_plat_id][ftbl_dict_id] :
@@ -8374,16 +8389,16 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 						
 						break # Stop searching FTBL Dictionary at first VFS ID match
 				else :
-					efs_anl_msg(col_r + 'Error: Could not find Platform %s > Dictionary %s > FTBL > VFS ID %0.4d!' % (
-								ftbl_plat_id, ftbl_dict_id, file_id) + col_e, err_stor, True)
+					efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > FTBL > VFS ID %0.4d!' % (
+								ftbl_plat_id, plat_name, ftbl_dict_id, file_id) + col_e, err_stor, True)
 			
 			if file_data_all : mfs_txt(efs_pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', True) # Store EFS File Records Log
 		else :
-			efs_anl_msg(col_r + 'Error: Could not find Platform %s > Dictionary %s > EFST > Revision %s!' % (
-						ftbl_plat_id, ftbl_dict_id, efst_dict_rev) + col_e, err_stor, True)
+			efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > EFST > Revision 0x%s!' % (
+						ftbl_plat_id, plat_name, ftbl_dict_id, efst_dict_rev) + col_e, err_stor, True)
 	else :
-		efs_anl_msg(col_r + 'Error: Could not find Platform %s > Dictionary %s > EFST!' % (
-					ftbl_plat_id, ftbl_dict_id) + col_e, err_stor, True)
+		efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > EFST!' % (
+					ftbl_plat_id, plat_name, ftbl_dict_id) + col_e, err_stor, True)
 	
 	# Remember to also update any prior function return statements
 	return bool(file_data_all)
@@ -10222,6 +10237,20 @@ comp_dict = {
 			8 : 0x8000000, # 128 MB
 			9 : 0x10000000, # 256 MB
 			}
+
+# FTBL/EFST Platforms
+ftbl_efst_plat = {
+			0x01 : 'ICP',
+			0x02 : 'CMP',
+			0x03 : 'LKF',
+			0x04 : 'TGP',
+			0x05 : 'CMP-V',
+			0x08 : 'EHL',
+			0x0A : 'IDV',
+			0x0B : 'WLY',
+			0x10 : 'ADP',
+			0x11 : 'JSP',
+			}
 	
 # CSE Known Bad Partition/Module Hashes
 cse_known_bad_hashes = [
@@ -10408,6 +10437,7 @@ for file_in in source :
 	efs_found = False
 	mfs_found = False
 	mfsb_found = False
+	mfs_is_afs = False
 	upd_found = False
 	rgn_exist = False
 	phy_found = False
@@ -11107,6 +11137,7 @@ for file_in in source :
 				mfs_found = True
 				mfs_start = p_offset_spi
 				mfs_size = p_size
+				mfs_is_afs = p_name == 'AFSP'
 				
 			# Detect if firmware has CSE MFSB File System Backup Partition
 			if p_name == 'MFSB' and not p_empty :
@@ -11293,6 +11324,7 @@ for file_in in source :
 				mfs_found = True
 				mfs_start = p_offset_spi
 				mfs_size = p_size
+				mfs_is_afs = p_name == 'AFSP'
 				
 			# Detect if IFWI Primary includes CSE File System Backup partition (Not POR, just in case)
 			if p_name == 'MFSB' and not p_empty :
@@ -11393,6 +11425,7 @@ for file_in in source :
 						mfs_found = True
 						mfs_start = s_p_offset_spi
 						mfs_size = s_p_size
+						mfs_is_afs = s_p_name == 'AFSP'
 						
 					# Detect if IFWI Secondary includes CSE File System Backup partition (Not POR, just in case)
 					if s_p_name == 'MFSB' and not s_p_empty :
@@ -12478,7 +12511,7 @@ for file_in in source :
 			
 		elif major == 14 :
 			
-			if minor == 0 : upd_found = True # Superseded minor version
+			if (minor,pos_sku_tbl) == (0,'H') and sku_init_db != 'SLM' : upd_found = True # Superseded H CON/COR minor version
 			
 			if minor in [0,1] and not pch_init_final : platform = 'CMP-H/LP' # Comet Point H/LP
 			elif minor == 5 and not pch_init_final : platform = 'CMP-V' # Comet Point V
