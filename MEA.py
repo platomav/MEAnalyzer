@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.189.0'
+title = 'ME Analyzer v1.189.2'
 
 import sys
 
@@ -3479,12 +3479,12 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 		
 		return pt
 
-class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID (iUnit/IUNP, not in XML, Reverse Engineered)
+class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID (iUnit/IUNP/IUNM, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
 		('Size',			uint32_t),		# 0x04
-		('Revision',		uint32_t),		# 0x08
+		('Type',			uint32_t),		# 0x08 1 = BootLoader (IUNP), 2 = Firmware (IUNM)
 		('Reserved',		uint32_t*4),	# 0x0C
 		# 0x1C
 	]
@@ -3492,15 +3492,17 @@ class CSE_Ext_10(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID (iUn
 	def ext_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
+		types = {1:'BootLoader', 2:'Firmware'}
+		
 		pt.title = col_y + 'Extension 16, Anti-Cloning SKU ID' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Revision', '%d' % self.Revision])
+		pt.add_row(['Type', types[self.Type] if self.Type in types else 'Unknown'])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
 		
-class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID Chunk (iUnit/IUNP, not in XML, Reverse Engineered)
+class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID Chunk (iUnit/IUNP/IUNM, not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Chunk',			uint32_t),		# 0x00
@@ -3510,7 +3512,7 @@ class CSE_Ext_10_Mod(ctypes.LittleEndianStructure) : # R1 - Anti-Cloning SKU ID 
 		('Year',			uint16_t),		# 0x0A
 		('Hash',			uint32_t*8),	# 0x0C SHA-256 Big Endian
 		('Unknown0',		uint32_t),		# 0x2C
-		('Unknown1',		uint32_t),		# 0x30 Base Address ?
+		('Unknown1',		uint32_t),		# 0x30 Base Address ? (start of Chunk)
 		('Reserved',		uint32_t*4),	# 0x34
 		# 0x44
 	]
@@ -3542,7 +3544,7 @@ class CSE_Ext_10_Mod_R2(ctypes.LittleEndianStructure) : # R2 - Anti-Cloning SKU 
 		('Year',			uint16_t),		# 0x0A
 		('Hash',			uint32_t*12),	# 0x0C SHA-384 Big Endian
 		('Unknown0',		uint32_t),		# 0x3C
-		('Unknown1',		uint32_t),		# 0x40 Base Address ?
+		('Unknown1',		uint32_t),		# 0x40 Base Address ? (start of Chunk)
 		('Reserved',		uint32_t*4),	# 0x44
 		# 0x54
 	]
@@ -12948,9 +12950,14 @@ for file_in in source :
 	if fwu_iup_check and (uncharted_match or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
 	
 	if variant == 'CSME' and not is_partial_upd and fwu_iup_result != 'Impossible' :
-		if major == 12 : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
-		elif (major,minor) in [(13,0),(13,50),(14,0),(15,40)] : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found)]
-		elif major >= 13 : fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found and phy_fwu_found)]
+		if major == 12 :
+			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
+		elif (major,minor) in [(13,0),(13,50),(14,0),(14,5),(15,40)] or (major,minor,sku_result) == (15,0,'LP') :
+			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found)]
+		elif (major,minor) in [(13,30),(14,1)] or (major,minor,sku_result) == (15,0,'H') :
+			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found and phy_fwu_found)]
+		else :
+			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found and phy_fwu_found)]
 		
 	# Check for CSE Extension 15 R2 NVM Compatibility
 	if ext15_info[3] not in ['', 'Undefined'] : nvm_db = '_%s' % ext15_info[3]
