@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.189.2'
+title = 'ME Analyzer v1.191.0'
 
 import sys
 
@@ -3168,7 +3168,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
 		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
-		pt.add_row(['Public Key & Exponent Hash', Hash])
+		pt.add_row(['Modulus & Exponent Hash', Hash])
 		
 		return pt
 	
@@ -3218,7 +3218,7 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
 		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
-		pt.add_row(['Public Key & Exponent Hash', Hash])
+		pt.add_row(['Modulus & Exponent Hash', Hash])
 		
 		return pt
 	
@@ -4846,6 +4846,39 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - SPS Platform ID (MFT_EXT
 		
 		return pt
 
+class CSE_Ext_544F4F46(ctypes.LittleEndianStructure) : # R1 - CPU Co-Signing 3K (Not in XML, Reverse Engineered)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				char*8),		# 0x00 FOOT (544F4F46)
+		('TotalSize',		uint32_t),		# 0x08
+		('HeaderSize',		uint32_t),		# 0x0C dwords (w/o Tag)
+		('ModulusSize',		uint32_t),		# 0x10 dwords
+		('ExponentSize',	uint32_t),		# 0x14 dwords
+		('RSAModulus',		uint32_t*96),	# 0x18 3072-bits
+		('RSAExponent',		uint32_t),		# 0x198
+		('RSASignature',	uint32_t*96),	# 0x19C 3072-bits
+		# 0x31C
+	]
+	
+	def ext_print(self) :		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		ModulusSize = self.ModulusSize * 4
+		RSAModulus = '%0.*X' % (ModulusSize * 2, int.from_bytes(self.RSAModulus, 'little'))
+		RSASignature = '%0.*X' % (ModulusSize * 2, int.from_bytes(self.RSASignature, 'little'))
+		
+		pt.title = col_y + 'Extension FOOT, CPU Co-Signing' + col_e
+		pt.add_row(['Tag', self.Tag.decode('utf-8')])
+		pt.add_row(['Total Size', '0x%X' % self.TotalSize])
+		pt.add_row(['Header Size', '0x%X' % (self.HeaderSize * 4)])
+		pt.add_row(['Modulus Size', '0x%X' % ModulusSize])
+		pt.add_row(['Exponent Size', '0x%X' % (self.ExponentSize * 4)])
+		pt.add_row(['RSA Modulus', '%s [...]' % RSAModulus[:8]])
+		pt.add_row(['RSA Exponent', '0x%X' % self.RSAExponent])
+		pt.add_row(['RSA Signature', '%s [...]' % RSASignature[:8]])
+		
+		return pt
+
 class RBE_PM_Metadata(ctypes.LittleEndianStructure) : # R1 - RBEP > rbe or FTPR > pm Module "Metadata"
 	_pack_ = 1
 	_fields_ = [
@@ -5008,6 +5041,9 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	print('\n%s\n' % file_pt)
 	
 	if reading_msg : print('%s\n' % reading_msg)
+	
+	# CSSPS 4.4 (WLY) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
+	if (variant,major,minor) == ('CSSPS',4,4) : input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only!\n' + col_e)
 	
 	# Show & Validate Flash Descriptor RSA Signature & Hash
 	if fdv_status[0] :
@@ -5699,14 +5735,15 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				entry_data = buffer[cpd_entry_offset:cpd_entry_offset + cpd_entry_size]
 				if entry_data in (b'', b'\xFF' * cpd_entry_size) or cpd_entry_offset >= file_end : entry_empty = 1
 				
-				# Determine Extension Size & End Offset
-				cpd_ext_size = int.from_bytes(buffer[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
-				cpd_ext_end = cpd_ext_offset + cpd_ext_size
-				
 				# Detect unknown CSE Extension & notify user
 				if ext_tag not in ext_tag_all :
 					cse_anl_err(col_r + 'Error: Detected unknown CSE Extension 0x%0.2X at %s > %s!\n       Some modules may not be detected without adding 0x%0.2X support!'
 					% (ext_tag, cpd_name, cpd_entry_name.decode('utf-8'), ext_tag) + col_e, None)
+				
+				# Determine Extension Size & End Offset
+				if ext_tag == 0x544F4F46 : cpd_ext_size = int.from_bytes(buffer[cpd_ext_offset + 0x8:cpd_ext_offset + 0xC], 'little')
+				else : cpd_ext_size = int.from_bytes(buffer[cpd_ext_offset + 0x4:cpd_ext_offset + 0x8], 'little')
+				cpd_ext_end = cpd_ext_offset + cpd_ext_size
 				
 				# Detect CSE Extension with null size & break loop
 				if cpd_ext_size == 0 :
@@ -7263,11 +7300,13 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
 				chunk_crc16_int = int.from_bytes(chunk_all[0x40:0x42], 'little') # Intel CRC-16 of Chunk (0x40) with initial value of 0xFFFF
 				chunk_crc16_mea = crccheck.crc.Crc16.calc(chunk_raw + struct.pack('<H', chunk_index), initvalue = 0xFFFF) # MEA CRC-16 of Chunk (0x40) with initial value of 0xFFFF
 				
-				if chunk_crc16_mea != chunk_crc16_int :
+				# Validate Chunk CRC-16. Ignore 0x0000 as it possibly (?) indicates a "hot" VFS dump.
+				if chunk_crc16_int not in (chunk_crc16_mea, 0x0000) :
 					mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS %s Page %d > Chunk %d CRC-16 0x%0.4X is INVALID, expected 0x%0.4X!'
 								   % (page_type, page_number, chunk_index, chunk_crc16_int, chunk_crc16_mea) + col_e, 'error', True, True, True, mfs_tmp_page)
 				else :
-					chunk_healthy += 1 #mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, True, mfs_tmp_page)
+					#mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, True, mfs_tmp_page)
+					chunk_healthy += 1
 			
 			if chunk_used_count and chunk_used_count == chunk_healthy :
 				mfs_tmp_page = mfs_anl_msg(col_g + 'All MFS %s Page %d Chunks (%d) CRC-16 are VALID' % (page_type, page_number, chunk_used_count) + col_e, '', True, True, True, mfs_tmp_page)
@@ -7293,11 +7332,13 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
 					chunk_crc16_int = int.from_bytes(chunk_all[0x40:0x42], 'little') # Intel CRC-16 of Chunk (0x40) with initial value of 0xFFFF
 					chunk_crc16_mea = crccheck.crc.Crc16.calc(chunk_raw + struct.pack('<H', chunk_index), initvalue = 0xFFFF) # MEA CRC-16 of Chunk (0x40) with initial value of 0xFFFF
 					
-					if chunk_crc16_mea != chunk_crc16_int :
+					# Validate Chunk CRC-16. Ignore 0x0000 as it possibly (?) indicates a "hot" VFS dump.
+					if chunk_crc16_int not in (chunk_crc16_mea, 0x0000) :
 						mfs_tmp_page = mfs_anl_msg(col_r + 'Error: MFS %s Page %d > Chunk %d CRC-16 0x%0.4X is INVALID, expected 0x%0.4X!'
 									   % (page_type, page_number, chunk_index, chunk_crc16_int, chunk_crc16_mea) + col_e, 'error', True, True, True, mfs_tmp_page)
 					else :
-						chunk_healthy += 1 #mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, True, mfs_tmp_page)
+						#mfs_tmp_page = mfs_anl_msg(col_g + 'MFS %s Page %d > Chunk %d CRC-16 is VALID' % (page_type, page_number, chunk_index) + col_e, '', True, True, True, mfs_tmp_page)
+						chunk_healthy += 1 
 			
 			if chunk_used_count and chunk_used_count == chunk_healthy :
 				mfs_tmp_page = mfs_anl_msg(col_g + 'All MFS %s Page %d Chunks (%d) CRC-16 are VALID' % (page_type, page_number, chunk_used_count) + col_e, '', True, True, True, mfs_tmp_page)
@@ -8612,6 +8653,7 @@ def pmc_anl(mn2_info) :
 	pmc_platform = pmc_variant[-3:]
 	pmc_pch_rev = '%s%d' % (pch_rev_val[min(mn2_info[2] // 10, 0xF)], mn2_info[2] % 10) # 21 = PCH C PMC 1
 	
+	# Get/Set special PMC Platform, SKU and/or Steppings
 	if pmc_variant == 'PMCCNP' and mn2_info[0] != 300 :
 		# CSME < 12.0.0.1033 --> 01.7.0.1022 = PCH Stepping A1 + PMC Hotfix 7 + PCH-H + PMC Build 1022 (Guess)
 		# CSME < 12.0.0.1033 --> 10.0.2.1021 = PCH Stepping B0 + PMC Hotfix 0 + PCH-LP + PMC Build 1021 (Guess)
@@ -8620,11 +8662,14 @@ def pmc_anl(mn2_info) :
 	
 	elif pmc_variant == 'PMCCMPV' :
 		# CSME 14.5 is H instead of V, PMC is 140 LP instead of 145 V = GREAT WORK INTEL...
-		pmc_pch_sku = 'V'
-		pmc_platform = 'CMP-V'
+		pmc_pch_sku = 'V' # Value instead of Halo or Low Power
+		pmc_platform = 'CMP-V' # To differentiate CMP-V (KBP) from actual CMP
 	
 	elif pmc_variant == 'PMCLBG' :
-		warn_stor.append([col_m + 'Warning: PMC LBG-R (Whitley) is WIP!' + col_e, False])
+		# Whitley is a royal f**k up, no further explanation required = GREAT WORK INTEL...
+		pmc_pch_sku = 'H' # Based on target use cases
+		pmc_pch_rev = 'B' # Based on CSSPS > VFS > mphytbl
+		pmc_platform = 'LBG-R' # To differentiate LBG-R from old LBG
 	
 	elif pmc_variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) :
 		pmc_platform = pmc_variant[3:6]
@@ -8634,8 +8679,14 @@ def pmc_anl(mn2_info) :
 		# 133.1.10.1003 = LKF + LP + PCH Compatibility B + PMC Maintenance 0 + PMC Revision 1003
 		pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 LP (SoC), 1 LP, 2 H, 3 N
 	
-	_,_,db_rev,db_rel = check_upd(('Latest_PMC%s_%s_%s' % (pmc_platform[:3], pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
-	if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
+	# Check PMC Latest status
+	if pmc_variant == 'PMCLBG' :
+		# LBG-R PMC version is static/useless (1.151.0.0) so use Latest Date instead
+		db_year,db_month,db_day,_ = check_upd(('Latest_PMC%s_H_%s' % (pmc_platform[:3], pmc_pch_rev)))
+		if pmc_year < db_year or (pmc_year == db_year and (pmc_month < db_month or (pmc_month == db_month and pmc_day < db_day))) : pmcp_upd_found = True
+	else :
+		_,_,db_rev,db_rel = check_upd(('Latest_PMC%s_%s_%s' % (pmc_platform[:3], pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
+		if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
 	
 	pmc_pch_rev_p = pmc_pch_rev[0] if pmc_pch_rev != 'Unknown' else pmc_pch_rev
 	
@@ -8649,7 +8700,7 @@ def pmc_anl(mn2_info) :
 		pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
 		pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
-	elif pmc_variant == 'PMCCNP' and mn2_info[0] != 300 :
+	elif pmc_platform.startswith(('CNP','LBG')) and mn2_info[0] != 300 :
 		pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
 		pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_sku, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
@@ -9476,7 +9527,7 @@ def fw_ver(major,minor,hotfix,build) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCDG')) :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
-	elif variant.startswith('PMCCNP') and (major < 130 or major == 3232) :
+	elif variant.startswith(('PMCCNP','PMCLBG')) and (major < 130 or major == 3232) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
 	elif variant.startswith('PMC') :
 		version = '%s.%s.%s.%s' % (major, minor, '{0:02d}'.format(hotfix), build)
@@ -9844,8 +9895,8 @@ def mass_scan(f_path) :
 # Colorama ANSI Color/Font Escape Character Sequences Regex
 ansi_escape = re.compile(r'\x1b[^m]*m')
 
-# CSE Extensions 0x00-0x1B, 0x1E-0x1F, 0x32
-ext_tag_all = list(range(28)) + list(range(30,32)) + [50]
+# CSE Extensions 0x00-0x1B, 0x1E-0x1F, 0x32, 0x544F4F46
+ext_tag_all = list(range(0x1C)) + list(range(0x1E,0x20)) + [0x32] + [0x544F4F46]
 
 # CSME 12-14 Revised Extensions
 ext_tag_rev_hdr_csme12 = {0xF:'_R2', 0x14:'_R2'}
@@ -9981,6 +10032,7 @@ ext_dict = {
 			'CSE_Ext_1E' : CSE_Ext_1E,
 			'CSE_Ext_1F' : CSE_Ext_1F,
 			'CSE_Ext_32' : CSE_Ext_32,
+			'CSE_Ext_544F4F46' : CSE_Ext_544F4F46,
 			'CSE_Ext_00_Mod' : CSE_Ext_00_Mod,
 			'CSE_Ext_00_Mod_R2' : CSE_Ext_00_Mod_R2,
 			'CSE_Ext_01_Mod' : CSE_Ext_01_Mod,
@@ -12756,7 +12808,7 @@ for file_in in source :
 		
 		if major == 4 :
 			
-			if minor == 4 : warn_stor.append([col_m + 'Warning: CSE SPS 4.4 (Whitley) is WIP!' + col_e, False])
+			if minor == 4 : warn_stor.append([col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only!' + col_e, False])
 			
 			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
 		
@@ -12806,7 +12858,7 @@ for file_in in source :
 		
 		if major == 100 :
 			
-			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG1'] * 3 # Dedicated Graphics 1 (Xe MAX)
+			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG01'] * 3 # Dedicated Graphics 1 (Xe MAX)
 			
 		# Check for Latest GSC status
 		_,_,db_hot,db_bld = check_upd(('Latest_%s_%s' % (variant, sku)))
@@ -12972,7 +13024,7 @@ for file_in in source :
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
 		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db)
-	elif variant.startswith('PMCCNP') and (major < 130 or major == 3232) : # PMC CNP A
+	elif variant.startswith(('PMCCNP','PMCLBG')) and (major < 130 or major == 3232) : # PMC CNP A, LBG-R
 		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, date, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, date, rel_db)
 	elif variant.startswith('PMCDG') : # PMC DG1
@@ -13075,9 +13127,9 @@ for file_in in source :
 	
 	if [variant,major,is_partial_upd] == ['CSME',11,False] :
 		if pdm_status != 'NaN' : msg_pt.add_row(['Power Down Mitigation', pdm_status])
-		msg_pt.add_row(['Workstation PCH Support', ['No','Yes'][fw_0C_lbg]])
+		msg_pt.add_row(['Workstation Support', ['No','Yes'][fw_0C_lbg]])
 		
-	if variant == 'ME' and major == 7 : msg_pt.add_row(['Patsburg PCH Support', ['No','Yes'][is_patsburg]])
+	if variant == 'ME' and major == 7 : msg_pt.add_row(['Patsburg Support', ['No','Yes'][is_patsburg]])
 	
 	if variant in ('CSME','CSTXE','CSSPS','TXE','GSC') and not is_partial_upd :
 		msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_signed or oemp_found or utok_found)]])
