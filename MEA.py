@@ -7,7 +7,7 @@ Intel Engine Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.191.0'
+title = 'ME Analyzer v1.193.2'
 
 import sys
 
@@ -399,7 +399,7 @@ class GSC_Info_IUP(ctypes.LittleEndianStructure) : # GSC Independent Update Part
 		
 		return pt
 		
-class GSC_OPROM_Header(ctypes.LittleEndianStructure) : # GSC Optional ROM Header (igsc_oprom.h > oprom_header_ext_v2)
+class GSC_OROM_Header(ctypes.LittleEndianStructure) : # GSC Option ROM Header (igsc_oprom.h > oprom_header_ext_v2)
 	_pack_ = 1
 	_fields_ = [
 		('Signature',		uint16_t),		# 0x00 AA55
@@ -411,16 +411,16 @@ class GSC_OPROM_Header(ctypes.LittleEndianStructure) : # GSC Optional ROM Header
 		('Reserved',		uint64_t),		# 0x0E
 		('EFIImageOffset',	uint16_t),		# 0x16
 		('PCIDataHdrOff',	uint16_t),		# 0x18
-		('OPROMPayloadOff',	uint16_t),		# 0x1A
+		('OROMPayloadOff',	uint16_t),		# 0x1A
 		# 0x1C
 	]
 	
 	def gsc_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'GSC Optional ROM Header' + col_e
+		pt.title = col_y + 'GSC Option ROM Header' + col_e
 		pt.add_row(['Signature', '%0.4X' % self.Signature])
-		pt.add_row(['Image Size', '0x%X' % self.ImageSize * 512])
+		pt.add_row(['Image Size', '0x%X' % (self.ImageSize * 512)])
 		pt.add_row(['Init Function Entry Point', '0x%X' % self.InitFuncEntrPnt])
 		pt.add_row(['Sub System', '0x%X' % self.SubSystem])
 		pt.add_row(['Machine Type', '0x%X' % self.MachineType])
@@ -428,14 +428,14 @@ class GSC_OPROM_Header(ctypes.LittleEndianStructure) : # GSC Optional ROM Header
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['EFI Image Offset', '0x%X' % self.EFIImageOffset])
 		pt.add_row(['PCI Data Header Offset', '0x%X' % self.PCIDataHdrOff])
-		pt.add_row(['OPROM Payload Offset', '0x%X' % self.OPROMPayloadOff])
+		pt.add_row(['OROM Payload Offset', '0x%X' % self.OROMPayloadOff])
 		
 		return pt
 		
-class GSC_OPROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Optional ROM PCI Data Header (igsc_oprom.h > oprom_pci_data)
+class GSC_OROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Option ROM PCI Data Header (igsc_oprom.h > oprom_pci_data)
 	_pack_ = 1
 	_fields_ = [
-		('Signature',		uint32_t),		# 0x00 PCIR
+		('Signature',		char*4),		# 0x00 PCIR
 		('VEN_ID',			uint16_t),		# 0x04
 		('DEV_ID',			uint16_t),		# 0x06
 		('DevListPointer',	uint16_t),		# 0x08
@@ -455,7 +455,7 @@ class GSC_OPROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Optional ROM PCI 
 	def gsc_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'GSC Optional ROM PCI Data Header' + col_e
+		pt.title = col_y + 'GSC Option ROM PCI Data' + col_e
 		pt.add_row(['Signature', self.Signature.decode('utf-8')])
 		pt.add_row(['Vendor ID', '%0.4X' % self.VEN_ID])
 		pt.add_row(['Device ID', '%0.4X' % self.DEV_ID])
@@ -463,10 +463,10 @@ class GSC_OPROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Optional ROM PCI 
 		pt.add_row(['Header Size', '0x%X' % self.PCIDataHdrLen])
 		pt.add_row(['Header Revision', self.PCIDataHdrRev])
 		pt.add_row(['Class Code', '0x%X' % int.from_bytes(self.ClassCode, 'little')])
-		pt.add_row(['Image Size', '0x%X' % self.ImageSize * 512])
+		pt.add_row(['Image Size', '0x%X' % (self.ImageSize * 512)])
 		pt.add_row(['Revision Level', '0x%X' % self.RevisionLevel])
 		pt.add_row(['Code Type', '0x%X' % self.CodeType])
-		pt.add_row(['Last Image Marker', '0x%X' % self.LastImageMark])
+		pt.add_row(['Last Image', ['No','Yes'][self.LastImageMark >> 7]])
 		pt.add_row(['Maximum Runtime Image Size', '0x%X' % self.MaxRuntimeImgLen])
 		pt.add_row(['Config Utility Code Header Pointer', '0x%X' % self.ConfUtlCodHdrPtr])
 		pt.add_row(['DMTF CLP Entry Point Pointer', '0x%X' % self.DMTFCLPEntPntPtr])
@@ -2957,7 +2957,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - Client System Informatio
 		# 0x30
 	]
 	
-	def __init__(self, variant, major, minor, hotfix, build, year, month, *args, **kwargs) :
+	def __init__(self, variant, major, minor, hotfix, build, year, month, variant_p, *args, **kwargs) :
 		super().__init__(*args, **kwargs)
 		self.variant = variant
 		self.major = major
@@ -2966,6 +2966,7 @@ class CSE_Ext_0C(ctypes.LittleEndianStructure) : # R1 - Client System Informatio
 		self.build = build
 		self.year = year
 		self.month = month
+		self.variant_p = variant_p
 	
 	def ext_print(self) :
 		fvalue = ['No','Yes']
@@ -4209,7 +4210,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 		# 0x08
 	]
 	
-	def __init__(self, variant, major, minor, hotfix, build, year, *args, **kwargs):
+	def __init__(self, variant, major, minor, hotfix, build, year, month, variant_p, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.variant = variant
 		self.major = major
@@ -4217,6 +4218,8 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 		self.hotfix = hotfix
 		self.build = build
 		self.year = year
+		self.month = month
+		self.variant_p = variant_p
 	
 	def ext_print(self) :
 		knob_ids = {
@@ -4424,8 +4427,53 @@ class CSE_Ext_16_GetFlagsPrivate(ctypes.Union):
 		('b', CSE_Ext_16_FlagsPrivate),
 		('asbytes', uint32_t)
 	]
-	
+
 class CSE_Ext_17(ctypes.LittleEndianStructure) : # R1 - Flash Descriptor Hash (not in XML, Reverse Engineered)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('Range1Start',		uint16_t),		# 0x08 Exclusion Range 1 (Intel, Manifest)
+		('Range1End',		uint16_t),		# 0x0A
+		('Range2Start',		uint16_t),		# 0x0C Exclusion Range 2 (OEM, Master Access)
+		('Range2End',		uint16_t),		# 0x0E
+		('Range3Start',		uint16_t),		# 0x10 Exclusion Range 3 (OEM, Custom)
+		('Range3End',		uint16_t),		# 0x12
+		('Range4Start',		uint16_t),		# 0x14 Exclusion Range 4 (OEM, Custom)
+		('Range4End',		uint16_t),		# 0x16
+		('Range5Start',		uint16_t),		# 0x18 Exclusion Range 5 (OEM, Custom)
+		('Range5End',		uint16_t),		# 0x1A
+		('Range6Start',		uint16_t),		# 0x1C Exclusion Range 6 (OEM, Custom)
+		('Range6End',		uint16_t),		# 0x1E
+		('Range7Start',		uint16_t),		# 0x20 Exclusion Range 7 (OEM, Custom)
+		('Range7End',		uint16_t),		# 0x22
+		('Range8Start',		uint16_t),		# 0x24 Exclusion Range 8 (OEM, Custom)
+		('Range8End',		uint16_t),		# 0x26
+		('Hash',			uint32_t*8),	# 0x28 SHA-256 LE
+		# 0x48
+	]
+	
+	def ext_print(self) :
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
+		
+		pt.title = col_y + 'Extension 23, Flash Descriptor Hash' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['Range 1', '0x%X - 0x%X' % (self.Range1Start, self.Range1End)])
+		pt.add_row(['Range 2', '0x%X - 0x%X' % (self.Range2Start, self.Range2End)])
+		pt.add_row(['Range 3', '0x%X - 0x%X' % (self.Range3Start, self.Range3End)])
+		pt.add_row(['Range 4', '0x%X - 0x%X' % (self.Range4Start, self.Range4End)])
+		pt.add_row(['Range 5', '0x%X - 0x%X' % (self.Range5Start, self.Range5End)])
+		pt.add_row(['Range 6', '0x%X - 0x%X' % (self.Range6Start, self.Range6End)])
+		pt.add_row(['Range 7', '0x%X - 0x%X' % (self.Range7Start, self.Range7End)])
+		pt.add_row(['Range 8', '0x%X - 0x%X' % (self.Range8Start, self.Range8End)])
+		pt.add_row(['Hash', Hash])
+		
+		return pt
+	
+class CSE_Ext_17_R2(ctypes.LittleEndianStructure) : # R2 - Flash Descriptor Hash (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -5027,6 +5075,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	rbe_pm_met_hashes = []
 	len_fpt_part_all = len(fpt_part_all)
 	len_bpdt_part_all = len(bpdt_part_all)
+	len_orom_hdr_all = len(orom_hdr_all)
 	config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix)
 	huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
 	
@@ -5244,7 +5293,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				print(col_y + '\n--> Stored $FPT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_type, part_name_p, part_start, part_end) + col_e)
 				
 				if part_name in ['UTOK','STKN'] :
-					ext_print,mn2_signs,_ = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month],
+					ext_print,mn2_signs,_ = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month,variant_p],
 														  part_name, [[],''], [[],-1,-1,-1]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest Info, when applicable (UTOK w/ UTFL or UTOK w/o UTFL)
@@ -5296,7 +5345,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				
 				# Store RBEP > rbe and FTPR/MFTP > pm "Metadata" within Module for Module w/o Metadata Hash validation
 				if part_name in ['FTPR','RBEP','MFTP'] :
-					_,rbe_pm_mod_attr,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,fwi_iup_hashes,_ = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month], None,
+					_,rbe_pm_mod_attr,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,fwi_iup_hashes,_ = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None,
 																												[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 					
 					for mod in rbe_pm_mod_attr :
@@ -5374,7 +5423,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				print(col_y + '\n--> Stored BPDT %s Partition "%s" [0x%0.6X - 0x%0.6X]' % (part_order, part_name_p, part_start, part_end) + col_e)
 				
 				if part_name in ['UTOK'] :
-					ext_print,mn2_signs,_ = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month],
+					ext_print,mn2_signs,_ = ext_anl(reading[part_start:part_end], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month,variant_p],
 												  part_name, [[],''], [[],-1,-1,-1]) # Retrieve & Store UTOK/STKN Extension Info
 					
 					# Print Manifest Info, when applicable (UTOK w/ UTFL or UTOK w/o UTFL)
@@ -5426,7 +5475,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				
 				# Store RBEP > rbe and FTPR/MFTP > pm "Metadata" within Module for Module w/o Metadata Hash validation
 				if part_name in ['FTPR','RBEP','MFTP'] :
-					_,rbe_pm_mod_attr,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,fwi_iup_hashes,_ = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month], None,
+					_,rbe_pm_mod_attr,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,fwi_iup_hashes,_ = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None,
 																												[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 					
 					for mod in rbe_pm_mod_attr :
@@ -5438,6 +5487,11 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 					rbe_pm_met_hashes = get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes)
 					
 					if fwi_iup_hashes : rbe_man_hashes = fwi_iup_hashes
+	
+	# Print all Graphics System Controller Option ROM (OROM) entries
+	if len_orom_hdr_all :
+		if len_fpt_part_all or len_bpdt_part_all : print()
+		for hdr in orom_hdr_all : print('%s\n' % hdr)
 	
 	# Parse all Code Partition Directory ($CPD) entries
 	# Better to separate $CPD from $FPT/BPDT to avoid duplicate FTUP/NFTP ($FPT) issue
@@ -5457,10 +5511,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 			print(col_y + '\n--> Stored Flash Descriptor Region "PDRP 0000" [0x%0.6X - 0x%0.6X]' % (cpdrange.start(), cpdrange.start() + pdr_fd_size) + col_e)
 		
 		cpd_offset_e,cpd_mod_attr_e,cpd_ext_attr_e,_,ext12_info,ext_print,_,_,ext_phval,ext_dnx_val,_,_,cpd_mn2_info,ext_iunit_val,_,_,gmf_blob_info,_,_ \
-		= ext_anl(reading, '$CPD', cpdrange.start(), file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		= ext_anl(reading, '$CPD', cpdrange.start(), file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 		
-		if cse_lt_struct or len_fpt_part_all or len_bpdt_part_all : print() # For visual purposes before $CPD info is shown
+		if cse_lt_struct or len_fpt_part_all or len_bpdt_part_all or len_orom_hdr_all : print() # For visual purposes before $CPD info is shown
 		
 		rbe_pm_met_valid = mod_anl(cpd_offset_e, cpd_mod_attr_e, cpd_ext_attr_e, fw_name, ext_print, ext_phval, ext_dnx_val, ext_iunit_val,
 						   rbe_pm_met_hashes, rbe_pm_met_valid, ext12_info, vol_ftbl_id, config_rec_size, gmf_blob_info, vol_ftbl_pl, cpd_mn2_info, rbe_man_hashes)
@@ -5529,7 +5583,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	ext_iunit_val = [False] # [AllChunkValid]
 	ext_phval = [False, False, 0, 0]
 	mn2_sigs = [False, -1, -1, True, -1, None]
-	variant,major,minor,hotfix,build,year,month = ftpr_var_ver
+	variant,major,minor,hotfix,build,year,month,variant_p = ftpr_var_ver # Remember to also adjust any ftpr_var_ver Classes/Constructors
 	anl_major,anl_minor,anl_hotfix,anl_build = ftpr_var_ver[1:5] # pylint: disable=W0612
 	anl_meu_major,anl_meu_minor,anl_meu_hotfix,anl_meu_build = ftpr_var_ver[1:5] # pylint: disable=W0612
 	mfs_parsed_idx,intel_cfg_hash_mfs = mfs_idx_cfg
@@ -5758,10 +5812,10 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				hdr_rev_tag = '' # CSE Extension Header Revision Tag
 				mod_rev_tag = '' # CSE Extension Module Revision Tag
 				
-				if (variant,major) == ('GSC',100) or (variant,anl_meu_major) in [('PMC',100),('OPROM',100)] :
+				if (variant,major) == ('GSC',100) or (variant_p,anl_meu_major) in [('PMC',100),('OROM',100)] :
 					if ext_tag in ext_tag_rev_hdr_gsc100 : hdr_rev_tag = ext_tag_rev_hdr_gsc100[ext_tag]
 					if ext_tag in ext_tag_rev_mod_gsc100 : mod_rev_tag = ext_tag_rev_mod_gsc100[ext_tag]
-				elif (variant,major) in [('CSME',15),('CSME',16)] or (variant,anl_major) in [('PMC',150),('PMC',160),('PCHC',15),('PCHC',16)] or mn2_rsa_key_len == 0x180 :
+				elif (variant,major) in [('CSME',15),('CSME',16)] or (variant_p,anl_major) in [('PMC',150),('PMC',160),('PCHC',15),('PCHC',16)] or mn2_rsa_key_len == 0x180 :
 					if ext_tag in ext_tag_rev_hdr_csme15 : hdr_rev_tag = ext_tag_rev_hdr_csme15[ext_tag]
 					if ext_tag in ext_tag_rev_mod_csme15 : mod_rev_tag = ext_tag_rev_mod_csme15[ext_tag]
 				elif (variant,major) == ('CSME',12) and not ((minor,hotfix) == (0,0) and build >= 7000 and year < 0x2018 and month < 0x8) or (variant,major) in [('CSME',13),('CSME',14)] :
@@ -6379,7 +6433,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			if mod_data in (b'', b'\xFF' * cpd_entry_size) or cpd_entry_offset >= file_end : mod_empty = 1 # Determine if Key is Empty/Missing
 			
 			if not mod_empty and man_pat.search(mod_data[:0x20]) : # Get Key Manifest/Extension Info when applicable (print at mod_anl only)
-				key_print,mn2_signs,fd_info = ext_anl(mod_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month], cpd_entry_name.decode('utf-8'),
+				key_print,mn2_signs,fd_info = ext_anl(mod_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], cpd_entry_name.decode('utf-8'),
 												  [[],''], [[],-1,-1,-1]) # Retrieve & Store Key Manifest/Extension Info
 				
 				ext_print += key_print # Append Key Manifest/Extension Info (key_print is the ext_print of .key file, same structure)
@@ -6741,7 +6795,15 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					if param.me11_mod_bug :
 						print('\n    MOD: %s' % mod_hash) # Debug
 						print('    MEA: %s' % mea_hash) # Debug
-				
+					
+					# Detect & Cut Module OROM Headers
+					if orom_pat.search(mod_data[:0x28]) :
+						orom_hdr = get_struct(mod_data, 0, GSC_OROM_Header) # OROM Header Structure
+						pcir_hdr = get_struct(mod_data, orom_hdr.PCIDataHdrOff, GSC_OROM_PCI_Data) # OROM PCIR Structure
+						modp_off = max(orom_hdr.PCIDataHdrOff + pcir_hdr.PCIDataHdrLen, orom_hdr.EFIImageOffset, orom_hdr.OROMPayloadOff) # Payload Offset
+						
+						with open(mod_fname + '.bin', 'wb') as raw_file : raw_file.write(mod_data[modp_off:]) # Store Module Payload w/o OROM Headers
+					
 					if mod_hash == mea_hash :
 						print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					else :
@@ -7175,7 +7237,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
 				file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
 				mfs_write(file_9_folder, file_9_data_path, file_data) # Store MFS Manifest Backup Contents
 				
-				ext_print,mn2_signs,_ = ext_anl(file_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
+				ext_print,mn2_signs,_ = ext_anl(file_data, '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
 													  [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl]) # Get Manifest Backup Extension Info
 				
 				if param.me11_mod_bug :
@@ -7610,7 +7672,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
 			file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
 			mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
 			# noinspection PyTypeChecker
-			ext_print,mn2_signs,_ = ext_anl(mfs_file[1], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
+			ext_print,mn2_signs,_ = ext_anl(mfs_file[1], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
 												  [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl]) # Get Manifest Backup Extension Info
 			
 			if param.me11_mod_extr :
@@ -8775,7 +8837,12 @@ def pchc_anl(mn2_info) :
 	
 	pchc_fw_ver = '%d.%d.%d.%0.4d' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 	pchc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
-	pchc_name_db = '%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, pchc_mn2_signed_db, mn2_info[6])
+	if pchc_variant == 'PCHCTGP' :
+		# The Date is required for TGP unfortunately because different PCHC with same Version exist = GREAT WORK INTEL...
+		pchc_name_db = '%s_%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, mn2_info[7], pchc_mn2_signed_db, mn2_info[6])
+	else :
+		# With the hope that it was a singular mistake, the other PCHC will remain simpler without Date
+		pchc_name_db = '%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, pchc_mn2_signed_db, mn2_info[6])
 	
 	# Search DB for PCHC firmware
 	for line in mea_db_lines :
@@ -8824,7 +8891,7 @@ def phy_anl(mn2_info) :
 	
 	if phy_variant != 'Unknown' :
 		phy_platform = phy_variant[-3:]
-		phy_sku = phy_variant[3]
+		phy_sku = 'G' if phy_variant.startswith('PHYDG') else phy_variant[3] # Set "G" for GSC/GFX to match regular PHY SKU naming
 	
 	db_year,db_month,db_day,_ = check_upd(('Latest_%s_%d' % (phy_variant, mn2_info[0])))
 	if phy_year < db_year or (phy_year == db_year and (phy_month < db_month or (phy_month == db_month and phy_day < db_day))) : phy_upd_found = True
@@ -8880,7 +8947,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 	elif (cse_variant,cse_major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSME',18),('CSSPS',5),('GSC',100)] : dict_version = 12
 	else :
 		# CSTXE, CSSPS 1/IGN, PMC, PCHC & PHY firmware do not use Huffman compression, skip error message
-		if cse_variant != 'CSTXE' and (cse_variant,cse_major) != ('CSSPS',1) and not cse_variant.startswith(('PMC','PCHC','PHY','OPROM')) and verbosity in ['all','error'] :
+		if cse_variant != 'CSTXE' and (cse_variant,cse_major) != ('CSSPS',1) and not cse_variant.startswith(('PMC','PCHC','PHY','OROM')) and verbosity in ['all','error'] :
 			if param.me11_mod_bug : input_col(col_r + '\nNo Huffman dictionary for {0} {1}'.format(cse_variant, cse_major) + col_e)
 			else : print(col_r + '\nNo Huffman dictionary for {0} {1}'.format(cse_variant, cse_major) + col_e)
 		
@@ -9584,6 +9651,7 @@ def fw_types(fw_type) :
 	elif fw_type == 'Independent' and variant.startswith('PMC') : type_db = 'PMC'
 	elif fw_type == 'Independent' and variant.startswith('PHY') : type_db = 'PHY'
 	elif fw_type == 'Independent' and variant.startswith('PCHC') : type_db = 'PCHC'
+	elif fw_type == 'Independent' and variant.startswith('OROM') : type_db = 'OROM'
 	elif fw_type == 'Unknown' : type_db = 'UNK'
 	
 	return fw_type, type_db
@@ -9817,7 +9885,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 		if variant == 'Unknown' : var_rsa_db = False # TBDx are multi-platform RSA Public Keys
 		
 		# Get CSE $CPD Module Names only for targeted variant detection via special ext_anl _Stage1 mode
-		cpd_mod_names,_ = ext_anl(buffer, '$MN2_Stage1', mn2_match_start, file_end, ['CSME',major,minor,hotfix,build,year,month], None, [[],''], [[],-1,-1,-1])
+		cpd_mod_names,_ = ext_anl(buffer, '$MN2_Stage1', mn2_match_start, file_end, ['CSME',major,minor,hotfix,build,year,month,variant_p], None, [[],''], [[],-1,-1,-1])
 		
 		if cpd_mod_names :
 			is_meu = hasattr(mn2_struct, 'MEU_Minor') # Check if $MN2 has MEU fields
@@ -9826,6 +9894,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				if mod == 'fwupdate' or is_partial_upd : variant = 'CSME' # CSME
 				elif mod in ['bup_rcv', 'sku_mgr', 'manuf'] : variant = 'CSSPS' # REC, OPR, IGN
 				elif mod.startswith('dkl') and major == 10 and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYSLKF' # SPHY (LKF)
+				elif mod.startswith('dkl') and major == 11 and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PHYDG1' # PHYP (DG1)
 				elif mod == 'pphy' and major in (12,14,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYPTGP' # PPHY (TGP)
 				elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP-H/LP)
 				elif mod == 'IntelRec' and major == 16 : variant = 'PCHCADP' # ADP
@@ -9853,9 +9922,9 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'PMCC006' : variant = 'PMCGLKB' # 6 GLK B
 				elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
 				elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PMCDG1' # DG1
-				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 100 : variant = 'OPROMDG1' # DG1
+				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 100 : variant = 'OROMDG1' # DG1
 			
-			if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY/OPROM detected
+			if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY/OROM detected
 		
 		elif buffer[mn2_match_end + 0x270 + 0x80:mn2_match_end + 0x270 + 0x84] == b'$MME' :
 			# $MME: ME2-5/SPS1 = 0x50, ME6-10/SPS2-3 = 0x60, TXE1-2 = 0x80
@@ -9866,7 +9935,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 			variant = 'SPS'
 		
 		else :
-			variant = 'ME' # Default fallback, no CSE/TXE/SPS/GSC/PMC/PCHC/PHY/OPROM detected
+			variant = 'ME' # Default fallback, no CSE/TXE/SPS/GSC/PMC/PCHC/PHY/OROM detected
 	
 	# Create Variant display-friendly text
 	if variant == 'CSME' : variant_p = 'CSE ME'
@@ -9876,7 +9945,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 	elif variant.startswith('PHY') : variant_p = 'PHY'
 	elif variant.startswith('PMC') : variant_p = 'PMC'
 	elif variant.startswith('PCHC') : variant_p = 'PCHC'
-	elif variant.startswith('OPROM') : variant_p = 'OPROM'
+	elif variant.startswith('OROM') : variant_p = 'OROM'
 	elif variant in ['ME','TXE','SPS'] : variant_p = variant
 	
 	return variant, variant_p, var_rsa_db
@@ -9905,15 +9974,15 @@ ext_tag_rev_hdr_csme12 = {0xF:'_R2', 0x14:'_R2'}
 ext_tag_rev_mod_csme12 = {0x1:'_R2', 0xD:'_R2'}
 
 # CSME 15 Revised Extensions
-ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2'}
+ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2', 0x17:'_R2'}
 
 # CSME 15 Revised Extension Modules
 ext_tag_rev_mod_csme15 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R3', 0x10:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
-# GSC/OPROM 100 Revised Extensions
+# GSC/OROM 100 Revised Extensions
 ext_tag_rev_hdr_gsc100 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
-# GSC/OPROM 100 Revised Extension Modules
+# GSC/OROM 100 Revised Extension Modules
 ext_tag_rev_mod_gsc100 = {0x1:'_R2', 0x7:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R2', 0x10:'_R2', 0x18:'_R3', 0x1A:'_R3'}
 
 # CSSPS 5 Revised Extensions
@@ -10022,6 +10091,7 @@ ext_dict = {
 			'CSE_Ext_16' : CSE_Ext_16,
 			'CSE_Ext_16_R2' : CSE_Ext_16_R2,
 			'CSE_Ext_17' : CSE_Ext_17,
+			'CSE_Ext_17_R2' : CSE_Ext_17_R2,
 			'CSE_Ext_18' : CSE_Ext_18,
 			'CSE_Ext_18_R2' : CSE_Ext_18_R2,
 			'CSE_Ext_19' : CSE_Ext_19,
@@ -10109,8 +10179,8 @@ key_dict = {
 			49 : 'OEM DNX IFWI R1', # XML v1.0 (Download and Execute v1)
 			53 : 'OEM DNX IFWI R2', # XML v2.4 (Download and Execute v2)
 			57 : 'OEM Descriptor',
-			58 : 'OEM ISI',
-			59 : 'PSE',
+			58 : 'OEM ISI', # Intel Safety Island
+			59 : 'PSE', # Programmable Services Engine
 			96 : 'HBM IO',
 			97 : 'OOB MSM',
 			98 : 'GT GPU',
@@ -10154,8 +10224,8 @@ bpdt_dict = {
 			26 : 'PLTS', # Platform Settings
 			31 : 'DPHY', # USB Type C Dekel PHY
 			32 : 'PCHC', # PCH Configuration
-			33 : 'ISIF', # ISI Firmware
-			34 : 'ISIC', # ISI Configuration
+			33 : 'ISIF', # Intel Safety Island Firmware
+			34 : 'ISIC', # Intel Safety Island Configuration
 			35 : 'HBMI', # HBM IO Partition
 			36 : 'OMSM', # OOB MSM Partition
 			37 : 'GTGP', # GT-GPU Partition
@@ -10166,7 +10236,7 @@ bpdt_dict = {
 			42 : 'PPHY', # PPHY Partition
 			43 : 'GBST', # GBST Partition
 			44 : 'TCCP', # USB Type C Controller Partition
-			45 : 'PSEP', # PSE Partition
+			45 : 'PSEP', # Programmable Services Engine Partition
 			}
 			
 # CSE Extension 12 SKU Capabilities (ConfigRuleSettings)
@@ -10276,6 +10346,7 @@ phy_dict = {
 			('CSME',14,1) : ['P'],
 			('CSME',14,0) : ['P'],
 			('CSME',13,30) : ['S'],
+			('GSC',100,0) : ['G'],
 			}
 			
 # FD Component Sizes
@@ -10419,6 +10490,9 @@ fpt_pat = re.compile(br'\x24\x46\x50\x54[\x01-\x7F]\x00\x00\x00')
 # Intel Engine firmware Boot Partition Descriptor Table pattern (BPDT)
 bpdt_pat = re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01\x02][\x00\x01].{16}(.\x00.\x00.{3}\x00.{3}\x00){3}', re.DOTALL)
 
+# Intel Graphics firmware Option ROM Header & PCI Data pattern (PCIR)
+orom_pat = re.compile(br'\x55\xAA.{22}\x1C\x00.{2}\x50\x43\x49\x52\x86\x80.{4}[\x18\x1C]\x00', re.DOTALL)
+
 # Intel Flash Descriptor pattern (FD)
 fd_pat = re.compile(br'\x5A\xA5\xF0\x0F[\x01-\x10].{171}\xFF{16}', re.DOTALL)
 
@@ -10534,6 +10608,7 @@ for file_in in source :
 	fpt_matches = []
 	p_store_all = []
 	fpt_part_all = []
+	orom_hdr_all = []
 	bpdt_matches = []
 	bpdt_hdr_all = []
 	bpdt_data_all = []
@@ -10673,17 +10748,18 @@ for file_in in source :
 		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading_16) # $CPD PCHC
 		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD SPHY
 		pr_man_14 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD PPHY
-		pr_man_15 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
-		pr_man_16 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
-		pr_man_17 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
+		pr_man_15 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL).search(reading_16) # $CPD PHYP
+		pr_man_16 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
+		pr_man_17 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
+		pr_man_18 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
 		
 		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
 		if pr_man_0 in (b'FTPR', b'MFTP', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' \
 		or pr_man_2 + pr_man_6 + pr_man_7 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_4 == b'BRINGUP' or pr_man_5 in (b'EpsRecovery', b'EpsFirmware') \
-		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 \
-		or pr_man_15 == b'bup_rcv' or pr_man_16 == b'FTPR' or pr_man_17 == b'OROM' :
+		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 \
+		or pr_man_16 == b'bup_rcv' or pr_man_17 == b'FTPR' or pr_man_18 == b'OROM' :
 			break
 		
 	else :
@@ -10915,7 +10991,7 @@ for file_in in source :
 		fd_is_rsa = bool(man_pat.search(fd_data_mn2[:0x20])) # Check if FD Manifest exists
 		
 		if fd_is_rsa : # Flash Descriptor is Hash protected
-			ext_print,mn2_signs,fd_info = ext_anl(fd_data_mn2, '$MN2', 0x1B, file_end, ['CSME',0,0,0,0,0,0], 'FDV', [[],''], [[],-1,-1,-1])
+			ext_print,mn2_signs,fd_info = ext_anl(fd_data_mn2, '$MN2', 0x1B, file_end, ['CSME',0,0,0,0,0,0,'CSE ME'], 'FDV', [[],''], [[],-1,-1,-1])
 			fd_rsa_valid = mn2_signs[0] # FDV RSA Signature validity
 			fd_rsa_crash = mn2_signs[3] # FDV RSA Signature crashed
 			fd_hash_int = fd_info[0] # FDV Extension 23 Hash value
@@ -11061,7 +11137,7 @@ for file_in in source :
 		fpt_matches_init = list(fpt_pat.finditer(reading))
 		
 	# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
-	man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME',0,0,0,0,0,0], None, [[],''], [[],-1,-1,-1])
+	man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME',0,0,0,0,0,0,'CSE ME'], None, [[],''], [[],-1,-1,-1])
 	fptemp_exists = bool(man_mod_names and man_mod_names[0] in ['FTPR.man','MFTP.man'] and fptemp_info[0]) # Detect if CSE FTPR/MFTP > fptemp module exists
 	
 	# Adjust $FPT matches, ignore known false positives
@@ -11353,7 +11429,7 @@ for file_in in source :
 				pmcp_size = p_size
 				
 				_,_,_,pmc_vcn,_,_,_,_,_,_,_,_,pmc_mn2_ver,_,pmc_ext15_info,_,_,_,_ = \
-				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if IFWI Primary includes Platform Controller Hub Configuration (PCHC) partition
 			if p_name == 'PCHC' and not p_empty :
@@ -11362,16 +11438,16 @@ for file_in in source :
 				pchc_size = p_size
 				
 				_,_,_,pchc_vcn,_,_,_,_,_,_,_,_,pchc_mn2_ver,_,pchc_ext15_info,_,_,_,_ = \
-				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if IFWI Primary includes USB Type C Physical (PHY) partition
-			if p_name in ('PPHY','SPHY') and not p_empty :
+			if p_name in ('PPHY','SPHY','PHYP') and not p_empty :
 				phy_found = True
 				phy_fwu_found = False
 				phy_size = p_size
 				
 				_,_,_,phy_vcn,_,_,_,_,_,_,_,_,phy_mn2_ver,_,phy_ext15_info,_,_,_,_ = \
-				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PHY',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if IFWI Primary includes CSE MFS File System partition (Not POR, just in case)
 			if p_name in ('MFS','AFSP') and not p_empty :
@@ -11454,7 +11530,7 @@ for file_in in source :
 						pmcp_size = s_p_size
 						
 						_,_,_,pmc_vcn,_,_,_,_,_,_,_,_,pmc_mn2_ver,_,pmc_ext15_info,_,_,_,_ = \
-						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PMC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 					
 					# Detect if IFWI Secondary includes Platform Controller Hub Configuration (PCHC) partition
 					if s_p_name == 'PCHC' and not s_p_empty :
@@ -11463,16 +11539,16 @@ for file_in in source :
 						pchc_size = s_p_size
 						
 						_,_,_,pchc_vcn,_,_,_,_,_,_,_,_,pchc_mn2_ver,_,pchc_ext15_info,_,_,_,_ = \
-						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 						
 					# Detect if IFWI Secondary includes USB Type C Physical firmware (PHY) partition
-					if s_p_name in ('PPHY','SPHY') and not s_p_empty :
+					if s_p_name in ('PPHY','SPHY','PHYP') and not s_p_empty :
 						phy_found = True
 						phy_fwu_found = False
 						phy_size = s_p_size
 						
 						_,_,_,phy_vcn,_,_,_,_,_,_,_,_,phy_mn2_ver,_,phy_ext15_info,_,_,_,_ = \
-						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PHY',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
 					
 					# Detect if IFWI Secondary includes CSE MFS File System partition (Not POR, just in case)
 					if s_p_name in ('MFS','AFSP') and not s_p_empty :
@@ -11542,6 +11618,34 @@ for file_in in source :
 		# Ignore Flash Descriptor OEM backup at BPDT > OBBP > NvCommon (HP)
 		if part[0] == 'OBBP' and not part[4] and fd_pat.search(reading[part[1]:part[2]]) : fd_count -= 1
 	
+	# Parse OROM/PCIR Images
+	orom_match = list(orom_pat.finditer(reading)) # OROM/PCIR detection
+	for match in orom_match :
+		orom_pat_bgn = match.start() # Get OROM start offset
+		
+		orom_struct_size = ctypes.sizeof(GSC_OROM_Header) # Get OROM Header Structure Size
+		orom_hdr_data = reading[orom_pat_bgn:orom_pat_bgn + orom_struct_size] # Store OROM Header Structure Contents
+		orom_hdr = get_struct(orom_hdr_data, 0, GSC_OROM_Header) # Get OROM Header Structure
+		orom_hdr_p = orom_hdr.gsc_print() # Get OROM Header Structure Info
+		
+		pcir_off = orom_pat_bgn + orom_hdr.PCIDataHdrOff # Get PCIR offset via OROM Header
+		pcir_struct_size = ctypes.sizeof(GSC_OROM_PCI_Data) # Get MEA OROM PCI Data Structure Size
+		pcir_hdr_size = int.from_bytes(reading[pcir_off + 0xA:pcir_off + 0xC], 'little') # Get Image OROM PCI Data Size
+		pcir_hdr_data = reading[pcir_off:pcir_off + pcir_hdr_size] # Store OROM PCI Data Structure Contents
+		if pcir_hdr_size < pcir_struct_size : pcir_hdr_data += b'\x00' * (pcir_struct_size - pcir_hdr_size) # Adjust shorter PCIR
+		pcir_hdr = get_struct(pcir_hdr_data, 0, GSC_OROM_PCI_Data) # Get OROM PCI Data Structure
+		pcir_hdr_p = pcir_hdr.gsc_print() # Get OROM PCI Data Structure Info
+		
+		if eng_fw_end == 0xFFFFFFFF : eng_fw_end = 0x0 # Reset the initial eng_fw_end value
+		
+		eng_fw_end += orom_hdr.ImageSize * 512 # Append OROM/PCIR Image Size to total OROM Size
+		
+		# Show OROM/PCIR Image info on demand (-dfpt)
+		if param.fpt_disp : print('%s\n%s\n' % (orom_hdr_p, pcir_hdr_p))
+		
+		# Store OROM/PCIR Image info to show at OROM unpacking
+		if param.me11_mod_extr : orom_hdr_all.extend([orom_hdr_p, pcir_hdr_p])
+	
 	# Scan $MAN/$MN2 Manifest, for basic info only
 	mn2_ftpr_hdr = get_struct(reading, start_man_match - 0x1B, get_manifest(reading, start_man_match - 0x1B))
 	
@@ -11575,7 +11679,7 @@ for file_in in source :
 		rsa_block_off_i = init_man_match[1] + 0x60 # Initial (FTPR) RSA Block Offset
 		rsa_sig_i = reading[rsa_block_off_i + rsa_key_len + rsa_exp_len:rsa_block_off_i + rsa_key_len * 2 + rsa_exp_len] # Initial (FTPR) RSA Signature
 		rsa_sig_i_hash = get_hash(rsa_sig_i, 0x20) # SHA-256 of Initial (FTPR) RSA Signature
-		rsa_sig_s = rsa_sig_i + rsa_sig # Proper (OPR1) + Initial (FTPR) RSA Signatures
+		rsa_sig_s = rsa_sig_i + rsa_sig if rsa_sig != rsa_sig_i else rsa_sig # Proper (OPR1) + Initial (FTPR) RSA Signatures
 		
 		# Ignore the EXTR at FTPR & OPR Firmware Version mismatch (must be before new/merged EXTR rsa_sig_hash)
 		sps_ver_rec = reading[init_man_match[1] + 0x4:init_man_match[1] + 0xC] # Initial/Recovery (FTPR) Firmware Version
@@ -11788,7 +11892,7 @@ for file_in in source :
 				pmcp_size = part[2] - part[1]
 				
 				_,_,_,pmc_vcn,_,_,_,_,_,_,_,_,pmc_mn2_ver,_,pmc_ext15_info,_,_,_,_ = \
-				ext_anl(reading, '$CPD', part[1], file_end, ['PMC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+				ext_anl(reading, '$CPD', part[1], file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if firmware has Platform Controller Hub Configuration (PCHC) partition
 			if part[0] == 'PCHC' and not part[6] :
@@ -11797,16 +11901,16 @@ for file_in in source :
 				pchc_size = part[2] - part[1]
 				
 				_,_,_,pchc_vcn,_,_,_,_,_,_,_,_,pchc_mn2_ver,_,pchc_ext15_info,_,_,_,_ = \
-				ext_anl(reading, '$CPD', part[1], file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+				ext_anl(reading, '$CPD', part[1], file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 				
 			# Detect if firmware has USB Type C Physical (PHY) partition
-			if part[0] in ('PPHY','SPHY') and not part[6] :
+			if part[0] in ('PPHY','SPHY','PHYP') and not part[6] :
 				phy_found = True
 				phy_fwu_found = True
 				phy_size = part[2] - part[1]
 				
 				_,_,_,phy_vcn,_,_,_,_,_,_,_,_,phy_mn2_ver,_,phy_ext15_info,_,_,_,_ = \
-				ext_anl(reading, '$CPD', part[1], file_end, ['PHY',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+				ext_anl(reading, '$CPD', part[1], file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
 		
 	# Calculate Firmware Size based on $FPT and/or IFWI LT
 	if (cse_lt_struct and not rgn_exist) or (rgn_exist and p_end_last != p_max_size) :
@@ -11995,7 +12099,7 @@ for file_in in source :
 	if (variant == 'ME' and major >= 8) or variant == 'TXE' :
 		pvbit_match = (re.compile(br'\x24\x44\x41\x54.{20}\x49\x46\x52\x50', re.DOTALL)).search(reading[start_man_match:]) # $DAT + [0x14] + IFRP detection
 		if pvbit_match : pvbit = reading[start_man_match + pvbit_match.start() + 0x10]
-	elif variant in ['CSME','CSTXE','CSSPS','GSC'] or variant.startswith(('PMC','PCHC','PHY','OPROM')) :
+	elif variant in ['CSME','CSTXE','CSSPS','GSC'] or variant.startswith(('PMC','PCHC','PHY','OROM')) :
 		pvbit = mn2_flags_pvbit
 	
 	if variant == 'ME' : # Management Engine
@@ -12415,7 +12519,7 @@ for file_in in source :
 		# Get CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg, FITC, MFSB or EFS (must be after mfs_anl, efs_anl & ext_anl)
@@ -12643,7 +12747,7 @@ for file_in in source :
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg, FITC, MFSB or EFS (must be after mfs_anl, efs_anl & ext_anl)
@@ -12739,7 +12843,7 @@ for file_in in source :
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg, FITC, MFSB or EFS (must be after mfs_anl, efs_anl & ext_anl)
@@ -12833,12 +12937,12 @@ for file_in in source :
 		# Get GSC Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,_ \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 		
 		if rbep_found :
 			_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,gsc_info \
-			= ext_anl(reading, '$CPD', rbep_start, file_end, [variant,major,minor,hotfix,build,year,month], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+			= ext_anl(reading, '$CPD', rbep_start, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
 			[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 		
 		# MFS missing, determine state via FTPR > fitc.cfg, FITC, MFSB or EFS (must be after mfs_anl, efs_anl & ext_anl)
@@ -12856,13 +12960,41 @@ for file_in in source :
 			# Verify PMC compatibility
 			pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, 'Unknown', sku_result, sku_stp, pmc_pch_rev, pmc_platform)
 		
+		# Detected stitched PHY firmware
+		if phy_found :
+			phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_upd_found,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver = phy_anl(phy_mn2_ver)
+			
+			# Verify PHY compatibility
+			phy_chk(phy_mn2_signed, release, phy_platform, phy_sku)
+		
 		if major == 100 :
 			
-			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG01'] * 3 # Dedicated Graphics 1 (Xe MAX)
+			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG01'] * 3 # Dedicated Xe Graphics 1
 			
 		# Check for Latest GSC status
 		_,_,db_hot,db_bld = check_upd(('Latest_%s_%s' % (variant, sku)))
 		if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+	
+	elif variant.startswith('OROM') : # Graphics System Controller Option ROM
+		
+		# Firmware Unpacking for all OROM
+		if param.me11_mod_extr :
+			cse_unpack('OROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			continue # Next input file
+		
+		# Get CSE MFS File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
+		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl \
+		= get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
+		
+		# Detect CSE Firmware Attributes (must be after mfs_anl)
+		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
+		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
+		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
+		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
+		
+		fw_type = 'Independent'
+		
+		if mn2_meu_ver.startswith('100.') : sku,sku_db,platform = ['DG01'] * 3 # Dedicated Xe Graphics 1
 	
 	elif variant.startswith('PMC') : # Power Management Controller
 		
@@ -12874,7 +13006,7 @@ for file_in in source :
 		# Detect CSE Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$CPD', 0, file_end, ['PMC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+		= ext_anl(reading, '$CPD', 0, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 		
 		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver \
 		= pmc_anl(cpd_mn2_info)
@@ -12915,7 +13047,7 @@ for file_in in source :
 		# Detect CSE Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$CPD', 0, file_end, ['PCHC',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+		= ext_anl(reading, '$CPD', 0, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 		
 		pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,upd_found,pchc_platform,pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver \
 		= pchc_anl(cpd_mn2_info)
@@ -12953,7 +13085,7 @@ for file_in in source :
 		# Detect CSE Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$CPD', 0, file_end, ['PHY',-1,-1,-1,-1,-1,-1], None, [[],''], [[],-1,-1,-1])
+		= ext_anl(reading, '$CPD', 0, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
 		
 		phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,upd_found,phy_platform,phy_date,phy_svn, phy_pvbit,phy_meu_ver \
 		= phy_anl(cpd_mn2_info)
@@ -12983,16 +13115,6 @@ for file_in in source :
 					with open('__RPADD__' + os.path.basename(file_in), 'wb') as o : o.write(reading[:-padd_size_phy])
 			else :
 				eng_size_text = [col_m + 'Warning: File size exceeds PHY %s Firmware, data in padding!' % platform + col_e, True]
-				
-	elif variant.startswith('OPROM') : # Option ROM
-		
-		print(col_m + '\nOPROM is WIP...' + col_e)
-		
-		# Firmware Unpacking for all OPROM
-		if param.me11_mod_extr :
-			cse_unpack('OPROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
-		
-		continue # Next input file
 	
 	# Create Firmware Type DB entry
 	fw_type, type_db = fw_types(fw_type)
@@ -13033,12 +13155,18 @@ for file_in in source :
 	elif variant.startswith('PMC') : # PMC CNP A/B, ICP, LKF, CMP, TGP, ADP, DG1
 		name_db = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, rel_db)
+	elif variant.startswith('PCHCTGP') : # PCHC TGP
+		name_db = '%s_%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), date, rel_db, rsa_sig_hash)
+		name_db_p = '%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), date, rel_db)
 	elif variant.startswith('PCHC') : # PCHC ICP, LKF, CMP, TGP, ADP
 		name_db = '%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db)
 	elif variant.startswith('PHY') : # PHY S, P
 		name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], sku_db, fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s_%s' % (phy_platform[:3], sku_db, fw_ver(major,minor,hotfix,build), rel_db)
+	elif variant.startswith('OROM') : # OROM
+		name_db = '%s_%s_%s_%s' % (platform, fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
+		name_db_p = '%s_%s_%s' % (platform, fw_ver(major,minor,hotfix,build), rel_db)
 	elif fw_type == 'Partial Update' :
 		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
 		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
@@ -13101,7 +13229,7 @@ for file_in in source :
 	msg_pt.add_row(['Type', fw_type])
 	
 	if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') or is_partial_upd \
-	or variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PCHC','PMCDG','GSC')) :
+	or variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PCHC','PMCDG','GSC','OROM')) :
 		pass
 	else :
 		msg_pt.add_row(['SKU', sku])
@@ -13114,13 +13242,13 @@ for file_in in source :
 	
 	if nvm_db : msg_pt.add_row(['NVM Compatibility', ext15_info[3]])
 	
-	if ((variant in ['ME','CSME'] and major >= 8) or variant.startswith(('TXE','CSTXE','CSSPS','GSC','PMC','PCHC','PHY'))) and not is_partial_upd :
+	if ((variant == 'ME' and major >= 8) or variant.startswith(('TXE','CS','GSC','PMC','PCHC','PHY','OROM'))) and not is_partial_upd :
 		msg_pt.add_row(['TCB Security Version Number', svn])
 		
-	if ((variant in ['CSME'] and major >= 12) or variant.startswith(('CSTXE','CSSPS','GSC','PMC','PCHC','PHY'))) and not is_partial_upd :
+	if ((variant == 'CSME' and major >= 12) or variant.startswith(('CSTXE','CSSPS','GSC','PMC','PCHC','PHY','OROM'))) and not is_partial_upd :
 		msg_pt.add_row(['ARB Security Version Number', ext15_info[0]])
 	
-	if ((variant in ['ME','CSME','GSC'] and major >= 8) or variant in ['TXE','CSTXE','CSSPS'] or variant.startswith(('PMC','PCHC','PHY'))) and not is_partial_upd :
+	if ((variant == 'ME' and major >= 8) or variant.startswith(('TXE','CS','GSC','PMC','PCHC','PHY','OROM'))) and not is_partial_upd :
 		msg_pt.add_row(['Version Control Number', vcn])
 	
 	if pvbit is not None and not is_partial_upd : msg_pt.add_row(['Production Ready', ['No','Yes'][pvbit]]) # Always check against None
@@ -13140,7 +13268,7 @@ for file_in in source :
 
 	if variant in ('CSME','CSTXE','CSSPS','GSC') and not is_partial_upd : msg_pt.add_row(['File System State', mfs_state])
 	
-	if rgn_exist or cse_lt_struct or variant.startswith(('PMC','PCHC','PHY')) :
+	if rgn_exist or cse_lt_struct or variant.startswith(('PMC','PCHC','PHY','OROM')) :
 		if (variant,major,release) == ('ME',6,'ROM-Bypass') : msg_pt.add_row(['Size', 'Unknown'])
 		elif (variant,fd_devexp_rgn_exist) == ('CSTXE',True) : pass
 		else : msg_pt.add_row(['Size', '0x%X' % eng_fw_end])
@@ -13157,7 +13285,7 @@ for file_in in source :
 	
 	if platform != 'NaN' : msg_pt.add_row(['Chipset Support', platform])
 	
-	if variant not in ['SPS','CSSPS'] and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
+	if variant not in ['SPS','CSSPS','OROM'] and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
 	
 	print(msg_pt)
 	
@@ -13245,7 +13373,7 @@ for file_in in source :
 		msg_phy_pt.add_row(['Size', '0x%X' % phy_size])
 		if phy_meu_ver != '0.0.0.0000' : msg_phy_pt.add_row(['Manifest Extension Utility', phy_meu_ver])
 		msg_phy_pt.add_row(['Chipset Support', phy_platform])
-		if phy_mn2_signed == 'Production' and (variant == 'CSME' and major >= 13) :
+		if phy_mn2_signed == 'Production' and ((variant == 'CSME' and major >= 13) or variant == 'GSC') :
 			msg_phy_pt.add_row(['Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][phy_upd_found]])
 		
 		print(msg_phy_pt)
