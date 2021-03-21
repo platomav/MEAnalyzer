@@ -1,3 +1,20 @@
+v1.200.0
+
+Added duplicate firmware name separation
+Improved GSC Option ROM (OROM) IUP support
+Improved CSE PMC, PCHC & PHY IUP analysis
+Improved CSSPS OEM Configuration detection
+Improved MEA initial analysis performance
+Reverted last PCHC TGP IUP detection changes
+Applied multiple code fixes and improvements
+
+r237
+
+CSME 14.1.53.1617_COR_H_A_PRD_EXTR-Y
+CSME 14.0.48.1605_CON_H_A_PRD_EXTR
+CSME 14.0.48.1605_COR_H_A_PRD_EXTR-Y
+CSME 12.0.72.1757_CON_H_BA_PRD_EXTR
+
 v1.193.2
 
 Added GSC Option ROM (OROM) support

@@ -3,11 +3,11 @@
 
 """
 ME Analyzer
-Intel Engine Firmware Analysis Tool
+Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.193.2'
+title = 'ME Analyzer v1.200.0'
 
 import sys
 
@@ -80,14 +80,14 @@ def mea_help() :
 		  '-skip   : Skips welcome & options screen\n'
 		  '-exit   : Skips Press enter to exit prompt\n'
 		  '-mass   : Scans all files of a given directory\n'
-		  '-pdb    : Writes input file DB entry to text file\n'
+		  '-pdb    : Writes unique input file DB name to file\n'
 		  '-dbname : Renames input file based on unique DB name\n'
-		  '-dfpt   : Shows $FPT, BPDT and/or CSE Layout Table headers\n'
-		  '-unp86  : Unpacks all CSE Converged Security Engine firmware\n'
-		  '-bug86  : Enables pausing on error during CSE unpacking\n'
-		  '-ver86  : Enables full verbose output during CSE unpacking\n'
-		  '-html   : Writes parsable HTML files during MEA operation\n'
-		  '-json   : Writes parsable JSON files during MEA operation'
+		  '-dfpt   : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info\n'
+		  '-unp86  : Unpacks all supported CSE, GSC and/or IUP firmware\n'
+		  '-bug86  : Enables pause on error during CSE/GSC/IUP unpacking\n'
+		  '-ver86  : Enables verbose output during CSE/GSC/IUP unpacking\n'
+		  '-html   : Writes parsable HTML info files during MEA operation\n'
+		  '-json   : Writes parsable JSON info files during MEA operation'
 		  )
 	
 	print(col_g + '\nCopyright (C) 2014-2021 Plato Mavropoulos' + col_e)
@@ -137,7 +137,7 @@ class MEA_Param :
 			
 		if self.mass_scan or self.db_print_new : self.skip_intro = True
 		
-# Engine Structures
+# Engine/Graphics/Independent Structures
 class FPT_Pre_Header(ctypes.LittleEndianStructure) : # (ROM_BYPASS)
 	_pack_ = 1
 	_fields_ = [
@@ -399,7 +399,7 @@ class GSC_Info_IUP(ctypes.LittleEndianStructure) : # GSC Independent Update Part
 		
 		return pt
 		
-class GSC_OROM_Header(ctypes.LittleEndianStructure) : # GSC Option ROM Header (igsc_oprom.h > oprom_header_ext_v2)
+class GSC_OROM_Header(ctypes.LittleEndianStructure) : # GSC Option ROM Image Header (igsc_oprom.h > oprom_header_ext_v2)
 	_pack_ = 1
 	_fields_ = [
 		('Signature',		uint16_t),		# 0x00 AA55
@@ -418,7 +418,7 @@ class GSC_OROM_Header(ctypes.LittleEndianStructure) : # GSC Option ROM Header (i
 	def gsc_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'GSC Option ROM Header' + col_e
+		pt.title = col_y + 'GSC Option ROM Image Header' + col_e
 		pt.add_row(['Signature', '%0.4X' % self.Signature])
 		pt.add_row(['Image Size', '0x%X' % (self.ImageSize * 512)])
 		pt.add_row(['Init Function Entry Point', '0x%X' % self.InitFuncEntrPnt])
@@ -432,7 +432,7 @@ class GSC_OROM_Header(ctypes.LittleEndianStructure) : # GSC Option ROM Header (i
 		
 		return pt
 		
-class GSC_OROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Option ROM PCI Data Header (igsc_oprom.h > oprom_pci_data)
+class GSC_OROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Option ROM Image Data Header (igsc_oprom.h > oprom_pci_data)
 	_pack_ = 1
 	_fields_ = [
 		('Signature',		char*4),		# 0x00 PCIR
@@ -455,7 +455,7 @@ class GSC_OROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Option ROM PCI Dat
 	def gsc_print(self) :
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'GSC Option ROM PCI Data' + col_e
+		pt.title = col_y + 'GSC Option ROM Image Data' + col_e
 		pt.add_row(['Signature', self.Signature.decode('utf-8')])
 		pt.add_row(['Vendor ID', '%0.4X' % self.VEN_ID])
 		pt.add_row(['Device ID', '%0.4X' % self.DEV_ID])
@@ -465,7 +465,7 @@ class GSC_OROM_PCI_Data(ctypes.LittleEndianStructure) : # GSC Option ROM PCI Dat
 		pt.add_row(['Class Code', '0x%X' % int.from_bytes(self.ClassCode, 'little')])
 		pt.add_row(['Image Size', '0x%X' % (self.ImageSize * 512)])
 		pt.add_row(['Revision Level', '0x%X' % self.RevisionLevel])
-		pt.add_row(['Code Type', '0x%X' % self.CodeType])
+		pt.add_row(['Code Type', pcir_code_types[self.CodeType] if self.CodeType in pcir_code_types else 'Unknown (0x%X)' % self.CodeType])
 		pt.add_row(['Last Image', ['No','Yes'][self.LastImageMark >> 7]])
 		pt.add_row(['Maximum Runtime Image Size', '0x%X' % self.MaxRuntimeImgLen])
 		pt.add_row(['Config Utility Code Header Pointer', '0x%X' % self.ConfUtlCodHdrPtr])
@@ -717,7 +717,7 @@ class BPDT_Entry(ctypes.LittleEndianStructure) : # (BpdtEntry)
 	# It is probable that Flags field is relevant to APL IFWI 2.0 platform only
 	# At the rest of IFWI 1.6, 2.0 & 1.7, Type is uint32_t without Flags
 	
-	def info_print(self) :
+	def hdr_print(self) :
 		fvalue = ['No','Yes']
 		f1,f2,f3,f4,f5 = self.get_flags()
 		
@@ -811,7 +811,7 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		('Year',			uint16_t),		# 0x16
 		('Size',			uint32_t),		# 0x18 dwords (0x2000 max)
 		('Tag',				char*4),		# 0x1C
-		('InternalInfo',	uint32_t),		# 0x20 Internal Info of FTPR > kernel or IGMF
+		('BuildTag',		uint32_t),		# 0x20 Internal Info of FTPR > kernel or IGMF
 		('Major',			uint16_t),		# 0x24
 		('Minor',			uint16_t),		# 0x26
 		('Hotfix',			uint16_t),		# 0x28
@@ -857,7 +857,7 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
-		pt.add_row(['Unique Build Tag', '0x%X' % self.InternalInfo])
+		pt.add_row(['Unique Build Tag', '0x%X' % self.BuildTag])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
 		pt.add_row(['TCB Security Version Number', '%d' % self.SVN])
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
@@ -892,7 +892,7 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		('Year',			uint16_t),		# 0x16
 		('Size',			uint32_t),		# 0x18 dwords (0x2000 max)
 		('Tag',				char*4),		# 0x1C
-		('InternalInfo',	uint32_t),		# 0x20 Internal Info of FTPR/MFTP > kernel or IGMF
+		('BuildTag',		uint32_t),		# 0x20 Internal Info of FTPR > kernel or IGMF
 		('Major',			uint16_t),		# 0x24
 		('Minor',			uint16_t),		# 0x26
 		('Hotfix',			uint16_t),		# 0x28
@@ -939,7 +939,7 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
 		pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
-		pt.add_row(['Unique Build Tag', '0x%X' % self.InternalInfo])
+		pt.add_row(['Unique Build Tag', '0x%X' % self.BuildTag])
 		pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
 		pt.add_row(['TCB Security Version Number', '%d' % self.SVN])
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
@@ -5059,9 +5059,9 @@ class RBE_PM_Metadata_R4(ctypes.LittleEndianStructure) : # R4 - RBEP > rbe or FT
 		
 		return pt
 	
-# Unpack Engine CSE firmware
+# Unpack Engine/Graphics/Independent CSE firmware
 # noinspection PyUnusedLocal
-def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg) :
+def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg, orom_hdr_all) :
 	rbe_pm_data_d = b''
 	vol_ftbl_id = -0x1
 	vol_ftbl_pl = -0x1
@@ -5343,8 +5343,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				
 				if part_name == 'INFO' : info_anl(mod_f_path, part_start, part_end)
 				
-				# Store RBEP > rbe and FTPR/MFTP > pm "Metadata" within Module for Module w/o Metadata Hash validation
-				if part_name in ['FTPR','RBEP','MFTP'] :
+				# Store RBEP > rbe and FTPR > pm "Metadata" within Module for Module w/o Metadata Hash validation
+				if part_name in ['FTPR','RBEP'] :
 					_,rbe_pm_mod_attr,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,fwi_iup_hashes,_ = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None,
 																												[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 					
@@ -5473,8 +5473,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 				
 				if part_name == 'INFO' : info_anl(mod_f_path, part_start, part_end)
 				
-				# Store RBEP > rbe and FTPR/MFTP > pm "Metadata" within Module for Module w/o Metadata Hash validation
-				if part_name in ['FTPR','RBEP','MFTP'] :
+				# Store RBEP > rbe and FTPR > pm "Metadata" within Module for Module w/o Metadata Hash validation
+				if part_name in ['FTPR','RBEP'] :
 					_,rbe_pm_mod_attr,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,fwi_iup_hashes,_ = ext_anl(reading, '$CPD', part_start, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None,
 																												[mfs_parsed_idx,intel_cfg_hash_mfs], [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
 					
@@ -5491,7 +5491,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	# Print all Graphics System Controller Option ROM (OROM) entries
 	if len_orom_hdr_all :
 		if len_fpt_part_all or len_bpdt_part_all : print()
-		for hdr in orom_hdr_all : print('%s\n' % hdr)
+		orom_fname = os.path.join(mea_dir, fw_name, 'OROM-PCIR Images [%d].txt' % (len_orom_hdr_all // 2))
+		for hdr in orom_hdr_all :
+			print('%s\n' % hdr)
+			with open(orom_fname, 'a', encoding = 'utf-8') as orom_file : orom_file.write('%s\n' % ansi_escape.sub('', str(hdr)))
 	
 	# Parse all Code Partition Directory ($CPD) entries
 	# Better to separate $CPD from $FPT/BPDT to avoid duplicate FTUP/NFTP ($FPT) issue
@@ -5714,7 +5717,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 		
 			# Detect if FTPR Partition is FIT/OEM-customized to skip Hash check at Stages 2 & 4
 			if cpd_entry_name == 'fitc.cfg' and entry_empty == 0 : oem_config = True # FIT OEM Configuration
-			if cpd_entry_name == 'oem.key' and entry_empty == 0 : oem_signed = True # OEM RSA Signature
+			if cpd_entry_name == 'oem.key' and entry_empty == 0 and not re.compile(br'\xCB\xBC.{10}\x24\x4D\x4E\x32').search(entry_data[:0x50]) :
+				oem_signed = True # OEM RSA Signature, skip Intel "OEM" Placeholder Keys with VEN_ID 0xBCCB
 			
 			# Detect Recovery Image Partition (RCIP)
 			if cpd_name == 'RCIP' :
@@ -6850,17 +6854,17 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, invalid data
 					
 					# Open decompressed Huffman module for Hash validation, when Metadata info is not available
-					# When the firmware lacks Module Metadata, check RBEP > rbe and FTPR/MFTP > pm Modules instead
+					# When the firmware lacks Module Metadata, check RBEP > rbe and FTPR > pm Modules instead
 					elif rbe_pm_met_hashes :
 						mea_hash = get_hash(mod_data_d, len(rbe_pm_met_hashes[0]) // 2)
 						
 						if param.me11_mod_bug :
-							print('\n    MOD: No Metadata, validation via RBEP > rbe and FTPR/MFTP > pm Modules') # Debug
+							print('\n    MOD: No Metadata, validation via RBEP > rbe and FTPR > pm Modules') # Debug
 							print('    MEA: %s' % mea_hash) # Debug
 							
 						if mea_hash in rbe_pm_met_hashes :
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							rbe_pm_met_valid.append(mea_hash) # Store valid RBEP > rbe or FTPR/MFTP > pm Hash to single out leftovers
+							rbe_pm_met_valid.append(mea_hash) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
 							if param.me11_mod_bug and (mod_hash,mea_hash) not in cse_known_bad_hashes :
@@ -6942,7 +6946,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							with open(mod_fname, 'wb') as mod_file : mod_file.write(mod_data_d) # Decompression complete, invalid data
 							
 					# Open decompressed LZMA module for Hash validation, when Metadata info is not available
-					# When the firmware lacks Module Metadata, check RBEP > rbe and FTPR/MFTP > pm Modules instead
+					# When the firmware lacks Module Metadata, check RBEP > rbe and FTPR > pm Modules instead
 					elif rbe_pm_met_hashes :
 						mea_hash_c = get_hash(mod_data_r, len(rbe_pm_met_hashes[0]) // 2) # Compressed, Header zeros included (most LZMA Modules)
 						
@@ -6952,7 +6956,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							mod_hash_u_ok = mea_hash_u in rbe_pm_met_hashes # Check Uncompressed LZMA validity
 						
 						if param.me11_mod_bug : # Debug
-							print('\n    MOD: No Metadata, validation via RBEP > rbe and FTPR/MFTP > pm Modules') # Debug
+							print('\n    MOD: No Metadata, validation via RBEP > rbe and FTPR > pm Modules') # Debug
 							if mod_hash_c_ok :
 								print('    MEA: %s' % mea_hash_c)
 							elif mod_hash_u_ok :
@@ -6963,11 +6967,11 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						
 						if mod_hash_c_ok :
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							rbe_pm_met_valid.append(mea_hash_c) # Store valid RBEP > rbe or FTPR/MFTP > pm Hash to single out leftovers
+							rbe_pm_met_valid.append(mea_hash_c) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
 						elif mod_hash_u_ok :
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
-							rbe_pm_met_valid.append(mea_hash_u) # Store valid RBEP > rbe or FTPR/MFTP > pm Hash to single out leftovers
+							rbe_pm_met_valid.append(mea_hash_u) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
 							if param.me11_mod_bug and (mod_hash,mea_hash_c) not in cse_known_bad_hashes :
@@ -8837,12 +8841,7 @@ def pchc_anl(mn2_info) :
 	
 	pchc_fw_ver = '%d.%d.%d.%0.4d' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 	pchc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
-	if pchc_variant == 'PCHCTGP' :
-		# The Date is required for TGP unfortunately because different PCHC with same Version exist = GREAT WORK INTEL...
-		pchc_name_db = '%s_%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, mn2_info[7], pchc_mn2_signed_db, mn2_info[6])
-	else :
-		# With the hope that it was a singular mistake, the other PCHC will remain simpler without Date
-		pchc_name_db = '%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, pchc_mn2_signed_db, mn2_info[6])
+	pchc_name_db = '%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, pchc_mn2_signed_db, mn2_info[6])
 	
 	# Search DB for PCHC firmware
 	for line in mea_db_lines :
@@ -9180,11 +9179,27 @@ def cpd_chk(cpd_data, variant, major) :
 	cpd_chk_rslt = ('$CPD_%s_%d_0x%0.8X' % (variant,major,cpd_chk_file),'$CPD_%s_%d_0x%0.8X' % (variant,major,cpd_chk_calc))
 	
 	return cpd_chk_file == cpd_chk_calc, cpd_chk_file, cpd_chk_calc, cpd_chk_rslt
+
+# Check CSE/GSC IUP firmware size
+def chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) :
+	if eng_fw_end > file_end :
+		eng_size_text = [col_m + 'Warning: %s %s Firmware size exceeds File, possible data loss!' % (variant_p, platform) + col_e, True]
+	elif eng_fw_end < file_end :
+		padd_size_iup = file_end - eng_fw_end
+		
+		if reading[eng_fw_end:file_end] == padd_size_iup * b'\xFF' :
+			eng_size_text = [col_y + 'Note: File has harmless unneeded %s %s Firmware end padding!' % (variant_p, platform) + col_e, False] # warn_stor
+			if param.check : # Remove unneeded padding, when applicable (Debug/Research)
+				with open('__RPADD__' + os.path.basename(file_in), 'wb') as o : o.write(reading[:-padd_size_iup])
+		else :
+			eng_size_text = [col_m + 'Warning: File size exceeds %s %s Firmware, data in padding!' % (variant_p, platform) + col_e, True]
 	
-# Get Engine Manifest Structure
+	return eng_size_text
+
+# Get Engine/Graphics/Independent Manifest Structure
 def get_manifest(buffer, offset) :
 	man_ver = int.from_bytes(buffer[offset + 0x8:offset + 0xC], 'little') # $MAN/$MN2 Version Tag
-	num_info = int.from_bytes(buffer[offset + 0x20:offset + 0x24], 'little') # $MAN/$MN2 NumModules/InternalInfo
+	num_info = int.from_bytes(buffer[offset + 0x20:offset + 0x24], 'little') # $MAN/$MN2 NumModules/BuildTag
 	
 	if man_ver == 0x10000 and (0x0 < num_info < 0x50) : return MN2_Manifest_R0
 	if man_ver == 0x10000 : return MN2_Manifest_R1
@@ -9221,7 +9236,7 @@ def get_bpdt(buffer, offset) :
 	
 	return BPDT_Header_2
 	
-# Get RBEP > rbe and/or FTPR/MFTP > pm Module "Metadata"
+# Get RBEP > rbe and/or FTPR > pm Module "Metadata"
 def get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes) :
 	rbe_pm_patt_256_1 = re.compile(br'\x86\x80.{70}\x86\x80.{70}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-256 "Metadata" pattern 1
 	rbe_pm_patt_256_2 = re.compile(br'\x86\x80.{46}\x86\x80.{46}\x86\x80', re.DOTALL).search(rbe_pm_data_d) # Find SHA-256 "Metadata" pattern 2
@@ -9315,7 +9330,7 @@ def struct_json(structure) :
 	return json.dumps(result, indent=4)
 
 # Initialize PLTable
-def ext_table(row_col_names,header,padd) :
+def ext_table(row_col_names, header, padd) :
 	pt = pltable.PrettyTable(row_col_names)
 	pt.set_style(pltable.UNICODE_LINES)
 	pt.xhtml = True
@@ -9374,7 +9389,7 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 	if exc_type is KeyboardInterrupt :
 		print('\n')
 	else :
-		print(col_r + '\nError: ME Analyzer crashed, please report the following:\n')
+		print(col_r + '\nError: %s crashed, please report the following:\n' % title)
 		traceback.print_exception(exc_type, exc_value, tb)
 		print(col_e)
 	
@@ -9541,7 +9556,7 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 
 # Analyze Intel Flash Descriptor (FD) Regions
 def fd_anl_rgn(start_fd_match, end_fd_match, fd_is_ich) :
-	fd_reg_exist = [] # BIOS/IAFW + Engine
+	fd_reg_exist = [] # BIOS/IAFW + Engine/Graphics
 	
 	fd_rgn_base = end_fd_match + 0x3C if fd_is_ich else end_fd_match + 0x2C
 	
@@ -9566,9 +9581,9 @@ def fd_anl_rgn(start_fd_match, end_fd_match, fd_is_ich) :
 		me_fd_start = me_fd_base * 0x1000 + start_fd_match
 		me_fd_size = (me_fd_limit + 1 - me_fd_base) * 0x1000
 		me_fd_exist = me_fd_start < file_end
-		fd_reg_exist.extend((me_fd_exist,me_fd_start,me_fd_size)) # Engine Region exists
+		fd_reg_exist.extend((me_fd_exist,me_fd_start,me_fd_size)) # Engine/Graphics Region exists
 	else :
-		fd_reg_exist.extend((False,0,0)) # Engine Region missing
+		fd_reg_exist.extend((False,0,0)) # Engine/Graphics Region missing
 	
 	if pdr_fd_limit != 0 :
 		pdr_fd_start = pdr_fd_base * 0x1000 + start_fd_match
@@ -9576,7 +9591,7 @@ def fd_anl_rgn(start_fd_match, end_fd_match, fd_is_ich) :
 		pdr_fd_exist = pdr_fd_start < file_end
 		fd_reg_exist.extend((pdr_fd_exist,pdr_fd_start,pdr_fd_size)) # Platform Data Region exists
 	else :
-		fd_reg_exist.extend((False,0,0)) # Engine Region missing
+		fd_reg_exist.extend((False,0,0)) # Engine/Graphics Region missing
 	
 	if devexp_fd_limit != 0 :
 		devexp_fd_start = devexp_fd_base * 0x1000 + start_fd_match
@@ -9588,8 +9603,8 @@ def fd_anl_rgn(start_fd_match, end_fd_match, fd_is_ich) :
 	
 	return fd_reg_exist
 	
-# Format firmware version
-def fw_ver(major,minor,hotfix,build) :
+# Format firmware version based on Variant
+def get_fw_ver(variant, major, minor, hotfix, build) :
 	if variant in ['SPS','CSSPS'] :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCDG')) :
@@ -9603,19 +9618,6 @@ def fw_ver(major,minor,hotfix,build) :
 	elif variant.startswith('PHY') :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, '{0:04d}'.format(build))
 	else :
-		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
-	
-	return version
-
-# Detect Fujitsu Compressed ME Region
-def fuj_umem_ver(me_fd_start) :
-	version = 'NaN'
-	
-	if reading[me_fd_start:me_fd_start + 0x4] == b'\x55\x4D\xC9\x4D' : # UMEM
-		major = int.from_bytes(reading[me_fd_start + 0xB:me_fd_start + 0xD], 'little')
-		minor = int.from_bytes(reading[me_fd_start + 0xD:me_fd_start + 0xF], 'little')
-		hotfix = int.from_bytes(reading[me_fd_start + 0xF:me_fd_start + 0x11], 'little')
-		build = int.from_bytes(reading[me_fd_start + 0x11:me_fd_start + 0x13], 'little')
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
 	
 	return version
@@ -9637,24 +9639,6 @@ def fovd_clean(fovdtype) :
 			break # FOVD/NVKR Partition found, skip the rest
 	
 	return True
-
-# Create Firmware Type Database Entry
-def fw_types(fw_type) :
-	type_db = 'NaN'
-	
-	if fw_type == 'Extracted' : type_db = 'EXTR'
-	elif fw_type == 'Stock' : type_db = 'RGN'
-	elif fw_type == 'Update' : type_db = 'UPD'
-	elif fw_type == 'Operational' : type_db = 'OPR'
-	elif fw_type == 'Recovery' : type_db = 'REC'
-	elif fw_type == 'Partial Update' : type_db = 'PFU'
-	elif fw_type == 'Independent' and variant.startswith('PMC') : type_db = 'PMC'
-	elif fw_type == 'Independent' and variant.startswith('PHY') : type_db = 'PHY'
-	elif fw_type == 'Independent' and variant.startswith('PCHC') : type_db = 'PCHC'
-	elif fw_type == 'Independent' and variant.startswith('OROM') : type_db = 'OROM'
-	elif fw_type == 'Unknown' : type_db = 'UNK'
-	
-	return fw_type, type_db
 	
 # Calculate Hash Hex Digest of Message
 def calc_hash_hex(message, hash_func) :
@@ -10033,6 +10017,9 @@ p_type_dict = {0:'Code', 1:'Data', 2:'GLUT', 3:'Generic', 4:'EFFS', 5:'ROM'}
 # Flash Partition Table v2.0 Flags (Sector Types)
 sector_types = {0:'4K', 2:'8K', 4:'64K', 8:'64K-8K Mixed'}
 
+# GSC Option ROM PCI Register Code Types
+pcir_code_types = {0x0: 'BIOS', 0x1: 'OpenBIOS', 0x2: 'PA-RISC', 0x3: 'UEFI', 0xF0: 'Data', 0xF1: 'Code', 0xFF: 'Reserved'}
+
 # CSE Extension 0x0F Firmware SKU
 ext15_fw_sku = {
 			0 : ('Undefined','NA'),
@@ -10144,7 +10131,7 @@ ext_dict = {
 			
 # CSE Key Manifest Hash Usages
 key_dict = {
-			0 : 'CSE BUP', # Fault Tolerant Partition (FTPR or MFTP)
+			0 : 'CSE BUP', # Fault Tolerant Partition (FTPR)
 			1 : 'CSE Main', # Non-Fault Tolerant Partition (NFTP)
 			2 : 'PMCP', # Power Management Controller
 			6 : 'USB Type C IOM', # USB Type C I/O Manageability
@@ -10197,7 +10184,7 @@ key_dict = {
 bpdt_dict = {
 			0 : 'SMIP', # OEM-SMIP Partition
 			1 : 'RBEP', # ROM Boot Extensions Partition (CSE-RBE)
-			2 : 'FTPR', # Fault Tolerant Partition (CSE-BUP/FTPR or CSE-Mini-BUP/MFTP)
+			2 : 'FTPR', # Fault Tolerant Partition (CSE-BUP/FTPR)
 			3 : 'UCOD', # Microcode Partition
 			4 : 'IBBP', # IBB Partition
 			5 : 'S-BPDT', # Secondary BPDT
@@ -10390,6 +10377,20 @@ cse_known_bad_hashes = [
 ('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSME 11.8 SLM & CSSPS 1/IGN Extension 0x3, CSSPS 5 & CSSPS 4.4 Extension 0x16)
 ]
 
+# Known Duplicate File Name Hashes
+known_dup_name_hahes = [
+'115C0ECC472F2F68B9E78DD8DC384803A1C181B437DFB5F69C0AF2A06494E785', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
+'543C776F7B6BE85063263445FD3F0B429143F0E7358D94AB7A6C5EAC76CBE604', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
+'2842B771A1D12714429B30304E7BA343BA5561481C515CFB1D60E058C7CB3BD7', # SPS 03.00.07.024_DE_PRD_EXTR (Date)
+'66661AD2E24380900B7D72C76EE28B4F2417C7498D696215CB8A8373B9FB1D8D', # SPS 03.00.07.024_DE_PRD_EXTR (Date)
+'0FE001FC26E846BF81DEC51CF485060700F9AD25356F84FAD4865B3B7B4C9CB5', # SPS 03.00.07.024_DE_PRD_OPR (Date)
+'83FD08D0CA822368D5CA609F62C0EBDE2D704ACBF9684EB753C6955EFA6E1297', # SPS 03.00.07.024_DE_PRD_OPR (Date)
+'AB5186FF7268433A90E8DA4BAEA17899E239BC9C8038A8D0BF5EADF9033C2FE2', # SPS 03.00.07.024_DE_PRD_REC (Date)
+'15D7FDD257400AC9C9E923996FAE277701EEBB3924FDDDD322A7EC1FA257AE23', # SPS 03.00.07.024_DE_PRD_REC (Date)
+'094F8155EAF63909FAC8D01D7E58814B861074114515BCB807EF2596B64BD838', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
+'A4C21E6741439BF3208E2493DB8C86C820CCFD7792D50D635DD8531D364F205F', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
+]
+
 # Get MEA Parameters from input
 param = MEA_Param(sys.argv)
 
@@ -10426,7 +10427,7 @@ elif sys_os.startswith('linux') or sys_os == 'darwin' : sys.stdout.write('\x1b]2
 if not param.skip_intro :
 	mea_hdr(mea_db_rev_p)
 
-	print("\nWelcome to Intel Engine Firmware Analysis Tool\n")
+	print("\nWelcome to Intel Engine & Graphics Firmware Analysis Tool\n")
 	
 	if arg_num == 2 :
 		print("Press Enter to skip or input -? to list options\n")
@@ -10478,23 +10479,32 @@ in_count = len(source)
 for arg in source :
 	if arg in param.val : in_count -= 1
 
-# Intel Engine firmware Manifest pattern ($MN2 or $MAN)
+# Intel Engine/Graphics/Independent firmware Manifest pattern ($MN2 or $MAN)
 man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL)
 
-# Intel Engine firmware Code Partition Directory pattern ($CPD)
+# Intel Engine/Graphics/Independent firmware Code Partition Directory pattern ($CPD)
 cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14]', re.DOTALL)
 
-# Intel Engine firmware Flash Partition Table pattern ($FPT)
+# Intel Engine/Graphics firmware Flash Partition Table pattern ($FPT)
 fpt_pat = re.compile(br'\x24\x46\x50\x54[\x01-\x7F]\x00\x00\x00')
 
-# Intel Engine firmware Boot Partition Descriptor Table pattern (BPDT)
+# Intel Engine/Graphics firmware Boot Partition Descriptor Table pattern (BPDT)
 bpdt_pat = re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01\x02][\x00\x01].{16}(.\x00.\x00.{3}\x00.{3}\x00){3}', re.DOTALL)
 
-# Intel Graphics firmware Option ROM Header & PCI Data pattern (PCIR)
+# Intel Graphics firmware Option ROM Header & PCI Register pattern (PCIR)
 orom_pat = re.compile(br'\x55\xAA.{22}\x1C\x00.{2}\x50\x43\x49\x52\x86\x80.{4}[\x18\x1C]\x00', re.DOTALL)
 
 # Intel Flash Descriptor pattern (FD)
 fd_pat = re.compile(br'\x5A\xA5\xF0\x0F[\x01-\x10].{171}\xFF{16}', re.DOTALL)
+
+# Intel Independent firmware probable patterns ($CPD + IUP)
+pr_man_12_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL)
+pr_man_13_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL)
+pr_man_14_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL)
+pr_man_15_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL)
+pr_man_16_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL)
+pr_man_17_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL)
+pr_man_18_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL)
 
 for file_in in source :
 	
@@ -10502,7 +10512,6 @@ for file_in in source :
 	nvm_db = ''
 	fw_type = ''
 	upd_rslt = ''
-	no_man_text = ''
 	reading_msg = ''
 	me2_type_fix = ''
 	me2_type_exp = ''
@@ -10514,7 +10523,6 @@ for file_in in source :
 	sku_init = 'NaN'
 	sku_init_db = 'NaN'
 	pdm_status = 'NaN'
-	fuj_version = 'NaN'
 	variant = 'Unknown'
 	variant_p = 'Unknown'
 	sku_result = 'Unknown'
@@ -10693,7 +10701,6 @@ for file_in in source :
 	fpt_pat_bgn = 0
 	fpt_pat_end = 0
 	bpdt_pat_bgn = 0
-	bpdt_pat_end = 0
 	cse_lt_dp_size = 0
 	cse_lt_bp_size = 0
 	sps3_chk16_file = 0
@@ -10702,6 +10709,8 @@ for file_in in source :
 	devexp_fd_start = -1
 	p_end_last_back = -1
 	cse_lt_flags_red = 0
+	orom_pci_size = 0
+	orom_cpd_size = 0
 	check_fw_align = 0
 	file_has_align = 0
 	eng_fw_align = 0x1000
@@ -10722,18 +10731,146 @@ for file_in in source :
 	
 	# Store input file buffer to RAM, will change if Flash Descriptor is detected
 	with open(file_in, 'rb') as in_file : reading = in_file.read()
-	file_end = len(reading)
+	file_end = len(reading) # Store the input file buffer Size/EOF
+	reading_16 = reading[:0x10] # Store the first 16 input file buffer bytes
 	
-	# Detect if image is AMI BIOS Guard (PFAT) protected
-	ami_pfat = reading[0x8:0x10] == b'_AMIPFAT'
-	
-	# Detect Intel Engine firmware
-	for man_range in list(man_pat.finditer(reading)) :
-		(start_man_match, end_man_match) = man_range.span()
-		start_man_match += 0xB # Add 8680.{9} sanity check before .$MN2 or .$MAN
-		reading_16 = reading[:0x10] # Read & Store the first 0x10 buffer bytes
+	# Detect & Skip AMI BIOS Guard (PFAT) protected images
+	if reading[0x8:0x10] == b'_AMIPFAT' :
+		msg_pt = ext_table([], False, 1)
+		msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
 		
-		pr_man_0 = reading[end_man_match + 0x374:end_man_match + 0x378] # FTPR/MFTP,OPR (CSME 15 +, CSTXE 5 +, CSSPS 6 +)
+		print('\n%s\n\nDetected' % msg_pt + col_y + ' AMI BIOS Guard (PFAT) ' + col_e + 'protected image, prior extraction'
+			  ' required!\n\nUse "AMI BIOS Guard Extractor" from https://github.com/platomav/BIOSUtilities')
+		
+		copy_on_msg(['PFAT']) # Close input and copy it in case of messages
+		
+		continue # Next input file
+	
+	# Parse VFS & EFS File Table Blobs
+	if param.mfs_ftbl :
+		ftbl = get_struct(reading, 0, FTBL_Header)
+		
+		if ftbl.Signature == b'FTBL' :
+			for i in range(ftbl.TableCount) :
+				tbl = get_struct(reading, 0x10 + i * 0x10, FTBL_Table)
+				
+				tbl_data = reading[tbl.Offset:tbl.Offset + tbl.Size]
+				
+				ftbl_pt = ext_table(['Path','File ID','Integrity','Encryption','Anti-Replay','Access Unknown','User ID','Group ID','VFS ID','Unknown'], True, 1)
+				ftbl_pt.title = 'FTBL Table ' + '%0.2X' % tbl.Dictionary
+				
+				for j in range(tbl.EntryCount) :
+					entry_data = tbl_data[j * 0x44:j * 0x44 + 0x44]
+					
+					entry = get_struct(entry_data, 0, FTBL_Entry)
+					
+					# Remember to also adjust FTBL_Entry, mfs_home13_anl & efs_anl
+					
+					f1,f2,f3,f4,f5 = entry.get_flags() # Integrity, Encryption, Anti-Replay, Access Unknown, Unknown
+					
+					path = entry.Path.decode('utf-8').strip() # Local Path (strip extra spaces, i.e. INTC_defpdt)
+					file_id = '0x%0.8X' % entry.FileID # File ID
+					access_int = ['No','Yes'][f1] # Access > Integrity
+					access_enc = ['No','Yes'][f2] # Access > Encryption
+					access_arp = ['No','Yes'][f3] # Access > Anti-Replay
+					access_unk = '{0:013b}b'.format(f4) # Access > Unknown
+					group_id = '0x%0.4X' % entry.GroudID # Group ID
+					user_id = '0x%0.4X' % entry.UserID # User ID
+					vfs_id = '%0.4d' % entry.VFSID # VFS ID (Low Level File)
+					unknown = '{0:064b}b'.format(f5) # Unknown
+					
+					# Create File Table Entries Dictionary
+					ftbl_entry_dict['%0.8X' % entry.FileID] = '%s,%d,%d,%d,%d,%d,%d,%d,%d' % (path,f1,f2,f3,f4,entry.GroudID,entry.UserID,entry.VFSID,f5)
+					
+					# Create File Table Entries Info
+					ftbl_pt.add_row([path,file_id,access_int,access_enc,access_arp,access_unk,user_id,group_id,vfs_id,unknown])
+					
+				ftbl_blob_dict['%0.2X' % tbl.Dictionary] = {}
+				ftbl_blob_dict['%0.2X' % tbl.Dictionary]['FTBL'] = ftbl_entry_dict # Create File Table Blob Dictionary
+				
+				with open('%s_FTBL_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(ftbl_pt))
+				if param.write_html :
+					with open('%s_FTBL_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(ftbl_pt))
+				if param.write_json :
+					with open('%s_FTBL_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(ftbl_pt))
+		
+		if reading[ftbl.HeaderSize:ftbl.HeaderSize + 0x4] == b'EFST' :
+			efst = get_struct(reading, ftbl.HeaderSize, EFST_Header)
+			
+			e_pt = ext_table(['Dictionary','Offset','File Count','Size','Unknown 0','Data Pages Committed',
+							  'Data Pages Reserved','Max Files','Unknown 1','Table Revision'], True, 1)
+			e_pt.title = 'EFST Tables'
+			
+			for i in range(efst.TableCount) :
+				tbl = get_struct(reading, ftbl.HeaderSize + 0x10 + i * 0x28, EFST_Table)
+				
+				e_pt.add_row(['0x%0.2X' % tbl.Dictionary,'0x%X' % tbl.Offset,tbl.EntryCount,'0x%X' % tbl.Size,'0x%X' % tbl.Unknown0,
+				tbl.DataPagesCom,tbl.DataPagesRes,tbl.MaxEntries,'0x%X' % tbl.Unknown1,tbl.Revision])
+				
+				with open('%s_EFST.txt' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write(str(e_pt))
+				
+				tbl_data = reading[tbl.Offset:tbl.Offset + tbl.Size]
+				
+				efst_pt = ext_table(['VFS ID','Name','Page','Offset','Size','Reserved'], True, 1)
+				efst_pt.title = 'EFST Table ' + '%0.2X' % tbl.Dictionary
+				
+				file_info = []
+				efst_entry_dict = {}
+				for j in range(tbl.EntryCount) :
+					entry_data = tbl_data[j * 0x3C:j * 0x3C + 0x3C]
+					
+					entry = get_struct(entry_data, 0, EFST_Entry)
+					
+					# Remember to also adjust EFST_Entry
+					
+					file_id = entry.FileID # File Count
+					file_name = entry.FileName.decode('utf-8').strip() # File Name (strip extra spaces)
+					if file_name.startswith('EFS_FILE_') : file_name = file_name[9:]
+					file_page = entry.FilePage # EFS Page Number (0,1,2...)
+					file_offset = entry.FileOffset # File Offset
+					file_length = entry.FileSize # File Size
+					reserved = entry.Reserved # Reserved
+					file_info.append((file_page,file_offset,file_length,file_id,reserved,file_name))
+					
+					# Create EFS Table Entries Info
+					efst_pt.add_row(['%0.4d' % file_id,file_name,file_page,'0x%X' % file_offset,'0x%X' % file_length,'0x%X' % reserved])
+					
+				file_info.sort() # Sort EFS Entries/Files based on File Page & File Offset
+				
+				# Determine actual EFS Data Area Buffer Offset for each Entry/File.
+				# EFS Data Area Buffer consists of all Data Pages w/o Header & Footer.
+				# EFS Files within the Data Area Buffer are sequential so we can use
+				# each File Size to determine the next File Offset, starting from 0x0.
+				dict_offset = [0] # First File starts at Data Area Buffer Offset 0x0
+				for info_idx in range(len(file_info) - 1) : # Last File Size is not needed
+					last_offset = dict_offset[info_idx] # Get previous File Offset
+					dict_offset.append(last_offset + 0x4 + file_info[info_idx][2]) # Calculate current File Offset
+				
+				# Create EFS Table Entries/Files Dictionary
+				for info_idx in range(len(file_info)) :
+					efst_entry_dict['%0.8X' % dict_offset[info_idx]] = '%d,%d,%d,%d,%d,%s' % file_info[info_idx]
+				
+				# Create EFS Table Blob Dictionary
+				if 'EFST' not in ftbl_blob_dict['%0.2X' % tbl.Dictionary] : ftbl_blob_dict['%0.2X' % tbl.Dictionary]['EFST'] = {}
+				ftbl_blob_dict['%0.2X' % tbl.Dictionary]['EFST']['%0.2X' % tbl.Revision] = efst_entry_dict
+				
+				with open('%s_EFST_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(efst_pt))
+				if param.write_html :
+					with open('%s_EFST_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(efst_pt))
+				if param.write_json :
+					with open('%s_EFST_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(efst_pt))
+				
+		o_dict = json.dumps(ftbl_blob_dict, indent=4, sort_keys=True)
+		with open('%s_FileTable.dat' % os.path.basename(file_in), 'w') as o : o.write(o_dict)
+		
+		continue # Next input file
+	
+	# Detect Intel Engine/Graphics/Independent firmware
+	for man_range in list(man_pat.finditer(reading)) :
+		start_man_match = man_range.start() + 0xB # 8680.{9} sanity check before .$MN2 or .$MAN
+		end_man_match = man_range.end()
+		
+		pr_man_0 = reading[end_man_match + 0x374:end_man_match + 0x378] # FTPR,OPR (CSME 15 +, CSTXE 5 +, CSSPS 6 +)
 		pr_man_1 = reading[end_man_match + 0x274:end_man_match + 0x278] # FTPR,OPR (CSME 11 - 13, CSTXE 3 - 4, CSSPS 4 - 5.0.3)
 		pr_man_2 = reading[end_man_match + 0x264:end_man_match + 0x266] # FT,OP (ME 6 - 10 Part 1, TXE 0 - 2 Part 1, SPS 2 - 3 Part 1)
 		pr_man_3 = reading[end_man_match + 0x266:end_man_match + 0x268] # PR,xx (ME 6 - 10 Part 2, TXE 0 - 2 Part 2)
@@ -10741,238 +10878,39 @@ for file_in in source :
 		pr_man_5 = reading[end_man_match + 0x2DC:end_man_match + 0x2E7] # EpsRecovery,EpsFirmware (SPS 1)
 		pr_man_6 = reading[end_man_match + 0x270:end_man_match + 0x277] # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
 		pr_man_7 = reading[end_man_match + 0x33C:end_man_match + 0x340] # $MMX (ME 6 BYP Part 2)
-		pr_man_8 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL).search(reading_16) # $CPD LOCL
-		pr_man_9 = re.compile(br'\x24\x4D\x4D\x45\x57\x43\x4F\x44\x5F').search(reading[0x290:0x299]) # $MMEWCOD_
-		pr_man_10 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL).search(reading_16) # $CPD PMCP
-		pr_man_11 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL).search(reading_16) # $CPD PCOD
-		pr_man_12 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL).search(reading_16) # $CPD PCHC
-		pr_man_13 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD SPHY
-		pr_man_14 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL).search(reading_16) # $CPD PPHY
-		pr_man_15 = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL).search(reading_16) # $CPD PHYP
-		pr_man_16 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
-		pr_man_17 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
-		pr_man_18 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
+		pr_man_8 = reading[end_man_match + 0x270:end_man_match + 0x279] # $MMEWCOD_ (ME 8+ PFU)
+		pr_man_9 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
+		pr_man_10 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
+		pr_man_11 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
+		pr_man_12 = pr_man_12_pat.search(reading_16) # $CPD LOCL (CSE)
+		pr_man_13 = pr_man_13_pat.search(reading_16) # $CPD PMCP (CSE)
+		pr_man_14 = pr_man_14_pat.search(reading_16) # $CPD PCOD (GSC)
+		pr_man_15 = pr_man_15_pat.search(reading_16) # $CPD PCHC (CSE)
+		pr_man_16 = pr_man_16_pat.search(reading_16) # $CPD SPHY (CSE)
+		pr_man_17 = pr_man_17_pat.search(reading_16) # $CPD PPHY (CSE)
+		pr_man_18 = pr_man_18_pat.search(reading_16) # $CPD PHYP (GSC)
 		
 		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
-		if pr_man_0 in (b'FTPR', b'MFTP', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' \
+		if pr_man_0 in (b'FTPR', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' \
 		or pr_man_2 + pr_man_6 + pr_man_7 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_4 == b'BRINGUP' or pr_man_5 in (b'EpsRecovery', b'EpsFirmware') \
-		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 or pr_man_9 or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 \
-		or pr_man_16 == b'bup_rcv' or pr_man_17 == b'FTPR' or pr_man_18 == b'OROM' :
+		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 == b'$MMEWCOD_' or pr_man_9 == b'FTPR' or pr_man_10 == b'OROM' or pr_man_11 == b'bup_rcv' \
+		or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 :
 			break
 		
 	else :
 		# Recovery Manifest not found (for > finish)
-		
-		# Parse MFS (FTBL) & EFS (EFST) File Table Blobs
-		if param.mfs_ftbl :
-			ftbl = get_struct(reading, 0, FTBL_Header)
-			
-			if ftbl.Signature == b'FTBL' :
-				for i in range(ftbl.TableCount) :
-					tbl = get_struct(reading, 0x10 + i * 0x10, FTBL_Table)
-					
-					tbl_data = reading[tbl.Offset:tbl.Offset + tbl.Size]
-					
-					ftbl_pt = ext_table(['Path','File ID','Integrity','Encryption','Anti-Replay','Access Unknown','User ID','Group ID','VFS ID','Unknown'], True, 1)
-					ftbl_pt.title = 'FTBL Table ' + '%0.2X' % tbl.Dictionary
-					
-					for j in range(tbl.EntryCount) :
-						entry_data = tbl_data[j * 0x44:j * 0x44 + 0x44]
-						
-						entry = get_struct(entry_data, 0, FTBL_Entry)
-						
-						# Remember to also adjust FTBL_Entry, mfs_home13_anl & efs_anl
-						
-						f1,f2,f3,f4,f5 = entry.get_flags() # Integrity, Encryption, Anti-Replay, Access Unknown, Unknown
-						
-						path = entry.Path.decode('utf-8').strip() # Local Path (strip extra spaces, i.e. INTC_defpdt)
-						file_id = '0x%0.8X' % entry.FileID # File ID
-						access_int = ['No','Yes'][f1] # Access > Integrity
-						access_enc = ['No','Yes'][f2] # Access > Encryption
-						access_arp = ['No','Yes'][f3] # Access > Anti-Replay
-						access_unk = '{0:013b}b'.format(f4) # Access > Unknown
-						group_id = '0x%0.4X' % entry.GroudID # Group ID
-						user_id = '0x%0.4X' % entry.UserID # User ID
-						vfs_id = '%0.4d' % entry.VFSID # VFS ID (Low Level File)
-						unknown = '{0:064b}b'.format(f5) # Unknown
-						
-						# Create File Table Entries Dictionary
-						ftbl_entry_dict['%0.8X' % entry.FileID] = '%s,%d,%d,%d,%d,%d,%d,%d,%d' % (path,f1,f2,f3,f4,entry.GroudID,entry.UserID,entry.VFSID,f5)
-						
-						# Create File Table Entries Info
-						ftbl_pt.add_row([path,file_id,access_int,access_enc,access_arp,access_unk,user_id,group_id,vfs_id,unknown])
-						
-					ftbl_blob_dict['%0.2X' % tbl.Dictionary] = {}
-					ftbl_blob_dict['%0.2X' % tbl.Dictionary]['FTBL'] = ftbl_entry_dict # Create File Table Blob Dictionary
-					
-					with open('%s_FTBL_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(ftbl_pt))
-					if param.write_html :
-						with open('%s_FTBL_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(ftbl_pt))
-					if param.write_json :
-						with open('%s_FTBL_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(ftbl_pt))
-			
-			if reading[ftbl.HeaderSize:ftbl.HeaderSize + 0x4] == b'EFST' :
-				efst = get_struct(reading, ftbl.HeaderSize, EFST_Header)
-				
-				e_pt = ext_table(['Dictionary','Offset','File Count','Size','Unknown 0','Data Pages Committed',
-								  'Data Pages Reserved','Max Files','Unknown 1','Table Revision'], True, 1)
-				e_pt.title = 'EFST Tables'
-				
-				for i in range(efst.TableCount) :
-					tbl = get_struct(reading, ftbl.HeaderSize + 0x10 + i * 0x28, EFST_Table)
-					
-					e_pt.add_row(['0x%0.2X' % tbl.Dictionary,'0x%X' % tbl.Offset,tbl.EntryCount,'0x%X' % tbl.Size,'0x%X' % tbl.Unknown0,
-					tbl.DataPagesCom,tbl.DataPagesRes,tbl.MaxEntries,'0x%X' % tbl.Unknown1,tbl.Revision])
-					
-					with open('%s_EFST.txt' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write(str(e_pt))
-					
-					tbl_data = reading[tbl.Offset:tbl.Offset + tbl.Size]
-					
-					efst_pt = ext_table(['VFS ID','Name','Page','Offset','Size','Reserved'], True, 1)
-					efst_pt.title = 'EFST Table ' + '%0.2X' % tbl.Dictionary
-					
-					file_info = []
-					efst_entry_dict = {}
-					for j in range(tbl.EntryCount) :
-						entry_data = tbl_data[j * 0x3C:j * 0x3C + 0x3C]
-						
-						entry = get_struct(entry_data, 0, EFST_Entry)
-						
-						# Remember to also adjust EFST_Entry
-						
-						file_id = entry.FileID # File Count
-						file_name = entry.FileName.decode('utf-8').strip() # File Name (strip extra spaces)
-						if file_name.startswith('EFS_FILE_') : file_name = file_name[9:]
-						file_page = entry.FilePage # EFS Page Number (0,1,2...)
-						file_offset = entry.FileOffset # File Offset
-						file_length = entry.FileSize # File Size
-						reserved = entry.Reserved # Reserved
-						file_info.append((file_page,file_offset,file_length,file_id,reserved,file_name))
-						
-						# Create EFS Table Entries Info
-						efst_pt.add_row(['%0.4d' % file_id,file_name,file_page,'0x%X' % file_offset,'0x%X' % file_length,'0x%X' % reserved])
-						
-					file_info.sort() # Sort EFS Entries/Files based on File Page & File Offset
-					
-					# Determine actual EFS Data Area Buffer Offset for each Entry/File.
-					# EFS Data Area Buffer consists of all Data Pages w/o Header & Footer.
-					# EFS Files within the Data Area Buffer are sequential so we can use
-					# each File Size to determine the next File Offset, starting from 0x0.
-					dict_offset = [0] # First File starts at Data Area Buffer Offset 0x0
-					for info_idx in range(len(file_info) - 1) : # Last File Size is not needed
-						last_offset = dict_offset[info_idx] # Get previous File Offset
-						dict_offset.append(last_offset + 0x4 + file_info[info_idx][2]) # Calculate current File Offset
-					
-					# Create EFS Table Entries/Files Dictionary
-					for info_idx in range(len(file_info)) :
-						efst_entry_dict['%0.8X' % dict_offset[info_idx]] = '%d,%d,%d,%d,%d,%s' % file_info[info_idx]
-					
-					# Create EFS Table Blob Dictionary
-					if 'EFST' not in ftbl_blob_dict['%0.2X' % tbl.Dictionary] : ftbl_blob_dict['%0.2X' % tbl.Dictionary]['EFST'] = {}
-					ftbl_blob_dict['%0.2X' % tbl.Dictionary]['EFST']['%0.2X' % tbl.Revision] = efst_entry_dict
-					
-					with open('%s_EFST_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(efst_pt))
-					if param.write_html :
-						with open('%s_EFST_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(efst_pt))
-					if param.write_json :
-						with open('%s_EFST_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(efst_pt))
-					
-			o_dict = json.dumps(ftbl_blob_dict, indent=4, sort_keys=True)
-			with open('%s_FileTable.dat' % os.path.basename(file_in), 'w') as o : o.write(o_dict)
-			
-			mea_exit(0)
-		
-		# Detect Intel Flash Descriptor (FD)
-		fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich,fd_is_cut,reading_msg = \
-		fd_anl_init(reading,file_end,start_man_match,end_man_match)
-		
-		# Analyze Intel Flash Descriptor Regions
-		if fd_exist :
-			fd_bios_rgn_exist,bios_fd_start,bios_fd_size,fd_me_rgn_exist,me_fd_start,me_fd_size,fd_pdr_rgn_exist,pdr_fd_start,pdr_fd_size, \
-			fd_devexp_rgn_exist,devexp_fd_start,devexp_fd_size = fd_anl_rgn(start_fd_match,end_fd_match,fd_is_ich)
-		
-		# Engine Region exists but cannot be identified
-		if fd_me_rgn_exist :
-			fuj_version = fuj_umem_ver(me_fd_start) # Check if ME Region is Fujitsu UMEM compressed
-			
-			# ME Region is Fujitsu UMEM compressed
-			if fuj_version != 'NaN' :
-				no_man_text = 'Detected' + col_y + ' Fujitsu Compressed ' + col_e + ('Intel Engine firmware v%s' % fuj_version)
-			
-			# ME Region is X58 ROMB Test
-			elif reading[me_fd_start:me_fd_start + 0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Detected' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
-			
-			# ME Region is Unknown
-			else :
-				no_man_text = 'Detected' + col_y + ' unidentifiable ' + col_e + 'Intel Engine firmware'
-			
-		# Engine Region does not exist
-		else :
-			fuj_version = fuj_umem_ver(0) # Check if ME Region is Fujitsu UMEM compressed (me_fd_start is 0x0, no SPI FD)
-			fw_start_match = fpt_pat.search(reading) # $FPT detection
-			
-			# Image is ME Fujitsu UMEM compressed
-			if fuj_version != 'NaN' :
-				no_man_text = 'Detected' + col_y + ' Fujitsu Compressed ' + col_e + ('Intel Engine firmware v%s' % fuj_version)
-			
-			# Image is X58 ROMB Test
-			elif reading[:0x8] == b'\xD0\x3F\xDA\x00\xC8\xB9\xB2\x00' :
-				no_man_text = 'Detected' + col_y + ' X58 ROM-Bypass ' + col_e + 'Intel Engine firmware'
-			
-			# Image contains some Engine Flash Partition Table ($FPT)
-			elif fw_start_match is not None :
-				fpt_hdr = get_struct(reading, fw_start_match.start(), get_fpt(reading, fw_start_match.start())[0])
-				
-				if fpt_hdr.FitBuild not in (0x0,0xFFFF) :
-					fitc_ver = '%s.%s.%s.%s' % (fpt_hdr.FitMajor, fpt_hdr.FitMinor, fpt_hdr.FitHotfix, fpt_hdr.FitBuild)
-					no_man_text = 'Detected' + col_y + ' Unknown ' + col_e + ('Intel Engine Flash Partition Table v%s' % fitc_ver)
-				else :
-					no_man_text = 'Detected' + col_y + ' Unknown ' + col_e + 'Intel Engine Flash Partition Table'
-				
-			# Image does not contain any kind of Intel Engine firmware
-			else :
-				no_man_text = 'File does not contain Intel Engine firmware'
-		
-		# Image is AMI BIOS Guard (PFAT) protected
-		if ami_pfat :
-			no_man_text = 'Detected' + col_y + ' AMI BIOS Guard (PFAT) ' + col_e + 'protected image, prior extraction required!'
-			no_man_text += '\n\nUse "AMI BIOS Guard Extractor" from https://github.com/platomav/BIOSUtilities'
-		
-		# Print filename
-		print()
 		msg_pt = ext_table([], False, 1)
 		msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
-		print(msg_pt)
-		
-		print('\n%s' % no_man_text)
-			
-		no_man_copy = bool(no_man_text and 'does not contain' not in no_man_text)
-		copy_on_msg([no_man_text] if no_man_copy else []) # Close input and copy it in case of messages
+		print('\n%s\n\nFile does not contain Intel Engine/Graphics Firmware' % msg_pt)
 		
 		continue # Next input file
 
-	# Engine firmware found (for > break), Manifest analysis
-	
-	# Skip AMI BIOS Guard (PFAT) protected images
-	if ami_pfat :
-		# Print filename
-		print()
-		msg_pt = ext_table([], False, 1)
-		msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
-		print(msg_pt)
-		
-		print('\nDetected' + col_y + ' AMI BIOS Guard (PFAT) ' + col_e + 'protected image, prior extraction required!' + \
-			  '\n\nUse "AMI BIOS Guard Extractor" from https://github.com/platomav/BIOSUtilities')
-		
-		copy_on_msg(['PFAT']) # Close input and copy it in case of messages
-		
-		continue # Next input file
+	# Engine/Graphics/Independent firmware found (for > break), Manifest analysis
 	
 	# Detect Partial Firmware Update (FWUpdate PFU)
-	if pr_man_8 or pr_man_9 : is_partial_upd = True
+	if pr_man_8 == b'$MMEWCOD_' or pr_man_12 : is_partial_upd = True
 	
 	# Detect Intel Flash Descriptor (FD)
 	fd_exist,reading,file_end,start_man_match,end_man_match,start_fd_match,end_fd_match,fd_count,fd_comp_all_size,fd_is_ich,fd_is_cut,reading_msg = \
@@ -11018,7 +10956,7 @@ for file_in in source :
 		
 	# Detect CSE Layout Table, it unfortunately lacks a unique identifier (GREAT WORK INTEL...)
 	if fd_me_rgn_exist :
-		cse_lt_off = me_fd_start # If Flash Descriptor exists, use Engine region offset (robust)
+		cse_lt_off = me_fd_start # If Flash Descriptor exists, use Engine/Graphics region offset (robust)
 	else :
 		cse_lt_pos_16 = reading[:0x1000].find(b'\x00' * 0x18 + b'\x22' + b'\x00' * 7 + b'\xFF' * 0xFB8) # At IFWI 1.6, try static "Checksum" field
 		cse_lt_pos_17 = re.compile(br'\x40\x00[\x00\x01]\x00.{4}(.{3}\x00){14}', re.DOTALL).search(reading[:0x1000]) # At IFWI 1.7, try struct pattern
@@ -11125,25 +11063,25 @@ for file_in in source :
 	
 	# Detect all $FPT and/or BPDT starting offsets (both allowed/needed)
 	if fd_me_rgn_exist :
-		# $FPT detection based on FD with Engine region (limits false positives from IE or CSTXE Engine/ROMB & DevExp1/Init)
+		# $FPT detection based on FD with Engine/Graphics region (limits false positives from IE or CSTXE Engine/ROMB & DevExp1/Init)
 		fpt_matches_init = list(fpt_pat.finditer(reading[me_fd_start:me_fd_start + me_fd_size]))
 		
-		# Detect ROMB code within FD > Engine (IFWI 2.0, FD > DevExp & No CSE LT & CSE/UEFI in FD > BIOS & ROMB in FD > Engine)
+		# Detect ROMB code within FD > Engine/Graphics (IFWI 2.0, FD > DevExp & No CSE LT & CSE/UEFI in FD > BIOS & ROMB in FD > Engine)
 		if fd_devexp_rgn_exist and not cse_lt_struct and fd_bios_rgn_exist and bpdt_pat.search(reading[bios_fd_start:bios_fd_start + 0x100]) \
 		and b'Non-Intel Root Key' in reading[me_fd_start:me_fd_start + me_fd_size] :
-			note_stor.append([col_y + 'Note: FD Engine region seems to include ROM-Bypass code!' + col_e, True])
+			note_stor.append([col_y + 'Note: FD Engine/Graphics region seems to include ROM-Bypass code!' + col_e, True])
 	else :
-		# FD with Engine region not found or multiple FD detected, scan entire file (could lead to false positives)
+		# FD with Engine/Graphics region not found or multiple FD detected, scan entire file (could lead to false positives)
 		fpt_matches_init = list(fpt_pat.finditer(reading))
 		
 	# No Variant known yet but, if possible, get CSE Stage 1 Info for false positive removal via special ext_anl _Stage1 mode
 	man_mod_names,fptemp_info = ext_anl(reading, '$MN2_Stage1', start_man_match, file_end, ['CSME',0,0,0,0,0,0,'CSE ME'], None, [[],''], [[],-1,-1,-1])
-	fptemp_exists = bool(man_mod_names and man_mod_names[0] in ['FTPR.man','MFTP.man'] and fptemp_info[0]) # Detect if CSE FTPR/MFTP > fptemp module exists
+	fptemp_exists = bool(man_mod_names and man_mod_names[0] == 'FTPR.man' and fptemp_info[0]) # Detect if CSE FTPR > fptemp module exists
 	
 	# Adjust $FPT matches, ignore known false positives
 	for fpt_match in fpt_matches_init :
 		fpt_match_start = me_fd_start + fpt_match.start() if fd_me_rgn_exist else fpt_match.start()
-		if fptemp_exists and fptemp_info[2] > fpt_match_start >= fptemp_info[1] : pass # CSE FTPR/MFTP > fptemp
+		if fptemp_exists and fptemp_info[2] > fpt_match_start >= fptemp_info[1] : pass # CSE FTPR > fptemp
 		elif cse_lt_struct and cse_lt_off < fpt_match_start < fpt_pat_bgn : pass # CSE LT Padding > $FPT
 		elif cse_lt_struct and cse_lt_flags_red and fpt_match_start == cse_lt_part_all[0][1] + 0x1000 : pass # CSE LT Data Redundancy > $FPT
 		elif cse_lt_struct and not cse_lt_part_all[5][4] and fpt_match_start == cse_lt_part_all[5][1] : pass # CSE Default Data > $FPT
@@ -11160,7 +11098,7 @@ for file_in in source :
 		if fpt_pat_end == 0 :
 			(fpt_pat_bgn, fpt_pat_end) = fpt_matches[0].span() # Select the 1st $FPT match by default
 			
-			# Adjust $FPT offset if FD with Engine region exists
+			# Adjust $FPT offset if FD with Engine/Graphics region exists
 			if fd_me_rgn_exist :
 				fpt_pat_bgn += me_fd_start
 				fpt_pat_end += me_fd_start
@@ -11284,11 +11222,12 @@ for file_in in source :
 			# Detect if firmware has FITC File System Configuration Partition
 			if p_name == 'FITC' and not p_empty : fitc_found = True
 			
-			# Detect if firmware has OEM Unlock Token (UTOK/STKN)
-			if p_name in ('UTOK','STKN') and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
+			# Detect if firmware has valid OEM Unlock/Security Token (UTOK/STKN)
+			if p_name in ['UTOK','STKN'] and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
 			
-			# Detect if CSE firmware has OEM Key Manager Partition (OEMP)
-			if p_name == 'OEMP' and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : oemp_found = True
+			# Detect if CSE firmware has valid and non-placeholder (VEN_ID BCCB) OEM Key Manager Partition (OEMP)
+			if p_name == 'OEMP' and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 \
+			and reading[p_offset_spi + 0x10:p_offset_spi + 0x12] != b'\xCB\xBC' : oemp_found = True
 			
 			if 0 < p_offset_spi < p_max_size and 0 < p_size < p_max_size : eng_fw_end = p_offset_spi + p_size
 			else : eng_fw_end = p_max_size
@@ -11304,13 +11243,13 @@ for file_in in source :
 		if fpt_count <= 2 :
 			# This does not work with Intel Engine Capsule images because they have multiple $FPT and Engine CODE
 			# regions. It cannot be removed because MEA needs to jump to COD1/OPR1 for (CS)SPS parsing. The Intel
-			# POR is to have at most two $FPT at normal CS(SPS) images, Main ($FPT) and Backup (FPTB), so MEA skips
+			# POR is to have at most two $FPT at normal (CS)SPS images, Main ($FPT) and Backup (FPTB), so MEA skips
 			# this adjustment for images with more than two $FPT hits. The drawback is that MEA detects FTPR instead
 			# of COD1/OPR1 at these Intel Capsule images. A proper detection/extractor could be added in the future.
 			for p_rec_fix in p_store_all :
 				# For ME 2-5 & SPS 1, pick CODE if RCVY or COD1 are not present
-				# For SPS, pick Operational (COD1/OPR1) instead of Recovery (CODE/FTPR/MFTP)
-				if p_rec_fix[0] in ['FTPR', 'MFTP', 'RCVY', 'OPR1', 'OPR', 'COD1'] or (p_rec_fix[0] == 'CODE' and not any(p in ('RCVY', 'COD1') for p in p_store_all)) :
+				# For SPS, pick Operational (COD1/OPR1) instead of Recovery (CODE/FTPR)
+				if p_rec_fix[0] in ['FTPR', 'RCVY', 'OPR1', 'OPR', 'COD1'] or (p_rec_fix[0] == 'CODE' and not any(p in ('RCVY', 'COD1') for p in p_store_all)) :
 					# Only if partition exists at file (counter-example: sole $FPT etc)
 					if p_rec_fix[1] + p_rec_fix[2] <= file_end :
 						rec_man_match = man_pat.search(reading[p_rec_fix[1]:p_rec_fix[1] + p_rec_fix[2]])
@@ -11363,7 +11302,7 @@ for file_in in source :
 		
 		ifwi_exist = True # Set IFWI/BPDT detection boolean
 		
-		(bpdt_pat_bgn, bpdt_pat_end) = bpdt_matches[ifwi_bpdt] # Get BPDT range via bpdt_matches index
+		bpdt_pat_bgn = bpdt_matches[ifwi_bpdt][0] # Get BPDT Start Offset via bpdt_matches index
 		
 		if bpdt_pat_bgn in s_bpdt_all : continue # Skip already parsed S-BPDT (Type 5)
 		
@@ -11601,9 +11540,12 @@ for file_in in source :
 					start_man_match += part[1] + 0xB # Add CSE_BUP offset and 8680.{9} sanity check before .$MN2
 					end_man_match += part[1]
 	
-		# Detect if CSE firmware has OEM Unlock Token (UTOK/STKN)
-		if part[0] in ('UTOK','STKN') and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : utok_found = True
-		if part[0] == 'OEMP' and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : oemp_found = True
+		# Detect if CSE firmware has valid OEM Unlock/Security Token (UTOK/STKN)
+		if part[0] in ['UTOK','STKN'] and not part[4] and part[1] < file_end and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 : utok_found = True
+		
+		# Detect if CSE firmware has valid and non-placeholder (VEN_ID BCCB) OEM Key Manager Partition (OEMP)
+		if part[0] == 'OEMP' and not part[4] and part[1] < file_end and reading[part[1]:part[1] + 0x10] != b'\xFF' * 0x10 \
+		and reading[part[1] + 0x10:part[1] + 0x12] != b'\xCB\xBC' : oemp_found = True
 	
 		# Detect BPDT partition overlaps
 		for all_part in bpdt_part_all :
@@ -11636,9 +11578,14 @@ for file_in in source :
 		pcir_hdr = get_struct(pcir_hdr_data, 0, GSC_OROM_PCI_Data) # Get OROM PCI Data Structure
 		pcir_hdr_p = pcir_hdr.gsc_print() # Get OROM PCI Data Structure Info
 		
-		if eng_fw_end == 0xFFFFFFFF : eng_fw_end = 0x0 # Reset the initial eng_fw_end value
+		orom_pci_size += orom_hdr.ImageSize * 512 # Calculate OROM IUP Size by appending all OROM/PCIR Image Sizes
 		
-		eng_fw_end += orom_hdr.ImageSize * 512 # Append OROM/PCIR Image Size to total OROM Size
+		# Calculate OROM IUP Size by appending all $CPD Partition and OROM/PCIR Structure Sizes
+		data_off = max(orom_hdr.PCIDataHdrOff + pcir_hdr.PCIDataHdrLen, orom_hdr.EFIImageOffset, orom_hdr.OROMPayloadOff) # Data Offset
+		if reading[orom_pat_bgn + data_off:orom_pat_bgn + data_off + 0x4] == b'$CPD' : # Check if Data is actually an OROM $CPD Partition
+			orom_cpd_size += orom_pat_bgn - orom_match[0].start() - orom_cpd_size # Append Size between current & previous OROM $CPD Partitions
+			orom_cpd_size += data_off # Append Size between current OROM/PCIR Headers & Data Payload (OROM $CPD Partition)
+			orom_cpd_size += cpd_size_calc(reading[data_off + orom_pat_bgn:], 0, 0x1000) # Append Size of current OROM $CPD Partition
 		
 		# Show OROM/PCIR Image info on demand (-dfpt)
 		if param.fpt_disp : print('%s\n%s\n' % (orom_hdr_p, pcir_hdr_p))
@@ -11745,8 +11692,8 @@ for file_in in source :
 				
 				mod_end_max = mod_start + 0x50 + 0xC + mod_size_all # Last $MME + $MME size + $SKU size + all $MOD sizes
 			
-			# For Engine alignment & size, remove fpt_start (included in mod_end_max < mod_end < p_offset_last)
-			eng_fw_align -= (mod_end_max - fpt_start) % 0x1000 # 4K alignment Size of entire Engine firmware
+			# For Engine/Graphics alignment & size, remove fpt_start (included in mod_end_max < mod_end < p_offset_last)
+			eng_fw_align -= (mod_end_max - fpt_start) % 0x1000 # 4K alignment Size of entire Engine/Graphics firmware
 			
 			if eng_fw_align != 0x1000 :
 				eng_fw_end = mod_end_max + eng_fw_align - fpt_start
@@ -11918,8 +11865,8 @@ for file_in in source :
 			# CSME 12+ consists of Layout Table (0x1000) + Data (MEA or LT size) + Boot/Temp (LT size)
 			p_end_last = cse_lt_size + max(p_end_last,cse_lt_dp_size) + cse_lt_bp_size
 		
-		# For Engine alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)
-		eng_fw_align -= (p_end_last - fpt_start) % 0x1000 # 4K alignment Size of entire Engine firmware
+		# For Engine/Graphics alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)
+		eng_fw_align -= (p_end_last - fpt_start) % 0x1000 # 4K alignment Size of entire Engine/Graphics firmware
 		
 		if eng_fw_align != 0x1000 :
 			eng_fw_end = p_end_last + eng_fw_align - fpt_start
@@ -11938,11 +11885,11 @@ for file_in in source :
 		# SPI image with FD
 		if fd_me_rgn_exist :
 			if eng_fw_end > me_fd_size :
-				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e, False]
+				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine/Graphics region, possible data loss!' + col_e, False]
 			elif eng_fw_end < me_fd_size and fd_is_cut :
-				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine region, possible data loss!' + col_e, True]
+				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine/Graphics region, possible data loss!' + col_e, True]
 			elif eng_fw_end < me_fd_size :
-				# Extra data at Engine FD region padding
+				# Extra data at Engine/Graphics FD region padding
 				padd_size_fd = me_fd_size - eng_fw_end
 				padd_start_fd = (cse_lt_off if cse_lt_struct else fpt_start) + eng_fw_end
 				padd_end_fd = (cse_lt_off if cse_lt_struct else fpt_start) + eng_fw_end + padd_size_fd
@@ -11953,9 +11900,9 @@ for file_in in source :
 					sps4_bis_match = b'$BIS\x00' in padd_data_fd if (variant,major) == ('CSSPS',4) else None
 					
 					if sps4_bis_match is not None : eng_size_text = ['', False]
-					else : eng_size_text = [col_m + 'Warning: Data in Engine region padding, possible data corruption!' + col_e, True]
+					else : eng_size_text = [col_m + 'Warning: Data in Engine/Graphics region padding, possible data corruption!' + col_e, True]
 		
-		# Bare Engine Region
+		# Bare Engine/Graphics Region
 		elif fpt_start == 0 or (cse_lt_struct and cse_lt_off == 0) :
 			padd_size_file = file_end - eng_fw_end
 			
@@ -12006,7 +11953,7 @@ for file_in in source :
 				else : fw_type = 'Stock'
 		elif (variant == 'ME' and major >= 8) or variant in ['CSME','CSTXE','CSSPS','TXE','GSC'] :
 			# Check 1, FITC Version
-			if fpt_hdr.FitBuild in [0x0,0xFFFF] : # 0000/FFFF --> clean CS(ME)/CS(TXE)
+			if fpt_hdr.FitBuild in [0x0,0xFFFF] : # 0000/FFFF --> clean (CS)ME/(CS)TXE
 				fw_type = 'Stock'
 				
 				# Check 2, FOVD partition
@@ -12076,7 +12023,7 @@ for file_in in source :
 	
 	# Check for Fujitsu UMEM ME Region (RGN/$FPT or UPD/$MN2)
 	if (fd_me_rgn_exist and reading[me_fd_start:me_fd_start + 0x4] == b'\x55\x4D\xC9\x4D') or (reading[:0x4] == b'\x55\x4D\xC9\x4D') :
-		warn_stor.append([col_m + 'Warning: Fujitsu Intel Engine firmware detected!' + col_e, False])
+		warn_stor.append([col_m + 'Warning: Fujitsu Intel Engine/Graphics firmware detected!' + col_e, False])
 	
 	# Detect Firmware Release (Production, Pre-Production, ROM-Bypass)
 	mn2_flags_pvbit,_,_,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
@@ -12107,9 +12054,7 @@ for file_in in source :
 		# Detect SKU Attributes
 		sku_match = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00').search(reading[start_man_match:]) # $SKU detection
 		if sku_match is not None :
-			(start_sku_match, end_sku_match) = sku_match.span()
-			start_sku_match += start_man_match
-			end_sku_match += start_man_match
+			start_sku_match = sku_match.start() + start_man_match
 			
 			if 2 <= major <= 6 :
 				# https://software.intel.com/sites/manageability/AMT_Implementation_and_Reference_Guide/WordDocuments/instanceidandversionstringformats.htm
@@ -12191,11 +12136,10 @@ for file_in in source :
 				byp_pat = re.compile(br'\x24\x56\x45\x52\x02\x00\x00\x00') # $VER2... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
-				if byp_match is not None :
+				if byp_match :
 					release = 'ROM-Bypass'
 					rel_db = 'BYP'
-					(byp_start, byp_end) = byp_match.span()
-					byp_size = fpt_start - (byp_start - 0x80)
+					byp_size = fpt_start - (byp_match.start() - 0x80)
 					eng_fw_end += byp_size
 					eng_size_text = ['', False]
 					
@@ -12263,11 +12207,10 @@ for file_in in source :
 				byp_pat = re.compile(br'\x24\x56\x45\x52\x03\x00\x00\x00') # $VER3... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
-				if byp_match is not None :
+				if byp_match :
 					release = 'ROM-Bypass'
 					rel_db = 'BYP'
-					(byp_start, byp_end) = byp_match.span()
-					byp_size = fpt_start - (byp_start - 0x80)
+					byp_size = fpt_start - (byp_match.start() - 0x80)
 					eng_fw_end += byp_size
 					eng_size_text = ['', False]
 			
@@ -12293,7 +12236,7 @@ for file_in in source :
 			if fw_type == "Update" :
 				byp_pat = re.compile(br'\x52\x4F\x4D\x42') # ROMB detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
-				if byp_match is not None :
+				if byp_match :
 					release = 'ROM-Bypass'
 					rel_db = 'BYP'
 			
@@ -12361,7 +12304,7 @@ for file_in in source :
 			if fw_type == 'Update' :
 				byp_pat = re.compile(br'\x52\x4F\x4D\x42') # ROMB detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
-				if byp_match is not None :
+				if byp_match :
 					release = 'ROM-Bypass'
 					rel_db = 'BYP'
 			
@@ -12433,13 +12376,13 @@ for file_in in source :
 					rel_db = 'BYP'
 			
 			# ME7 Blacklist Table Detection
-			me7_blist_1_minor  = int.from_bytes(reading[start_man_match + 0x6DF:start_man_match + 0x6E1], 'little')
-			me7_blist_1_hotfix  = int.from_bytes(reading[start_man_match + 0x6E1:start_man_match + 0x6E3], 'little')
-			me7_blist_1_build  = int.from_bytes(reading[start_man_match + 0x6E3:start_man_match + 0x6E5], 'little')
+			me7_blist_1_minor = int.from_bytes(reading[start_man_match + 0x6DF:start_man_match + 0x6E1], 'little')
+			me7_blist_1_hotfix = int.from_bytes(reading[start_man_match + 0x6E1:start_man_match + 0x6E3], 'little')
+			me7_blist_1_build = int.from_bytes(reading[start_man_match + 0x6E3:start_man_match + 0x6E5], 'little')
 			if me7_blist_1_build != 0 : me7_blist_1 = '<= 7.%d.%d.%d' % (me7_blist_1_minor, me7_blist_1_hotfix, me7_blist_1_build)
-			me7_blist_2_minor  = int.from_bytes(reading[start_man_match + 0x6EB:start_man_match + 0x6ED], 'little')
-			me7_blist_2_hotfix  = int.from_bytes(reading[start_man_match + 0x6ED:start_man_match + 0x6EF], 'little')
-			me7_blist_2_build  = int.from_bytes(reading[start_man_match + 0x6EF:start_man_match + 0x6F1], 'little')
+			me7_blist_2_minor = int.from_bytes(reading[start_man_match + 0x6EB:start_man_match + 0x6ED], 'little')
+			me7_blist_2_hotfix = int.from_bytes(reading[start_man_match + 0x6ED:start_man_match + 0x6EF], 'little')
+			me7_blist_2_build = int.from_bytes(reading[start_man_match + 0x6EF:start_man_match + 0x6F1], 'little')
 			if me7_blist_2_build != 0 : me7_blist_2 = '<= 7.%d.%d.%d' % (me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build)
 			
 			platform = ['CPT','CPT/PBG'][is_patsburg]
@@ -12506,7 +12449,8 @@ for file_in in source :
 		
 		# Firmware Unpacking for all CSME
 		if param.me11_mod_extr :
-			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
 		# Get CSE MFS File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
@@ -12687,9 +12631,7 @@ for file_in in source :
 		# Detect SKU Attributes
 		sku_match = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00').search(reading[start_man_match:]) # $SKU detection
 		if sku_match is not None :
-			(start_sku_match, end_sku_match) = sku_match.span()
-			start_sku_match += start_man_match
-			end_sku_match += start_man_match
+			start_sku_match = sku_match.start() + start_man_match
 			
 			sku_attrib = get_struct(reading, start_sku_match, SKU_Attributes)
 			_,_,_,_,_,_,_,_,_,_,_,sku_size,_ = sku_attrib.get_flags()
@@ -12734,15 +12676,13 @@ for file_in in source :
 		
 		# Firmware Unpacking for all CSTXE
 		if param.me11_mod_extr :
-			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
 		# Get CSE MFS File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
 		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl \
 		= get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
-		
-		# Get CSE EFS File System Attributes & Configuration State (must be after mfs_anl)
-		if efs_found : efs_init = efs_anl(mea_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
 		
 		# Detect CSE Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
@@ -12831,7 +12771,8 @@ for file_in in source :
 		
 		# Firmware Unpacking for all CSSPS
 		if param.me11_mod_extr :
-			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
 		# Get CSE MFS File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
@@ -12860,7 +12801,7 @@ for file_in in source :
 		# Set Recovery or Operational Region Type
 		if not rgn_exist :
 			# Intel releases OPR as partition ($CPD) but REC as region ($FPT)
-			if ext_pname in ['FTPR','MFTP'] : fw_type = 'Recovery' # Non-Intel POR for REC
+			if ext_pname == 'FTPR' : fw_type = 'Recovery' # Non-Intel POR for REC
 			elif ext_pname == 'OPR' : fw_type = 'Operational' # Intel POR for OPR
 		elif not ifwi_exist and not sps_opr_found :
 			fw_type = 'Recovery' # Intel POR for REC ($FPT + FTPR)
@@ -12924,14 +12865,15 @@ for file_in in source :
 		
 		# Firmware Unpacking for all GSC
 		if param.me11_mod_extr :
-			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
 		# Get GSC MFS File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
 		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl \
 		= get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
 		
-		# Get CSE EFS File System Attributes & Configuration State (must be after mfs_anl)
+		# Get GSC EFS File System Attributes & Configuration State (must be after mfs_anl)
 		if efs_found : efs_init = efs_anl(mea_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
 		
 		# Get GSC Firmware Attributes (must be after mfs_anl)
@@ -12979,151 +12921,102 @@ for file_in in source :
 		
 		# Firmware Unpacking for all OROM
 		if param.me11_mod_extr :
-			cse_unpack('OROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack('OROM', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
-		# Get CSE MFS File System Attributes & Configuration State (invokes mfs_anl, must be before ext_anl)
-		mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl \
-		= get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
-		
-		# Detect CSE Firmware Attributes (must be after mfs_anl)
+		# Detect IUP Firmware Attributes (must be after mfs_anl)
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
-		= ext_anl(reading, '$MN2', start_man_match, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], None, [mfs_parsed_idx,intel_cfg_hash_mfs],
-		[pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl])
+		= ext_anl(reading, '$MN2', start_man_match, file_end, ['OROM',-1,-1,-1,-1,-1,-1,'OROM'], None, [[],''], [[],-1,-1,-1])
 		
-		fw_type = 'Independent'
+		if mn2_meu_ver.startswith('100.') : platform = 'DG01' # Dedicated Xe Graphics 1
 		
-		if mn2_meu_ver.startswith('100.') : sku,sku_db,platform = ['DG01'] * 3 # Dedicated Xe Graphics 1
+		orom_all_size = max(orom_pci_size, orom_cpd_size) # Get total OROM IUP Size ($CPD Size may exceed PCIR)
+		eng_fw_end = orom_all_size + 0x1000 - (orom_all_size % 0x1000) # Calculate 4K aligned OROM IUP Size
+		
+		if orom_match and orom_match[0].start() == 0x0 : # OROM 1st Image POR Start Offset is 0x0
+			eng_size_text = chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) # Check OROM IUP Size
 	
 	elif variant.startswith('PMC') : # Power Management Controller
 		
 		# Firmware Unpacking for all PMC
 		if param.me11_mod_extr :
-			cse_unpack('PMC', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack('PMC', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
-		# Detect CSE Firmware Attributes
+		# Detect IUP Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
 		= ext_anl(reading, '$CPD', 0, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 		
-		pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,upd_found,pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver \
-		= pmc_anl(cpd_mn2_info)
+		pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,upd_found,platform,date,svn,pvbit,mn2_meu_ver = pmc_anl(cpd_mn2_info)
 		
-		sku = pmc_pch_sku
-		sku_stp = pmc_pch_rev[0] if pmc_pch_rev != 'Unknown' else pmc_pch_rev
-		mn2_meu_ver = pmc_meu_ver
-		release = pmc_mn2_signed
-		rel_db = pmc_mn2_signed_db
+		if sku_stp != 'Unknown' : sku_stp = sku_stp[0]
 		sku_db = '%s_%s' % (sku, sku_stp)
-		date = pmc_date
-		svn = pmc_svn
-		pvbit = pmc_pvbit
-		platform = pmc_platform
-		fw_type = 'Independent'
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PMC firmware size
 		
-		# Check PMC firmware size
-		if eng_fw_end > file_end :
-			eng_size_text = [col_m + 'Warning: PMC %s Firmware size exceeds File, possible data loss!' % platform + col_e, True]
-		elif eng_fw_end < file_end :
-			padd_size_pmc = file_end - eng_fw_end
-			if reading[eng_fw_end:file_end] == padd_size_pmc * b'\xFF' :
-				eng_size_text = [col_y + 'Note: File has harmless unneeded PMC %s Firmware end padding!' % platform + col_e, False] # warn_stor
-				if param.check : # Remove unneeded padding, when applicable (Debug/Research)
-					with open('__RPADD__' + os.path.basename(file_in), 'wb') as o : o.write(reading[:-padd_size_pmc])
-			else :
-				eng_size_text = [col_m + 'Warning: File size exceeds PMC %s Firmware, data in padding!' % platform + col_e, True]
+		eng_size_text = chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) # Check PMC firmware size
 				
 	elif variant.startswith('PCHC') : # Platform Controller Hub Configuration
 		
 		# Firmware Unpacking for all PCHC
 		if param.me11_mod_extr :
-			cse_unpack('PCHC', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack('PCHC', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
-		# Detect CSE Firmware Attributes
+		# Detect IUP Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
 		= ext_anl(reading, '$CPD', 0, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 		
-		pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,upd_found,pchc_platform,pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver \
-		= pchc_anl(cpd_mn2_info)
-		
-		release = pchc_mn2_signed
-		rel_db = pchc_mn2_signed_db
-		mn2_meu_ver = pchc_meu_ver
-		date = pchc_date
-		svn = pchc_svn
-		pvbit = pchc_pvbit
-		platform = pchc_platform
-		fw_type = 'Independent'
+		pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,upd_found,platform,date,svn,pvbit,mn2_meu_ver = pchc_anl(cpd_mn2_info)
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PCHC firmware size
 		
-		# Check PCHC firmware size
-		if eng_fw_end > file_end :
-			eng_size_text = [col_m + 'Warning: PCHC %s Firmware size exceeds File, possible data loss!' % platform + col_e, True]
-		elif eng_fw_end < file_end :
-			padd_size_pchc = file_end - eng_fw_end
-			if reading[eng_fw_end:file_end] == padd_size_pchc * b'\xFF' :
-				eng_size_text = [col_y + 'Note: File has harmless unneeded PCHC %s Firmware end padding!' % platform + col_e, False] # warn_stor
-				if param.check : # Remove unneeded padding, when applicable (Debug/Research)
-					with open('__RPADD__' + os.path.basename(file_in), 'wb') as o : o.write(reading[:-padd_size_pchc])
-			else :
-				eng_size_text = [col_m + 'Warning: File size exceeds PCHC %s Firmware, data in padding!' % platform + col_e, True]
+		eng_size_text = chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) # Check PCHC firmware size
 				
 	elif variant.startswith('PHY') : # USB Type C Physical
 		
 		# Firmware Unpacking for all PHY
 		if param.me11_mod_extr :
-			cse_unpack('PHY', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail, cse_red_info, fdv_status, reading_msg)
+			cse_unpack('PHY', fpt_part_all, bpdt_part_all, file_end, fpt_start if rgn_exist else -1, fpt_chk_fail, cse_lt_chk_fail,
+			cse_red_info, fdv_status, reading_msg, orom_hdr_all)
 			continue # Next input file
 		
-		# Detect CSE Firmware Attributes
+		# Detect IUP Firmware Attributes
 		cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
 		= ext_anl(reading, '$CPD', 0, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
 		
-		phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,upd_found,phy_platform,phy_date,phy_svn, phy_pvbit,phy_meu_ver \
-		= phy_anl(cpd_mn2_info)
-		
-		release = phy_mn2_signed
-		rel_db = phy_mn2_signed_db
-		mn2_meu_ver = phy_meu_ver
-		date = phy_date
-		svn = phy_svn
-		sku = phy_sku
-		sku_db = phy_sku
-		pvbit = phy_pvbit
-		platform = phy_platform
-		fw_type = 'Independent'
+		phy_fw_ver,sku,release,rel_db,upd_found,platform,date,svn,pvbit,mn2_meu_ver = phy_anl(cpd_mn2_info)
 		
 		eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PHY firmware size
 		
-		# Check PHY firmware size
-		if eng_fw_end > file_end :
-			eng_size_text = [col_m + 'Warning: PHY %s Firmware size exceeds File, possible data loss!' % platform + col_e, True]
-		elif eng_fw_end < file_end :
-			padd_size_phy = file_end - eng_fw_end
-			if reading[eng_fw_end:file_end] == padd_size_phy * b'\xFF' :
-				eng_size_text = [col_y + 'Note: File has harmless unneeded PHY %s Firmware end padding!' % platform + col_e, False] # warn_stor
-				
-				if param.check : # Remove unneeded padding, when applicable (Debug/Research)
-					with open('__RPADD__' + os.path.basename(file_in), 'wb') as o : o.write(reading[:-padd_size_phy])
-			else :
-				eng_size_text = [col_m + 'Warning: File size exceeds PHY %s Firmware, data in padding!' % platform + col_e, True]
+		eng_size_text = chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) # Check PHY firmware size
 	
 	# Create Firmware Type DB entry
-	fw_type, type_db = fw_types(fw_type)
+	if variant.startswith(('PMC','PCHC','PHY','OROM')) : fw_type = 'Independent'
+	
+	if fw_type == 'Extracted' : type_db = 'EXTR'
+	elif fw_type == 'Stock' : type_db = 'RGN'
+	elif fw_type == 'Update' : type_db = 'UPD'
+	elif fw_type == 'Operational' : type_db = 'OPR'
+	elif fw_type == 'Recovery' : type_db = 'REC'
+	elif fw_type == 'Partial Update' : type_db = 'PFU'
+	elif fw_type == 'Independent' and variant.startswith('PMC') : type_db = 'PMC'
+	elif fw_type == 'Independent' and variant.startswith('PHY') : type_db = 'PHY'
+	elif fw_type == 'Independent' and variant.startswith('PCHC') : type_db = 'PCHC'
+	elif fw_type == 'Independent' and variant.startswith('OROM') : type_db = 'OROM'
+	elif fw_type == 'Unknown' : type_db = 'UNK'
 	
 	# Check for CSME 12+ FWUpdate Support/Compatibility
-	fwu_iup_check = bool(type_db == 'EXTR' and sku_db.startswith('COR'))
+	fwu_iup_check = (variant,major >= 12,type_db,sku_db[:3],is_partial_upd) == ('CSME',True,'EXTR','COR',False)
 	if fwu_iup_check and (uncharted_match or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
-	
-	if variant == 'CSME' and not is_partial_upd and fwu_iup_result != 'Impossible' :
+	if fwu_iup_result != 'Impossible' :
 		if major == 12 :
 			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
 		elif (major,minor) in [(13,0),(13,50),(14,0),(14,5),(15,40)] or (major,minor,sku_result) == (15,0,'LP') :
@@ -13136,52 +13029,46 @@ for file_in in source :
 	# Check for CSE Extension 15 R2 NVM Compatibility
 	if ext15_info[3] not in ['', 'Undefined'] : nvm_db = '_%s' % ext15_info[3]
 	
-	# Create firmware DB names
-	if variant in ['CSSPS','SPS'] and sku != 'NaN' :
-		name_db = '%s_%s%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db, rsa_sig_hash)
-		name_db_p = '%s_%s%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db)
-	elif variant == 'SPS' :
-		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
-	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
-		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), pmc_pch_rev[0], date, rel_db)
-	elif variant.startswith(('PMCCNP','PMCLBG')) and (major < 130 or major == 3232) : # PMC CNP A, LBG-R
-		name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, date, rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, date, rel_db)
-	elif variant.startswith('PMCDG') : # PMC DG1
-		name_db = '%s_%s_%s_%s' % (pmc_platform[:4], fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s' % (pmc_platform[:4], fw_ver(major,minor,hotfix,build), rel_db)
-	elif variant.startswith('PMC') : # PMC CNP A/B, ICP, LKF, CMP, TGP, ADP, DG1
-		name_db = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s_%s' % (pmc_platform[:3], fw_ver(major,minor,hotfix,build), sku_db, rel_db)
-	elif variant.startswith('PCHCTGP') : # PCHC TGP
-		name_db = '%s_%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), date, rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), date, rel_db)
-	elif variant.startswith('PCHC') : # PCHC ICP, LKF, CMP, TGP, ADP
-		name_db = '%s_%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s' % (pchc_platform[:3], fw_ver(major,minor,hotfix,build), rel_db)
-	elif variant.startswith('PHY') : # PHY S, P
-		name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], sku_db, fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s_%s' % (phy_platform[:3], sku_db, fw_ver(major,minor,hotfix,build), rel_db)
-	elif variant.startswith('OROM') : # OROM
-		name_db = '%s_%s_%s_%s' % (platform, fw_ver(major,minor,hotfix,build), rel_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s' % (platform, fw_ver(major,minor,hotfix,build), rel_db)
-	elif fw_type == 'Partial Update' :
-		name_db = '%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db, rsa_sig_hash)
-		name_db_p = '%s_%s_%s' % (fw_ver(major,minor,hotfix,build), rel_db, type_db)
-	elif variant == 'CSME' and major >= 12 and type_db == 'EXTR' and sku_db.startswith('COR') :
-		name_db = '%s_%s%s_%s_%s-%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db, ['N','Y'][int(fwu_iup_exist)], rsa_sig_hash)
-		name_db_p = '%s_%s%s_%s_%s-%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db, ['N','Y'][int(fwu_iup_exist)])
-	else : # CS(ME), (CS)TXE, GSC
-		name_db = '%s_%s%s_%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db, rsa_sig_hash)
-		name_db_p = '%s_%s%s_%s_%s' % (fw_ver(major,minor,hotfix,build), sku_db, nvm_db, rel_db, type_db)
+	# Format Firmware Version Tag based on Variant
+	fw_ver = get_fw_ver(variant, major, minor, hotfix, build)
 	
+	# Create Firmware File Name
+	if variant.endswith('SPS') and sku == 'NaN' : # (CS)SPS w/o SKU
+		name_fw = '%s_%s_%s' % (fw_ver, rel_db, type_db)
+	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
+		name_fw = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver, pmc_pch_rev[0], date, rel_db)
+	elif variant.startswith(('PMCCNP','PMCLBG')) and (major < 130 or major == 3232) : # PMC CNP A, LBG-R
+		name_fw = '%s_%s_%s_%s_%s' % (pmc_platform[:3], fw_ver, sku_db, date, rel_db)
+	elif variant.startswith('PMCDG') : # PMC DG1
+		name_fw = '%s_%s_%s' % (pmc_platform[:4], fw_ver, rel_db)
+	elif variant.startswith('PMC') : # PMC CNP A/B, ICP, LKF, CMP, TGP, ADP, DG1
+		name_fw = '%s_%s_%s_%s' % (pmc_platform[:3], fw_ver, sku_db, rel_db)
+	elif variant.startswith('PCHC') : # PCHC ICP, LKF, CMP, TGP, ADP
+		name_fw = '%s_%s_%s' % (pchc_platform[:3], fw_ver, rel_db)
+	elif variant.startswith('PHY') : # PHY S, P
+		name_fw = '%s_%s_%s_%s' % (phy_platform[:3], sku, fw_ver, rel_db)
+	elif variant.startswith('OROM') : # OROM
+		name_fw = '%s_%s_%s' % (platform, fw_ver, rel_db)
+	elif fw_type == 'Partial Update' : # PFU/LMS
+		name_fw = '%s_%s_%s' % (fw_ver, rel_db, type_db)
+	else : # (CS)ME, (CS)TXE, (CS)SPS, GSC
+		name_fw = '%s_%s%s_%s_%s' % (fw_ver, sku_db, nvm_db, rel_db, type_db)
+	
+	# CSME 12+ Corporate Extracted must include IUP existence state as well for FWUpdate tool compatibility & usage
+	if fwu_iup_check : name_fw += ['-N','-Y'][int(fwu_iup_exist)]
+	
+	# Create Firmware Database Name/Entry
+	name_db = name_fw + '_' + rsa_sig_hash
+	
+	# Append part of RSA Signature Hash to known Firmware with duplicate Names 
+	if rsa_sig_hash in known_dup_name_hahes : name_fw += '_%s' % rsa_sig_hash[:8]
+	
+	# Store Firmware DB entry to file
 	if param.db_print_new :
 		with open(os.path.join(mea_dir, 'MEA_PDB.txt'), 'a', encoding = 'utf-8') as db_file : db_file.write(name_db + '\n')
 		continue # Next input file
 	
-	# Search Database for firmware
+	# Search Database for Firmware
 	if not variant.startswith(('PMC','PCHC','PHY')) and not is_partial_upd : # Not PMC, PCHC, PHY or Partial Update
 		for line in mea_db_lines :
 			# Search the re-created file name without extension at the database
@@ -13204,27 +13091,25 @@ for file_in in source :
 	# Check if firmware is updated, Production only
 	if release == 'Production' and not is_partial_upd : # Does not display if firmware is non-Production or Partial Update
 		if not variant.startswith(('SPS','CSSPS','PMCAPL','PMCBXT','PMCGLK')) : # (CS)SPS and old PMC excluded
-			if upd_found : upd_rslt = col_r + 'No' + col_e
-			elif not upd_found : upd_rslt = col_g + 'Yes' + col_e
+			upd_rslt = col_r + 'No' + col_e if upd_found else col_g + 'Yes' + col_e
 	
 	# Rename input file based on the DB structured name
 	if param.give_db_name :
 		old_file_name = file_in
-		new_file_name = os.path.join(os.path.dirname(file_in), name_db_p + '.bin')
+		new_file_name = os.path.join(os.path.dirname(file_in), name_fw + '.bin')
 		
 		if not os.path.isfile(new_file_name) : os.replace(old_file_name, new_file_name)
-		elif os.path.basename(file_in) == name_db_p + '.bin' : pass
+		elif os.path.basename(file_in) == name_fw + '.bin' : pass
 		else : print(col_r + 'Error: A file with the same name already exists!' + col_e)
 		
 		continue # Next input file
 	
 	# Print Firmware Info
-	print()
 	msg_pt = ext_table(['Field', 'Value'], False, 1)
 	msg_pt.title = col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e
 	
 	msg_pt.add_row(['Family', variant_p])
-	msg_pt.add_row(['Version', fw_ver(major,minor,hotfix,build)])
+	msg_pt.add_row(['Version', fw_ver])
 	msg_pt.add_row(['Release', release + ', Engineering ' if build >= 7000 else release])
 	msg_pt.add_row(['Type', fw_type])
 	
@@ -13274,7 +13159,7 @@ for file_in in source :
 		else : msg_pt.add_row(['Size', '0x%X' % eng_fw_end])
 	
 	if fitc_ver_found :
-		msg_pt.add_row(['Flash Image Tool', fw_ver(fitc_major,fitc_minor,fitc_hotfix,fitc_build)])
+		msg_pt.add_row(['Flash Image Tool', get_fw_ver(variant,fitc_major,fitc_minor,fitc_hotfix,fitc_build)])
 		
 	if mn2_meu_ver != '0.0.0.0000' :
 		msg_pt.add_row(['Manifest Extension Utility', mn2_meu_ver])
@@ -13287,7 +13172,7 @@ for file_in in source :
 	
 	if variant not in ['SPS','CSSPS','OROM'] and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
 	
-	print(msg_pt)
+	print('\n%s' % msg_pt)
 	
 	if param.check : # Debug/Research
 		if mfs_state != 'Unconfigured' or oem_signed or oemp_found or utok_found : input('\nCFG_PRESENT!\n')
