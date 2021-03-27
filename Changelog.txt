@@ -1,3 +1,16 @@
+v1.200.2
+
+Fixed CSE IUP firmware naming
+Fixed GSC OROM false positives
+
+r238
+
+CSSPS 05.01.04.300_ME_SVR_PRD_OPR
+CSSPS 05.01.04.300_ME_SVR_BA_PRD_REC
+CSSPS 04.04.04.051_WH_SVR_B_PRD_EXTR
+CSSPS 04.04.03.263_WH_SVR_B_PRD_EXTR
+PMC LBG_01.151.0.0_H_B_2021-01-06_PRD
+
 v1.200.0
 
 Added duplicate firmware name separation
