@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.200.2'
+title = 'ME Analyzer v1.203.1'
 
 import sys
 
@@ -101,7 +101,7 @@ class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.val = ['-?','-skip','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-ftbl','-rcfg','-check']
+		self.val = ['-?','-skip','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbname','-mass','-dfpt','-exit','-ftbl','-rcfg','-chk','-byp']
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -118,6 +118,7 @@ class MEA_Param :
 		self.mfs_ftbl = False
 		self.mfs_rcfg = False
 		self.check = False
+		self.bypass = False
 		
 		if '-?' in source : self.help_scr = True
 		if '-skip' in source : self.skip_intro = True
@@ -133,7 +134,8 @@ class MEA_Param :
 		if '-json' in source : self.write_json = True
 		if '-ftbl' in source : self.mfs_ftbl = True # Hidden
 		if '-rcfg' in source : self.mfs_rcfg = True # Hidden
-		if '-check' in source : self.check = True # Hidden
+		if '-chk' in source : self.check = True # Hidden
+		if '-byp' in source : self.bypass = True # Hidden
 			
 		if self.mass_scan or self.db_print_new : self.skip_intro = True
 		
@@ -337,13 +339,15 @@ class GSC_Info_FWI(ctypes.LittleEndianStructure) : # GSC Firmware Image Info (ig
 		('GSCHotfix',		uint16_t),		# 0x0C
 		('GSCBuild',		uint16_t),		# 0x0E
 		('Flags',			uint16_t),		# 0x10 Unknown
-		('FWType',			uint8_t),		# 0x12 Same as CSE_Ext_0F_R2, remember to change it as well!
-		('FWSKU',			uint8_t),		# 0x13 Same as CSE_Ext_0F_R2, remember to change it as well!
+		('FWType',			uint8_t),		# 0x12
+		('FWSKU',			uint8_t),		# 0x13
 		('ARBSVN',			uint32_t),		# 0x14
 		('TCBSVN',			uint32_t),		# 0x18
 		('VCN',				uint32_t),		# 0x1C
 		# 0x20
 	]
+	
+	# FWType & FWSKU are also used by CSE_Ext_0F_R2 & CSE_Ext_23, remember to change them as well!
 	
 	def get_flags(self) :
 		fw_type = CSE_Ext_0F_R2_GetFWType()
@@ -890,7 +894,7 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		('Day',				uint8_t),		# 0x14
 		('Month',			uint8_t),		# 0x15
 		('Year',			uint16_t),		# 0x16
-		('Size',			uint32_t),		# 0x18 dwords (0x2000 max)
+		('Size',			uint32_t),		# 0x18 dwords (max 2K, 4K for MTP+)
 		('Tag',				char*4),		# 0x1C
 		('BuildTag',		uint32_t),		# 0x20 Internal Info of FTPR > kernel or IGMF
 		('Major',			uint16_t),		# 0x24
@@ -3121,7 +3125,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # R1 - Key Manifest (KEY_MANIFE
 		("KeyType",			uint32_t),		# 0x08 1 RoT, 2 OEM (KeyManifestTypeValues)
 		("KeySVN",			uint32_t),		# 0x0C
 		("OEMID",			uint16_t),		# 0x10
-		("KeyID",			uint8_t),		# 0x12 Matched against Field Programmable Fuse (FPF)
+		("KeyID",			uint8_t),		# 0x12 Matched against Field Programmable Fuses (FPF)
 		("Reserved0",		uint8_t),		# 0x13
 		("Reserved1",		uint32_t*4),	# 0x14
 		# 0x24
@@ -3133,7 +3137,7 @@ class CSE_Ext_0E(ctypes.LittleEndianStructure) : # R1 - Key Manifest (KEY_MANIFE
 		pt.title = col_y + 'Extension 14, Key Manifest' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
-		pt.add_row(['Key Type', ['Unknown','RoT','OEM'][self.KeyType]])
+		pt.add_row(['Key Type', ['Reserved','RoT','OEM'][self.KeyType]])
 		pt.add_row(['Key SVN', '%d' % self.KeySVN])
 		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
 		pt.add_row(['Key ID', '0x%0.2X' % self.KeyID])
@@ -3156,7 +3160,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 	
 	def ext_print(self) :
 		f1,f2 = self.get_flags()
-		hash_usages = self.get_usages()
+		hash_usages = get_key_usages(self.UsageBitmap)
 		
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
 		
@@ -3178,19 +3182,6 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 		flags.asbytes = self.Flags
 		
 		return flags.b.IPIPolicy, flags.b.Reserved
-	
-	# Identical code at CSE_Ext_0F, CSE_Ext_0F_R2
-	def get_usages(self) :
-		hash_usages = []
-		
-		usage_bits = list(format(int.from_bytes(self.UsageBitmap, 'little'), '0128b'))
-		usage_bits.reverse()
-		
-		for usage_bit in range(len(usage_bits)) :
-			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
-				
-		return hash_usages
 		
 class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT_ENTRY)
 	_pack_ = 1
@@ -3206,7 +3197,7 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 	
 	def ext_print(self) :
 		f1,f2 = self.get_flags()
-		hash_usages = self.get_usages()
+		hash_usages = get_key_usages(self.UsageBitmap)
 		
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
 		
@@ -3228,19 +3219,6 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 		flags.asbytes = self.Flags
 		
 		return flags.b.IPIPolicy, flags.b.Reserved
-	
-	# Identical code at CSE_Ext_0F, CSE_Ext_0F_R2
-	def get_usages(self) :
-		hash_usages = []
-		
-		usage_bits = list(format(int.from_bytes(self.UsageBitmap, 'little'), '0128b'))
-		usage_bits.reverse()
-		
-		for usage_bit in range(len(usage_bits)) :
-			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
-				
-		return hash_usages
 	
 class CSE_Ext_0E_Flags(ctypes.LittleEndianStructure):
 	_fields_ = [
@@ -3268,7 +3246,7 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 	]
 	
 	def ext_print(self) :
-		hash_usages = self.get_usages()
+		hash_usages = get_key_usages(self.UsageBitmap)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3282,19 +3260,6 @@ class CSE_Ext_0F(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
-	
-	# Identical code at CSE_Ext_0F_R2, CSE_Ext_0E_Mod & CSE_Ext_0E_Mod_R2
-	def get_usages(self) :
-		hash_usages = []
-		
-		usage_bits = list(format(int.from_bytes(self.UsageBitmap, 'little'), '0128b'))
-		usage_bits.reverse()
-		
-		for usage_bit in range(len(usage_bits)) :
-			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
-				
-		return hash_usages
 		
 class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Information (SIGNED_PACKAGE_INFO_EXT)
 	_pack_ = 1
@@ -3314,11 +3279,11 @@ class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Inform
 	
 	# Firmware SKU value at older CSE_Ext_0F_R2 should be ignored in favor of CSE_Ext_0C, as explained at ext_anl > 0xF
 	
-	# FWType & FWSKU are also used by GSC_Info_FWI, remember to change it as well!
+	# FWType & FWSKU are also used by CSE_Ext_23 & GSC_Info_FWI, remember to change them as well!
 	
 	def ext_print(self) :
 		f1,f2,f3,f4,f5,f6 = self.get_flags()
-		hash_usages = self.get_usages()
+		hash_usages = get_key_usages(self.UsageBitmap)
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3349,19 +3314,6 @@ class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Inform
 		
 		return fw_type.b.FWType, fw_type.b.Reserved, fw_sub_type.b.FWSKU, fw_sub_type.b.Reserved, \
 			   nvm_compatibility.b.NVMCompatibility, nvm_compatibility.b.Reserved
-	
-	# Identical code at CSE_Ext_0F, CSE_Ext_0E_Mod & CSE_Ext_0E_Mod_R2
-	def get_usages(self) :
-		hash_usages = []
-		
-		usage_bits = list(format(int.from_bytes(self.UsageBitmap, 'little'), '0128b'))
-		usage_bits.reverse()
-		
-		for usage_bit in range(len(usage_bits)) :
-			if usage_bits[usage_bit] == '1' :
-				hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
-				
-		return hash_usages
 
 class CSE_Ext_0F_R2_FWType(ctypes.LittleEndianStructure):
 	_fields_ = [
@@ -4819,6 +4771,8 @@ class CSE_Ext_1B(ctypes.LittleEndianStructure) : # R1 - GSC PCOD Initial Vector 
 		# 0x18
 	]
 	
+	# Only for GSC DG1 Alpha. Seems to be REVOCATION_EXTENSION now with TBD structure.
+	
 	def ext_print(self) :
 		Nonce = '%0.*X' % (0x10 * 2, int.from_bytes(self.Nonce, 'little'))
 		
@@ -4867,6 +4821,114 @@ class CSE_Ext_1F(ctypes.LittleEndianStructure) : # R1 - Golden Measurements File
 		pt.add_row(['Body Size (MEA)', '0x%X' % (self.Size - ctypes.sizeof(CSE_Ext_1F))]) # Calculated by MEA
 		
 		return pt
+
+class CSE_Ext_22(ctypes.LittleEndianStructure) : # R1 - Key Manifest v2 (KEY_MANIFEST_EXT, KeyManifestV2)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('KeyType',			uint32_t),		# 0x08 1 RoT, 2 OEM (KeyManifestTypeValues)
+		('OEMID',			uint16_t),		# 0x0C
+		('KeyID',			uint8_t),		# 0x0E Matched against Field Programmable Fuses (FPF)
+		('Reserved',		uint8_t*12),	# 0x0F
+		('ModuleCount',		uint8_t),		# 0x1B Keys Number
+		# 0x1C
+	]
+	
+	def ext_print(self) :		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 34, Key Manifest' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['Key Type', ['Reserved','RoT','OEM'][self.KeyType]])
+		pt.add_row(['OEM ID', '0x%0.4X' % self.OEMID])
+		pt.add_row(['Key ID', '0x%0.2X' % self.KeyID])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		pt.add_row(['Key Count', self.ModuleCount])
+		
+		return pt
+
+class CSE_Ext_22_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_ENTRY)
+	_pack_ = 1
+	_fields_ = [
+		('Usage',			uint16_t),		# 0x00 (KeyManifestHashUsages, OemKeyManifestHashUsages)
+		('Flags',			uint8_t),		# 0x02
+		('HashAlgorithm',	uint8_t),		# 0x03
+		('MinimalSVN',		uint8_t),		# 0x04
+		('Reserved',		uint8_t*3),		# 0x05
+		# 0x08
+	]
+	
+	def ext_print(self) :
+		f1,f2 = self.get_flags()
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 34, Entry' + col_e
+		pt.add_row(['Hash Usage', key_dict[self.Usage] if self.Usage in key_dict else 'Unknown (%d)' % self.Usage])
+		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
+		pt.add_row(['Flags Reserved', '0x%X' % f2])
+		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Minimal SVN', self.MinimalSVN])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		
+		return pt
+	
+	def get_flags(self) :
+		flags = CSE_Ext_0E_GetFlags()
+		flags.asbytes = self.Flags
+		
+		return flags.b.IPIPolicy, flags.b.Reserved
+
+class CSE_Ext_23(ctypes.LittleEndianStructure) : # R1 - Signed Package Information v2 (SIGNED_PACKAGE_INFO_EXT, SignedPackageInfoV2)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		('PartitionName',	char*4),		# 0x08
+		('VCN',				uint32_t),		# 0x0C Version Control Number
+		('ARBSVN',			uint32_t),		# 0x10 FPF Anti-Rollback (ARB) Security Version Number
+		('Usage',			uint16_t),		# 0x14 (KeyManifestHashUsages, OemKeyManifestHashUsages)
+		('FWType',			uint8_t),  		# 0x16 Bits 0-2 FW Type, 3-7 Reserved (FwTypeValues)
+		('FWSKU',			uint8_t),  		# 0x17 Bits 0-2 FW SKU, 3-7 Reserved (FwSkuIdValues)
+		('ModuleCount',		uint8_t),  		# 0x18
+		('Reserved',		uint8_t*15),  	# 0x19
+		# 0x28
+	]
+	
+	# Firmware SKU value at older CSE_Ext_0F_R2 should be ignored in favor of CSE_Ext_0C, as explained at ext_anl > 0xF
+	
+	# FWType & FWSKU are also used by CSE_Ext_0F_R2 & GSC_Info_FWI, remember to change them as well!
+	
+	def ext_print(self) :
+		f1,f2,f3,f4 = self.get_flags()
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 35, Signed Package Information' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
+		pt.add_row(['Partition Name', self.PartitionName.decode('utf-8')])
+		pt.add_row(['Version Control Number', self.VCN])
+		pt.add_row(['ARB Security Version Number', self.ARBSVN])
+		pt.add_row(['Hash Usage', key_dict[self.Usage] if self.Usage in key_dict else 'Unknown (%d)' % self.Usage])
+		pt.add_row(['Firmware Type', ext15_fw_type[f1] if f1 in ext15_fw_type else 'Unknown (%d)' % f1])
+		pt.add_row(['Firmware Type Reserved', '0x%X' % f2])
+		pt.add_row(['Firmware SKU', ext15_fw_sku[f3][0] if f3 in ext15_fw_sku else 'Unknown (%d)' % f3])
+		pt.add_row(['Firmware SKU Reserved', '0x%X' % f4])
+		pt.add_row(['Module Count' % self.ModuleCount])
+		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+		
+		return pt
+	
+	def get_flags(self) :
+		fw_type = CSE_Ext_0F_R2_GetFWType()
+		fw_type.asbytes = self.FWType
+		fw_sub_type = CSE_Ext_0F_R2_GetFWSKU()
+		fw_sub_type.asbytes = self.FWSKU
+		
+		return fw_type.b.FWType, fw_type.b.Reserved, fw_sub_type.b.FWSKU, fw_sub_type.b.Reserved
 		
 class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - SPS Platform ID (MFT_EXT_MANIFEST_PLATFORM_ID)
 	_pack_ = 1
@@ -5524,7 +5586,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 		
 	# Store all RBEP > rbe and FTPR > pm "Metadata" leftover Hashes for Huffman symbol reversing
 	# The leftover Hashes for Huffman symbol reversing should be n+* if NFTP > pavp and/or PCOD > PCOD are encrypted
-	#for l_hash in [l_hash for l_hash in rbe_pm_met_hashes if l_hash not in rbe_pm_met_valid] : print(l_hash) # Debug/Research
+	if param.bypass :
+		for l_hash in [l_hash for l_hash in rbe_pm_met_hashes if l_hash not in rbe_pm_met_valid] : print(l_hash) # Debug/Research
 	
 # Analyze CSE Extensions
 # noinspection PyUnusedLocal
@@ -7008,6 +7071,19 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						break
 						
 	return rbe_pm_met_valid
+
+# Get CSE Key Hash Usages
+def get_key_usages(key_bitmap) :
+	hash_usages = []
+	
+	usage_bits = list(format(int.from_bytes(key_bitmap, 'little'), '0128b'))
+	usage_bits.reverse()
+	
+	for usage_bit in range(len(usage_bits)) :
+		if usage_bits[usage_bit] == '1' :
+			hash_usages.append(key_dict[usage_bit] if usage_bit in key_dict else 'Unknown (%d)' % usage_bit)
+			
+	return hash_usages
 	
 # Store and show CSE Analysis Errors
 def cse_anl_err(ext_err_msg, checked_hashes) :
@@ -8747,7 +8823,7 @@ def pmc_anl(mn2_info) :
 	
 	# Check PMC Latest status
 	if pmc_variant == 'PMCLBG' :
-		# LBG-R PMC version is static/useless (1.151.0.0) so use Latest Date instead
+		# LBG-R PMC version is weird/useless so use Latest Date instead
 		db_year,db_month,db_day,_ = check_upd(('Latest_PMC%s_H_%s' % (pmc_platform[:3], pmc_pch_rev)))
 		if pmc_year < db_year or (pmc_year == db_year and (pmc_month < db_month or (pmc_month == db_month and pmc_day < db_day))) : pmcp_upd_found = True
 	else :
@@ -8784,7 +8860,7 @@ def pmc_anl(mn2_info) :
 		if pmc_name_db in line :
 			break # Break loop at 1st name match
 	else :
-		note_stor.append([col_g + 'Note: This PMC %s firmware was not found at the database, please report it!' % pmc_platform + col_e, True])
+		note_new_fw('PMC %s' % pmc_platform)
 	
 	# Detect PMC RSA Public Key Recognition
 	for line in mea_db_lines :
@@ -8848,7 +8924,7 @@ def pchc_anl(mn2_info) :
 		if pchc_name_db in line :
 			break # Break loop at 1st name match
 	else :
-		note_stor.append([col_g + 'Note: This PCHC %s firmware was not found at the database, please report it!' % pchc_platform + col_e, True])
+		note_new_fw('PCHC %s' % pchc_platform)
 	
 	# Detect PCHC RSA Public Key Recognition
 	for line in mea_db_lines :
@@ -8910,7 +8986,7 @@ def phy_anl(mn2_info) :
 		if phy_name_db in line :
 			break # Break loop at 1st name match
 	else :
-		note_stor.append([col_g + 'Note: This PHY %s firmware was not found at the database, please report it!' % phy_platform + col_e, True])
+		note_new_fw('PHY %s' % phy_platform)
 	
 	# Detect PHY RSA Public Key Recognition
 	for line in mea_db_lines :
@@ -9451,7 +9527,7 @@ def copy_on_msg(msg_all) :
 	for message in msg_all :
 		if message[1] : copy = True
 	
-	#if err_stor or warn_stor or note_stor : copy = True # Copy on any message (Debug/Research)
+	if param.bypass and (err_stor or warn_stor or note_stor) : copy = True # Copy on any message (Debug/Research)
 	
 	# At least one message needs a file copy
 	if copy :
@@ -9470,6 +9546,11 @@ def copy_on_msg(msg_all) :
 			check_name += '_%d' % cur_count
 		
 		shutil.copyfile(file_in, check_name)
+
+# Store/Show new firmware Note
+def note_new_fw(variant_p) :
+	note_stor.append([col_g + 'Note: This %s firmware is not in the database! You can help this project by\
+	\n      quickly uploading it to https://mega.nz/megadrop/kgyWLLA10WY/. Thank you!' % variant_p + col_e, True])
 
 # Check DB for latest version
 def check_upd(key) :
@@ -9774,7 +9855,8 @@ def release_fix(release, rel_db, rsa_key_hash) :
 	'6F4BDE36CB1DD10A797CCE74BEA122F7609BA29630458E93586B2B447E58C38C',
 	'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7',
 	'86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894',
-	'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76'
+	'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76',
+	'2BDB4349FEFF80F6F6341DB7AD40E2568363AC9ED96A0DAA950F26DAD4E4F71A'
 	]
 	
 	if release == 'Production' and rsa_key_hash in rsa_pre_keys :
@@ -9862,11 +9944,11 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 			
 			break # Break loop at 1st match
 	
-	if variant == 'TBD1' and 6 <= major <= 10 : variant = 'ME'
-	elif variant == 'TBD1' and 0 <= major <= 2 : variant = 'TXE'
+	if mn2_rsa_hash == '86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894' and 6 <= major <= 10 : variant = 'ME'
+	elif mn2_rsa_hash == '86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894' and 0 <= major <= 2 : variant = 'TXE'
 	
 	if variant.startswith(('Unknown','TBD')) :
-		if variant == 'Unknown' : var_rsa_db = False # TBDx are multi-platform RSA Public Keys
+		if variant == 'Unknown' : var_rsa_db = False # TBD are multi-platform RSA Public Keys
 		
 		# Get CSE $CPD Module Names only for targeted variant detection via special ext_anl _Stage1 mode
 		cpd_mod_names,_ = ext_anl(buffer, '$MN2_Stage1', mn2_match_start, file_end, ['CSME',major,minor,hotfix,build,year,month,variant_p], None, [[],''], [[],-1,-1,-1])
@@ -9879,13 +9961,15 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod in ['bup_rcv', 'sku_mgr', 'manuf'] : variant = 'CSSPS' # REC, OPR, IGN
 				elif mod.startswith('dkl') and major == 10 and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYSLKF' # SPHY (LKF)
 				elif mod.startswith('dkl') and major == 11 and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PHYDG1' # PHYP (DG1)
+				elif mod == 'nphy' and major in (9,7) and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYNICP' # NPHY (ICP)
+				elif mod == 'nphy' and major in (15,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYNTGP' # NPHY (TGP)
 				elif mod == 'pphy' and major in (12,14,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYPTGP' # PPHY (TGP)
-				elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP-H/LP)
+				elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP)
 				elif mod == 'IntelRec' and major == 16 : variant = 'PCHCADP' # ADP
 				elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 40 : variant = 'PCHCEHL' # EHL
 				elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 0 : variant = 'PCHCTGP' # TGP
 				elif mod == 'IntelRec' and (major,minor) == (14,5) : variant = 'PCHCCMPV' # CMP-V
-				elif mod == 'IntelRec' and (major,minor) == (14,0) : variant = 'PCHCCMP' # CMP-H/LP
+				elif mod == 'IntelRec' and (major,minor) == (14,0) : variant = 'PCHCCMP' # CMP
 				elif mod == 'IntelRec' and (major,minor) == (13,30) : variant = 'PCHCLKF' # LKF
 				elif mod == 'IntelRec' and (major,minor) == (13,5) : variant = 'PCHCJSP' # JSP
 				elif mod == 'IntelRec' and (major,minor) == (13,0) : variant = 'PCHCICP' # ICP
@@ -9894,7 +9978,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'PMCC000' and major == 130 and is_meu and mn2_struct.MEU_Minor == 50 : variant = 'PMCJSP' # JSP
 				elif mod == 'PMCC000' and major in (400,130) : variant = 'PMCICP' # 0 ICP
 				elif mod == 'PMCC000' and major == 140 and is_meu and mn2_struct.MEU_Minor == 5 : variant = 'PMCCMPV' # 0 CMP-V
-				elif mod == 'PMCC000' and major == 140 : variant = 'PMCCMP' # 0 CMP-H/LP (After CMP-V)
+				elif mod == 'PMCC000' and major == 140 : variant = 'PMCCMP' # 0 CMP (After CMP-V)
 				elif mod == 'PMCC000' and major == 150 : variant = 'PMCTGP' # 0 TGP
 				elif mod == 'PMCC000' and major == 154 : variant = 'PMCEHL' # 0 EHL
 				elif mod == 'PMCC000' and major == 160 : variant = 'PMCADP' # 0 ADP
@@ -9948,8 +10032,8 @@ def mass_scan(f_path) :
 # Colorama ANSI Color/Font Escape Character Sequences Regex
 ansi_escape = re.compile(r'\x1b[^m]*m')
 
-# CSE Extensions 0x00-0x1B, 0x1E-0x1F, 0x32, 0x544F4F46
-ext_tag_all = list(range(0x1C)) + list(range(0x1E,0x20)) + [0x32] + [0x544F4F46]
+# CSE Extensions 0x00-0x1B, 0x1E-0x1F, 0x22, 0x23, 0x32, 0x544F4F46
+ext_tag_all = list(range(0x1C)) + list(range(0x1E,0x20)) + [0x22,0x23,0x32,0x544F4F46]
 
 # CSME 12-14 Revised Extensions
 ext_tag_rev_hdr_csme12 = {0xF:'_R2', 0x14:'_R2'}
@@ -9985,7 +10069,7 @@ ext_tag_rev_mod_cssps503 = {0x0:'_R2'}
 ext_tag_mod_none = [0x4, 0xA, 0xC, 0x11, 0x13, 0x16, 0x17, 0x1B, 0x32]
 
 # CSE Extensions with Module Count
-ext_tag_mod_count = [0x1, 0x2, 0x12]
+ext_tag_mod_count = [0x1, 0x2, 0x12, 0x22, 0x23]
 
 # CSE SPS SKU Type ID
 cssps_type_fw = {'RC':'Recovery', 'OP':'Operational'}
@@ -10088,6 +10172,8 @@ ext_dict = {
 			'CSE_Ext_1B' : CSE_Ext_1B,
 			'CSE_Ext_1E' : CSE_Ext_1E,
 			'CSE_Ext_1F' : CSE_Ext_1F,
+			'CSE_Ext_22' : CSE_Ext_22,
+			'CSE_Ext_23' : CSE_Ext_23,
 			'CSE_Ext_32' : CSE_Ext_32,
 			'CSE_Ext_544F4F46' : CSE_Ext_544F4F46,
 			'CSE_Ext_00_Mod' : CSE_Ext_00_Mod,
@@ -10127,6 +10213,7 @@ ext_dict = {
 			'CSE_Ext_1A_Mod' : CSE_Ext_1A_Mod,
 			'CSE_Ext_1A_Mod_R2' : CSE_Ext_1A_Mod_R2,
 			'CSE_Ext_1A_Mod_R3' : CSE_Ext_1A_Mod_R3,
+			'CSE_Ext_22_Mod' : CSE_Ext_22_Mod,
 			}
 			
 # CSE Key Manifest Hash Usages
@@ -10178,6 +10265,10 @@ key_dict = {
 			103 : 'OROM',
 			104 : 'HUC Production',
 			105 : 'HUC Debug',
+			106 : 'IFR', # In Field Repair
+			192 : 'ESE',
+			193 : 'DMU',
+			194 : 'PUnit',
 			}
 	
 # IFWI BPDT Entry Types ($CPD Partition Names)
@@ -10218,7 +10309,7 @@ bpdt_dict = {
 			37 : 'GTGP', # GT-GPU Partition
 			38 : 'MDFI', # MDF IO Partition
 			39 : 'PUNP', # PUnit Partition
-			40 : 'DPHY', # GSC PHY Partition
+			40 : 'PHYP', # GSC PHY Partition
 			41 : 'SAMF', # SAM Firmware
 			42 : 'PPHY', # PPHY Partition
 			43 : 'GBST', # GBST Partition
@@ -10273,7 +10364,7 @@ pch_dict = {
 			0xC : 'CNP/CMP-LP', # Cannon Point LP, Comet Point LP
 			0xD : 'CNP/CMP-H', # Cannon Point H, Comet Point H
 			0xE : 'LKF-LP', # Lakefield LP
-			0xF : 'EHL-LP', # Elkhart Lake LP
+			0xF : 'EHL-LP', # Mule Creek Canyon (Elkhart Lake) LP
 			0x10 : 'JSP-N', # Jasper Point N
 			0x11 : 'EBG-H', # Emmitsburg H
 			0x12 : 'ADP-LP', # Alder Point P (LP?)
@@ -10329,10 +10420,11 @@ pchc_dict = {
 			
 # CSE & PHY Compatibility
 phy_dict = {
-			('CSME',15,0) : ['P'],
+			('CSME',15,0) : ['P','N'],
 			('CSME',14,1) : ['P'],
 			('CSME',14,0) : ['P'],
 			('CSME',13,30) : ['S'],
+			('CSME',13,0) : ['N'],
 			('GSC',100,0) : ['G'],
 			}
 			
@@ -10389,6 +10481,10 @@ known_dup_name_hahes = [
 '15D7FDD257400AC9C9E923996FAE277701EEBB3924FDDDD322A7EC1FA257AE23', # SPS 03.00.07.024_DE_PRD_REC (Date)
 '094F8155EAF63909FAC8D01D7E58814B861074114515BCB807EF2596B64BD838', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
 'A4C21E6741439BF3208E2493DB8C86C820CCFD7792D50D635DD8531D364F205F', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
+'85BFC86B46805E82B0B4AAA8F98DBAE053C60590488ABD7651ABFB91B81D942F', # PHY ICP_N_9.0.1.0006_PRD (Date, Data)
+'B198CE2350424A447FCB0A5BC1D4A2DCF6CF1074D0A3072A0DEFF6B0AC70752E', # PHY ICP_N_9.0.1.0006_PRD (Date, Data)
+'3A98E7F1075029AF6AE23BF352A65F0F09C0417D035445E1EEEB6D0C4D83A0B8', # PHY ICP_N_9.0.1.0006_PRE (Date, Data)
+'F47A69561A851482E66D78836519DE25A3FED14B5B5A92F5C00AC3B6D7E9F631', # PHY ICP_N_9.0.1.0006_PRE (Date, Data)
 ]
 
 # Get MEA Parameters from input
@@ -10505,6 +10601,7 @@ pr_man_15_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x
 pr_man_16_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL)
 pr_man_17_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL)
 pr_man_18_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL)
+pr_man_19_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4E\x50\x48\x59', re.DOTALL)
 
 for file_in in source :
 	
@@ -10616,6 +10713,9 @@ for file_in in source :
 	s_bpdt_all = []
 	fpt_matches = []
 	p_store_all = []
+	pmc_sig_all = []
+	phy_sig_all = []
+	pchc_sig_all = []
 	fpt_part_all = []
 	orom_hdr_all = []
 	bpdt_matches = []
@@ -10665,6 +10765,9 @@ for file_in in source :
 	pmcp_size = 0
 	pchc_size = 0
 	phy_size = 0
+	pmc_count = 0
+	phy_count = 0
+	pchc_count = 0
 	oem_signed = 0
 	rbep_start = -1
 	fpt_length = -1
@@ -10890,14 +10993,15 @@ for file_in in source :
 		pr_man_16 = pr_man_16_pat.search(reading_16) # $CPD SPHY (CSE)
 		pr_man_17 = pr_man_17_pat.search(reading_16) # $CPD PPHY (CSE)
 		pr_man_18 = pr_man_18_pat.search(reading_16) # $CPD PHYP (GSC)
+		pr_man_19 = pr_man_19_pat.search(reading_16) # $CPD NPHY (CSE)
 		
-		#break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
+		if param.bypass : break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
 		if pr_man_0 in (b'FTPR', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' \
 		or pr_man_2 + pr_man_6 + pr_man_7 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_4 == b'BRINGUP' or pr_man_5 in (b'EpsRecovery', b'EpsFirmware') \
 		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 == b'$MMEWCOD_' or pr_man_9 == b'FTPR' or pr_man_10 == b'OROM' or pr_man_11 == b'bup_rcv' \
-		or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 :
+		or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 or pr_man_19 :
 			if pr_man_8 == b'$MMEWCOD_' or pr_man_12 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_10 == b'OROM' : is_orom_img = True # GSC Option ROM Image (OROM)
 			break
@@ -11370,6 +11474,9 @@ for file_in in source :
 				_,_,_,pmc_vcn,_,_,_,_,_,_,_,_,pmc_mn2_ver,_,pmc_ext15_info,_,_,_,_ = \
 				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 				
+				if pmc_mn2_ver[6] not in pmc_sig_all : pmc_count += 1
+				pmc_sig_all.append(pmc_mn2_ver[6])
+				
 			# Detect if IFWI Primary includes Platform Controller Hub Configuration (PCHC) partition
 			if p_name == 'PCHC' and not p_empty :
 				pchc_found = True
@@ -11379,14 +11486,20 @@ for file_in in source :
 				_,_,_,pchc_vcn,_,_,_,_,_,_,_,_,pchc_mn2_ver,_,pchc_ext15_info,_,_,_,_ = \
 				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 				
+				if pchc_mn2_ver[6] not in pchc_sig_all : pchc_count += 1
+				pchc_sig_all.append(pchc_mn2_ver[6])
+				
 			# Detect if IFWI Primary includes USB Type C Physical (PHY) partition
-			if p_name in ('PPHY','SPHY','PHYP') and not p_empty :
+			if p_name in ('PPHY','NPHY','SPHY','PHYP') and not p_empty :
 				phy_found = True
 				phy_fwu_found = False
 				phy_size = p_size
 				
 				_,_,_,phy_vcn,_,_,_,_,_,_,_,_,phy_mn2_ver,_,phy_ext15_info,_,_,_,_ = \
 				ext_anl(reading, '$CPD', p_offset_spi, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
+				
+				if phy_mn2_ver[6] not in phy_sig_all : phy_count += 1
+				phy_sig_all.append(phy_mn2_ver[6])
 				
 			# Detect if IFWI Primary includes CSE MFS File System partition (Not POR, just in case)
 			if p_name in ('MFS','AFSP') and not p_empty :
@@ -11470,6 +11583,9 @@ for file_in in source :
 						
 						_,_,_,pmc_vcn,_,_,_,_,_,_,_,_,pmc_mn2_ver,_,pmc_ext15_info,_,_,_,_ = \
 						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
+						
+						if pmc_mn2_ver[6] not in pmc_sig_all : pmc_count += 1
+						pmc_sig_all.append(pmc_mn2_ver[6])
 					
 					# Detect if IFWI Secondary includes Platform Controller Hub Configuration (PCHC) partition
 					if s_p_name == 'PCHC' and not s_p_empty :
@@ -11480,14 +11596,20 @@ for file_in in source :
 						_,_,_,pchc_vcn,_,_,_,_,_,_,_,_,pchc_mn2_ver,_,pchc_ext15_info,_,_,_,_ = \
 						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 						
+						if pchc_mn2_ver[6] not in pchc_sig_all : pchc_count += 1
+						pchc_sig_all.append(pchc_mn2_ver[6])
+						
 					# Detect if IFWI Secondary includes USB Type C Physical firmware (PHY) partition
-					if s_p_name in ('PPHY','SPHY','PHYP') and not s_p_empty :
+					if s_p_name in ('PPHY','NPHY','SPHY','PHYP') and not s_p_empty :
 						phy_found = True
 						phy_fwu_found = False
 						phy_size = s_p_size
 						
 						_,_,_,phy_vcn,_,_,_,_,_,_,_,_,phy_mn2_ver,_,phy_ext15_info,_,_,_,_ = \
 						ext_anl(reading, '$CPD', s_p_offset_spi, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
+						
+						if phy_mn2_ver[6] not in phy_sig_all : phy_count += 1
+						phy_sig_all.append(phy_mn2_ver[6])
 					
 					# Detect if IFWI Secondary includes CSE MFS File System partition (Not POR, just in case)
 					if s_p_name in ('MFS','AFSP') and not s_p_empty :
@@ -11841,6 +11963,9 @@ for file_in in source :
 				_,_,_,pmc_vcn,_,_,_,_,_,_,_,_,pmc_mn2_ver,_,pmc_ext15_info,_,_,_,_ = \
 				ext_anl(reading, '$CPD', part[1], file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
 				
+				if pmc_mn2_ver[6] not in pmc_sig_all : pmc_count += 1
+				pmc_sig_all.append(pmc_mn2_ver[6])
+				
 			# Detect if firmware has Platform Controller Hub Configuration (PCHC) partition
 			if part[0] == 'PCHC' and not part[6] :
 				pchc_found = True
@@ -11850,14 +11975,20 @@ for file_in in source :
 				_,_,_,pchc_vcn,_,_,_,_,_,_,_,_,pchc_mn2_ver,_,pchc_ext15_info,_,_,_,_ = \
 				ext_anl(reading, '$CPD', part[1], file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
 				
+				if pchc_mn2_ver[6] not in pchc_sig_all : pchc_count += 1
+				pchc_sig_all.append(pchc_mn2_ver[6])
+				
 			# Detect if firmware has USB Type C Physical (PHY) partition
-			if part[0] in ('PPHY','SPHY','PHYP') and not part[6] :
+			if part[0] in ('PPHY','NPHY','SPHY','PHYP') and not part[6] :
 				phy_found = True
 				phy_fwu_found = True
 				phy_size = part[2] - part[1]
 				
 				_,_,_,phy_vcn,_,_,_,_,_,_,_,_,phy_mn2_ver,_,phy_ext15_info,_,_,_,_ = \
 				ext_anl(reading, '$CPD', part[1], file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
+				
+				if phy_mn2_ver[6] not in phy_sig_all : phy_count += 1
+				phy_sig_all.append(phy_mn2_ver[6])
 		
 	# Calculate Firmware Size based on $FPT and/or IFWI LT
 	if (cse_lt_struct and not rgn_exist) or (rgn_exist and p_end_last != p_max_size) :
@@ -13085,8 +13216,7 @@ for file_in in source :
 	else :
 		can_search_db = False # Do not search DB for PMC, PCHC, PHY or Partial Update
 	
-	if can_search_db and not rgn_over_extr_found and not fw_in_db_found and not sps_extr_ignore :
-		note_stor.append([col_g + 'Note: This %s firmware was not found at the database, please report it!' % variant_p + col_e, True])
+	if can_search_db and not rgn_over_extr_found and not fw_in_db_found and not sps_extr_ignore : note_new_fw(variant_p)
 	
 	# Check if firmware is updated, Production only
 	if release == 'Production' and not is_pfu_img : # Does not display if firmware is non-Production or Partial Update
@@ -13275,6 +13405,12 @@ for file_in in source :
 	if fwu_iup_result == 'Impossible' and uncharted_match :
 		fwu_iup_msg = (uncharted_match.start(),p_end_last_back,p_end_last_back + uncharted_match.start())
 		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from 0x%X - 0x%X for FWUpdate Support!' % fwu_iup_msg + col_e, False])
+	
+	if pmc_count > 1 : warn_stor.append([col_m + 'Warning: Multiple (%d) different CSE PMC IUPs detected!' % pmc_count + col_e, True])
+	
+	if phy_count > 1 : warn_stor.append([col_m + 'Warning: Multiple (%d) different CSE PHY IUPs detected!' % phy_count + col_e, True])
+	
+	if pchc_count > 1 : warn_stor.append([col_m + 'Warning: Multiple (%d) different CSE PCHC IUPs detected!' % pchc_count + col_e, True])
 	
 	if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Partition Tables detected!' % fpt_count + col_e, True])
 	
