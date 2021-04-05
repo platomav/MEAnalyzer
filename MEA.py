@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.203.1'
+title = 'ME Analyzer v1.203.2'
 
 import sys
 
@@ -10982,11 +10982,11 @@ for file_in in source :
 		pr_man_5 = reading[end_man_match + 0x2DC:end_man_match + 0x2E7] # EpsRecovery,EpsFirmware (SPS 1)
 		pr_man_6 = reading[end_man_match + 0x270:end_man_match + 0x277] # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
 		pr_man_7 = reading[end_man_match + 0x33C:end_man_match + 0x340] # $MMX (ME 6 BYP Part 2)
-		pr_man_8 = reading[end_man_match + 0x270:end_man_match + 0x279] # $MMEWCOD_ (ME 8+ PFU)
+		pr_man_8 = reading[0x290:0x299] == b'$MMEWCOD_' # $MMEWCOD_ (ME 8+ PFU)
 		pr_man_9 = reading[end_man_match + 0x26C:end_man_match + 0x270] # FTPR (CSSPS 1 Ignition)
 		pr_man_10 = reading[end_man_match + 0x36C:end_man_match + 0x370] # OROM (GSC)
 		pr_man_11 = reading[end_man_match - 0x38:end_man_match - 0x31] # bup_rcv (CSSPS 5.0.3 +)
-		pr_man_12 = pr_man_12_pat.search(reading_16) # $CPD LOCL (CSE)
+		pr_man_12 = pr_man_12_pat.search(reading_16) # $CPD LOCL (CSE, PFU)
 		pr_man_13 = pr_man_13_pat.search(reading_16) # $CPD PMCP (CSE)
 		pr_man_14 = pr_man_14_pat.search(reading_16) # $CPD PCOD (GSC)
 		pr_man_15 = pr_man_15_pat.search(reading_16) # $CPD PCHC (CSE)
@@ -11000,9 +11000,9 @@ for file_in in source :
 		# Break if a valid Recovery Manifest is found
 		if pr_man_0 in (b'FTPR', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' \
 		or pr_man_2 + pr_man_6 + pr_man_7 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_4 == b'BRINGUP' or pr_man_5 in (b'EpsRecovery', b'EpsFirmware') \
-		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 == b'$MMEWCOD_' or pr_man_9 == b'FTPR' or pr_man_10 == b'OROM' or pr_man_11 == b'bup_rcv' \
+		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 or pr_man_9 == b'FTPR' or pr_man_10 == b'OROM' or pr_man_11 == b'bup_rcv' \
 		or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 or pr_man_19 :
-			if pr_man_8 == b'$MMEWCOD_' or pr_man_12 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
+			if pr_man_8 or pr_man_12 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_10 == b'OROM' : is_orom_img = True # GSC Option ROM Image (OROM)
 			break
 		

@@ -1,3 +1,7 @@
+v1.203.2
+
+Fixed non-CSE Engine firmware detection
+
 v1.203.1
 
 Added CSE PHY N (ICP,TGP) IUP support
