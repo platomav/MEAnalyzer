@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.203.2'
+title = 'ME Analyzer v1.204.0'
 
 import sys
 
@@ -9856,7 +9856,8 @@ def release_fix(release, rel_db, rsa_key_hash) :
 	'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7',
 	'86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894',
 	'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76',
-	'2BDB4349FEFF80F6F6341DB7AD40E2568363AC9ED96A0DAA950F26DAD4E4F71A'
+	'2BDB4349FEFF80F6F6341DB7AD40E2568363AC9ED96A0DAA950F26DAD4E4F71A',
+	'5D18E09F0135FAD8840989401F50C39A47A5E783CEDFC7AB1E1B11600425808F',
 	]
 	
 	if release == 'Production' and rsa_key_hash in rsa_pre_keys :
@@ -9975,7 +9976,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'IntelRec' and (major,minor) == (13,0) : variant = 'PCHCICP' # ICP
 				elif mod == 'PMCC000' and (major in (300,3232) or (major < 130 and year <= 0x2017)) : variant = 'PMCCNP' # 0 CNP
 				elif mod == 'PMCC000' and major == 133 : variant = 'PMCLKF' # 0 LKF
-				elif mod == 'PMCC000' and major == 130 and is_meu and mn2_struct.MEU_Minor == 50 : variant = 'PMCJSP' # JSP
+				elif mod == 'PMCC000' and major in (135,130) and is_meu and mn2_struct.MEU_Minor == 50 : variant = 'PMCJSP' # JSP
 				elif mod == 'PMCC000' and major in (400,130) : variant = 'PMCICP' # 0 ICP
 				elif mod == 'PMCC000' and major == 140 and is_meu and mn2_struct.MEU_Minor == 5 : variant = 'PMCCMPV' # 0 CMP-V
 				elif mod == 'PMCC000' and major == 140 : variant = 'PMCCMP' # 0 CMP (After CMP-V)
