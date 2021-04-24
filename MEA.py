@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.204.0'
+title = 'ME Analyzer v1.206.0'
 
 import sys
 
@@ -5153,7 +5153,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	
 	if reading_msg : print('%s\n' % reading_msg)
 	
-	# CSSPS 4.4 (WLY) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
+	# CSSPS 4.4 (WTL) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
 	if (variant,major,minor) == ('CSSPS',4,4) : input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only!\n' + col_e)
 	
 	# Show & Validate Flash Descriptor RSA Signature & Hash
@@ -8588,22 +8588,27 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 	# Remember to also update any prior function return statements
 	return bool(file_data_all)
 	
-# Analyze MFS Intel Configuration > PCH Initialization Table
+# Analyze MFS Intel Configuration > Chipset Initialization Table
 def mphytbl(mfs_file, rec_data, pch_init_info) :
 	pch_stp_val = {0:'A',1:'B',2:'C',3:'D',4:'E',5:'F',6:'G',7:'H',8:'I',9:'J',10:'K',11:'L',12:'M',13:'N',14:'O',15:'P'}
 	
 	if rec_data[0x2:0x6] == b'\xFF' * 4 :
-		pch_init_plt = pch_dict[rec_data[7]] if rec_data[7] in pch_dict else 'Unknown' # Actual PCH SKU Platform (ICP-LP, TGP-H etc)
-		pch_init_stp = rec_data[8] >> 4 # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
-		pch_init_rev = rec_data[6] # PCH Initialization Table Revision
+		pch_init_plt = pch_dict[rec_data[7]] if rec_data[7] in pch_dict else 'Unknown' # Actual Chipset SKU Platform (ICP-LP, TGP-H etc)
+		pch_init_stp = rec_data[8] >> 4 # Raw Chipset Stepping(s), Absolute or Bitfield depending on firmware
+		pch_init_rev = rec_data[6] # Chipset Initialization Table Revision
 	else :
-		pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual PCH SKU Platform (SPT-H, CNP-LP etc)
-		pch_init_stp = rec_data[3] & 0xF # Raw PCH Stepping(s), Absolute or Bitfield depending on firmware
-		pch_init_rev = rec_data[2] # PCH Initialization Table Revision
-	pch_true_stp = '' # Actual PCH Stepping(s) (A, B, C etc)
+		pch_init_plt = pch_dict[rec_data[3] >> 4] if rec_data[3] >> 4 in pch_dict else 'Unknown' # Actual Chipset SKU Platform (SPT-H, CNP-LP etc)
+		pch_init_stp = rec_data[3] & 0xF # Raw Chipset Stepping(s), Absolute or Bitfield depending on firmware
+		pch_init_rev = rec_data[2] # Chipset Initialization Table Revision
+	pch_true_stp = '' # Actual Chipset Stepping(s) (A, B, C etc)
 	
-	# Detect Actual PCH Stepping(s) for CSME 11 & CSSPS 4
-	if (variant,major) in [('CSME',11),('CSSPS',4)] :
+	# Detect Actual Chipset Stepping(s) for CSSPS 4.4
+	if (variant,major,minor) in [('CSSPS',4,4)] :
+		pch_true_stp = pch_stp_val[pch_init_stp] # Absolute (0 = A, 1 = B, 2 = C, 3 = D etc)
+		pch_init_plt = 'WTL' # Change from LBG-H to WTL (LBG-R)
+	
+	# Detect Actual Chipset Stepping(s) for CSME 11 & CSSPS 4
+	elif (variant,major) in [('CSME',11),('CSSPS',4)] :
 		if mn2_ftpr_hdr.Year > 0x2015 or (mn2_ftpr_hdr.Year == 0x2015 and mn2_ftpr_hdr.Month > 0x05) \
 		or (mn2_ftpr_hdr.Year == 0x2015 and mn2_ftpr_hdr.Month == 0x05 and mn2_ftpr_hdr.Day >= 0x19) :
 			# Absolute for CSME >=~ 11.0.0.1140 @ 2015-05-19 (0 = A, 1 = B, 2 = C, 3 = D etc)
@@ -8612,7 +8617,7 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			# Unreliable for CSME ~< 11.0.0.1140 @ 2015-05-19 (always 80 --> SPT/KBP-LP A)
 			pass
 	
-	# Detect Actual PCH Stepping(s) for CSME 12 & CSSPS 5
+	# Detect Actual Chipset Stepping(s) for CSME 12 & CSSPS 5
 	elif (variant,major) in [('CSME',12),('CSSPS',5)] :
 		if (mn2_ftpr_hdr.Year > 0x2018 or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month > 0x01)
 		or (mn2_ftpr_hdr.Year == 0x2018 and mn2_ftpr_hdr.Month == 0x01 and mn2_ftpr_hdr.Day >= 0x25)) :
@@ -8623,7 +8628,12 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			# Absolute for CSME ~< 12.0.0.1058 @ 2018-01-25 (0 = A, 1 = B, 2 = C, 3 = D etc)
 			pch_true_stp = pch_stp_val[pch_init_stp]
 	
-	# Detect Actual PCH Stepping(s) for CSME 13 and CSME 15
+	# Detect Actual Chipset Stepping(s) for CSME 15.40
+	elif (variant,major,minor) in [('CSME',15,40)] :
+		if 7000 > build >= 1000 : pch_true_stp = pch_stp_val[(build // 1000) - 1] # Build Number Yxxx
+		else : pch_true_stp = pch_stp_val[pch_init_stp] # Fallback to Absolute value
+	
+	# Detect Actual Chipset Stepping(s) for CSME 13 and CSME 15
 	elif (variant,major) in [('CSME',13),('CSME',15)] :
 		if rec_data[0x2:0x6] == b'\xFF' * 4 :
 			# Absolute for CSME 13 >=~ 13.0.0.1061 (0 = A, 1 = B, 2 = C, 3 = D etc)
@@ -8633,19 +8643,19 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 			for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else ''
 			if not pch_true_stp : pch_true_stp = 'A' # Fallback to A in case Bitfield is 0000
 		
-	# Detect Actual PCH Stepping(s) for CSME 14.5
+	# Detect Actual Chipset Stepping(s) for CSME 14.5
 	elif (variant,major,minor) in [('CSME',14,5)] :
 		# Absolute for CSME 14.5 (0 = A, 1 = B, 2 = C, 3 = D etc)
 		pch_true_stp = pch_stp_val[pch_init_stp]
 		pch_init_plt = 'CMP-V' # Change from KBP/BSF/GCF-H to CMP-V
 	
-	# Detect Actual PCH Stepping(s) for CSME 14.0
+	# Detect Actual Chipset Stepping(s) for CSME 14.0
 	elif (variant,major) in [('CSME',14)] :
 		# Bitfield for CSME 14.0 & maybe CSME 15 (0011 = --BA, 0110 = -CB-)
 		for i in range(4) : pch_true_stp += 'DCBA'[i] if pch_init_stp & (1<<(4-1-i)) else ''
 		if not pch_true_stp : pch_true_stp = 'A' # Fallback to A in case Bitfield is 0000
 		
-	pch_init_info.append([mfs_file, pch_init_plt, pch_true_stp, pch_init_rev]) # Output PCH Initialization Table Info
+	pch_init_info.append([mfs_file, pch_init_plt, pch_true_stp, pch_init_rev]) # Output Chipset Initialization Table Info
 	
 	return pch_init_info
 	
@@ -8807,11 +8817,11 @@ def pmc_anl(mn2_info) :
 		pmc_pch_sku = 'V' # Value instead of Halo or Low Power
 		pmc_platform = 'CMP-V' # To differentiate CMP-V (KBP) from actual CMP
 	
-	elif pmc_variant == 'PMCLBG' :
+	elif pmc_variant == 'PMCWTL' :
 		# Whitley is a royal f**k up, no further explanation required = GREAT WORK INTEL...
 		pmc_pch_sku = 'H' # Based on target use cases
 		pmc_pch_rev = 'B' # Based on CSSPS > VFS > mphytbl
-		pmc_platform = 'LBG-R' # To differentiate LBG-R from old LBG
+		pmc_platform = 'WTL' # Whitley (a.k.a. LBG-R, a.k.a. SHI-T)
 	
 	elif pmc_variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) :
 		pmc_platform = pmc_variant[3:6]
@@ -8822,8 +8832,8 @@ def pmc_anl(mn2_info) :
 		pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 LP (SoC), 1 LP, 2 H, 3 N
 	
 	# Check PMC Latest status
-	if pmc_variant == 'PMCLBG' :
-		# LBG-R PMC version is weird/useless so use Latest Date instead
+	if pmc_variant == 'PMCWTL' :
+		# WTL PMC version is weird/useless so use Latest Date instead
 		db_year,db_month,db_day,_ = check_upd(('Latest_PMC%s_H_%s' % (pmc_platform[:3], pmc_pch_rev)))
 		if pmc_year < db_year or (pmc_year == db_year and (pmc_month < db_month or (pmc_month == db_month and pmc_day < db_day))) : pmcp_upd_found = True
 	else :
@@ -8842,7 +8852,7 @@ def pmc_anl(mn2_info) :
 		pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
 		pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
-	elif pmc_platform.startswith(('CNP','LBG')) and mn2_info[0] != 300 :
+	elif pmc_platform.startswith(('CNP','WTL')) and mn2_info[0] != 300 :
 		pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
 		pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_sku, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
@@ -9690,7 +9700,7 @@ def get_fw_ver(variant, major, minor, hotfix, build) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCDG')) :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
-	elif variant.startswith(('PMCCNP','PMCLBG')) and (major < 130 or major == 3232) :
+	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 130 or major == 3232) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
 	elif variant.startswith('PMC') :
 		version = '%s.%s.%s.%s' % (major, minor, '{0:02d}'.format(hotfix), build)
@@ -9967,7 +9977,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'pphy' and major in (12,14,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYPTGP' # PPHY (TGP)
 				elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP)
 				elif mod == 'IntelRec' and major == 16 : variant = 'PCHCADP' # ADP
-				elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 40 : variant = 'PCHCEHL' # EHL
+				elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 40 : variant = 'PCHCMCC' # MCC
 				elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 0 : variant = 'PCHCTGP' # TGP
 				elif mod == 'IntelRec' and (major,minor) == (14,5) : variant = 'PCHCCMPV' # CMP-V
 				elif mod == 'IntelRec' and (major,minor) == (14,0) : variant = 'PCHCCMP' # CMP
@@ -9981,9 +9991,9 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'PMCC000' and major == 140 and is_meu and mn2_struct.MEU_Minor == 5 : variant = 'PMCCMPV' # 0 CMP-V
 				elif mod == 'PMCC000' and major == 140 : variant = 'PMCCMP' # 0 CMP (After CMP-V)
 				elif mod == 'PMCC000' and major == 150 : variant = 'PMCTGP' # 0 TGP
-				elif mod == 'PMCC000' and major == 154 : variant = 'PMCEHL' # 0 EHL
+				elif mod == 'PMCC000' and major == 154 : variant = 'PMCMCC' # 0 MCC
 				elif mod == 'PMCC000' and major == 160 : variant = 'PMCADP' # 0 ADP
-				elif mod == 'PMCC000' and major == 1 : variant = 'PMCLBG' # 0 LBG-R (CSSPS 4.4)
+				elif mod == 'PMCC000' and major == 1 : variant = 'PMCWTL' # 0 WTL
 				elif mod == 'PMCC002' : variant = 'PMCAPLA' # 2 APL A
 				elif mod == 'PMCC003' : variant = 'PMCAPLB' # 3 APL B
 				elif mod == 'PMCC004' : variant = 'PMCGLKA' # 4 GLK A
@@ -10365,7 +10375,7 @@ pch_dict = {
 			0xC : 'CNP/CMP-LP', # Cannon Point LP, Comet Point LP
 			0xD : 'CNP/CMP-H', # Cannon Point H, Comet Point H
 			0xE : 'LKF-LP', # Lakefield LP
-			0xF : 'EHL-LP', # Mule Creek Canyon (Elkhart Lake) LP
+			0xF : 'MCC-LP', # Mule Creek Canyon (Elkhart Lake) LP
 			0x10 : 'JSP-N', # Jasper Point N
 			0x11 : 'EBG-H', # Emmitsburg H
 			0x12 : 'ADP-LP', # Alder Point P (LP?)
@@ -10415,7 +10425,7 @@ pchc_dict = {
 			('CSME',14,1) : [(14,0)],
 			('CSME',14,5) : [(14,5)],
 			('CSME',15,0) : [(15,0)],
-			('CSME',15,40) : [(15,0)],
+			('CSME',15,40) : [(15,40),(15,0)],
 			('CSME',16,0) : [(16,0)],
 			}
 			
@@ -10450,9 +10460,9 @@ ftbl_efst_plat = {
 			0x03 : 'LKF',
 			0x04 : 'TGP',
 			0x05 : 'CMP-V',
-			0x08 : 'EHL',
+			0x08 : 'MCC',
 			0x0A : 'IDV',
-			0x0B : 'WLY',
+			0x0B : 'WTL',
 			0x10 : 'ADP',
 			0x11 : 'JSP',
 			}
@@ -12753,7 +12763,7 @@ for file_in in source :
 		elif major == 15 :
 			
 			if minor == 0 and not pch_init_final : platform = 'TGP' # Tiger Point
-			elif minor == 40 and not pch_init_final : platform = 'EHL' # Elkhart Lake
+			elif minor == 40 and not pch_init_final : platform = 'MCC' # Mule Creek Canyon (Elkhart Lake)
 			
 		# Get CSME 12+ DB SKU and check for Latest status
 		sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, sku_db, upd_found, False, True)
@@ -13169,7 +13179,7 @@ for file_in in source :
 		name_fw = '%s_%s_%s' % (fw_ver, rel_db, type_db)
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
 		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_stp[0], date, rel_db)
-	elif variant.startswith(('PMCCNP','PMCLBG')) and (major < 130 or major == 3232) : # PMC CNP A, LBG-R
+	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 130 or major == 3232) : # PMC CNP A, WTL
 		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_db, date, rel_db)
 	elif variant.startswith('PMCDG') : # PMC DG1
 		name_fw = '%s_%s_%s' % (platform[:4], fw_ver, rel_db)
