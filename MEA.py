@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.206.0'
+title = 'ME Analyzer v1.206.2'
 
 import sys
 
@@ -4261,7 +4261,7 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
 		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % int.from_bytes(self.HashSize, 'little')])
-		pt.add_row(['Hash', Hash])
+		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Ignore FWU Disable Policy', fvalue[f11]])
 		pt.add_row(['Flags Private Reserved', '0x%X' % f12])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
@@ -4331,7 +4331,7 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
 		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
 		pt.add_row(['Hash Size', '0x%X' % int.from_bytes(self.HashSize, 'little')])
-		pt.add_row(['Hash', Hash])
+		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Ignore FWU Disable Policy', fvalue[f11]])
 		pt.add_row(['Flags Private Reserved', '0x%X' % f12])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
@@ -8806,7 +8806,7 @@ def pmc_anl(mn2_info) :
 	pmc_pch_rev = '%s%d' % (pch_rev_val[min(mn2_info[2] // 10, 0xF)], mn2_info[2] % 10) # 21 = PCH C PMC 1
 	
 	# Get/Set special PMC Platform, SKU and/or Steppings
-	if pmc_variant == 'PMCCNP' and mn2_info[0] != 300 :
+	if pmc_variant == 'PMCCNP' and mn2_info[0] not in [300,30] :
 		# CSME < 12.0.0.1033 --> 01.7.0.1022 = PCH Stepping A1 + PMC Hotfix 7 + PCH-H + PMC Build 1022 (Guess)
 		# CSME < 12.0.0.1033 --> 10.0.2.1021 = PCH Stepping B0 + PMC Hotfix 0 + PCH-LP + PMC Build 1021 (Guess)
 		if mn2_info[2] in pch_sku_old : pmc_pch_sku = pch_sku_old[mn2_info[2]] # 0 H, 2 LP
@@ -8852,7 +8852,7 @@ def pmc_anl(mn2_info) :
 		pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
 		pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
-	elif pmc_platform.startswith(('CNP','WTL')) and mn2_info[0] != 300 :
+	elif pmc_platform.startswith(('CNP','WTL')) and mn2_info[0] not in [300,30] :
 		pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
 		pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_sku, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
@@ -8887,6 +8887,7 @@ def pmc_anl(mn2_info) :
 def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
 	if (variant,major,minor) in pmc_dict :
 		if (variant,major,minor,pmc_platform) == ('CSME',12,0,'CNP') and pmc_pch_gen != 300 : return # Ignore CSME 12.0 Alpha CNP PMC
+		if (variant,major,minor,pmc_platform) == ('CSME',13,0,'ICP') and pmc_pch_gen != 130 : return # Ignore CSME 13.0 Alpha ICP PMC
 		if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'H','B','A') : sku_stp = 'Unknown' # Skip CSME 15.0 H A w/ PMC B
 		if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'LP','C','B') : sku_stp = 'Unknown' # Skip CSME 15.0 LP B w/ PMC C
 		
@@ -9700,7 +9701,7 @@ def get_fw_ver(variant, major, minor, hotfix, build) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCDG')) :
 		version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
-	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 130 or major == 3232) :
+	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 30 or major == 3232) :
 		version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
 	elif variant.startswith('PMC') :
 		version = '%s.%s.%s.%s' % (major, minor, '{0:02d}'.format(hotfix), build)
@@ -9984,7 +9985,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'IntelRec' and (major,minor) == (13,30) : variant = 'PCHCLKF' # LKF
 				elif mod == 'IntelRec' and (major,minor) == (13,5) : variant = 'PCHCJSP' # JSP
 				elif mod == 'IntelRec' and (major,minor) == (13,0) : variant = 'PCHCICP' # ICP
-				elif mod == 'PMCC000' and (major in (300,3232) or (major < 130 and year <= 0x2017)) : variant = 'PMCCNP' # 0 CNP
+				elif mod == 'PMCC000' and (major in (300,30,3232) or (major < 30 and year <= 0x2017)) : variant = 'PMCCNP' # 0 CNP
 				elif mod == 'PMCC000' and major == 133 : variant = 'PMCLKF' # 0 LKF
 				elif mod == 'PMCC000' and major in (135,130) and is_meu and mn2_struct.MEU_Minor == 50 : variant = 'PMCJSP' # JSP
 				elif mod == 'PMCC000' and major in (400,130) : variant = 'PMCICP' # 0 ICP
@@ -10397,7 +10398,7 @@ mfs_dict = {
 # CSE & PMC Compatibility
 pmc_dict = {
 			('CSME',12,0) : [300],
-			('CSME',13,0) : [130,400],
+			('CSME',13,0) : [130],
 			('CSME',13,30) : [133],
 			('CSME',13,50) : [135,130],
 			('CSME',14,0) : [140],
@@ -12755,7 +12756,7 @@ for file_in in source :
 			
 		elif major == 14 :
 			
-			if (minor,pos_sku_tbl) == (0,'H') and sku_init_db != 'SLM' : upd_found = True # Superseded H CON/COR minor version
+			if minor == 0 and not (sku_init_db,pos_sku_tbl) in [('COR','LP'),('SLM','H')] : upd_found = True # Superseded minor version
 			
 			if minor in [0,1] and not pch_init_final : platform = 'CMP-H/LP' # Comet Point H/LP
 			elif minor == 5 and not pch_init_final : platform = 'CMP-V' # Comet Point V
@@ -13179,7 +13180,7 @@ for file_in in source :
 		name_fw = '%s_%s_%s' % (fw_ver, rel_db, type_db)
 	elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
 		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_stp[0], date, rel_db)
-	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 130 or major == 3232) : # PMC CNP A, WTL
+	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 30 or major == 3232) : # PMC CNP A, WTL
 		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_db, date, rel_db)
 	elif variant.startswith('PMCDG') : # PMC DG1
 		name_fw = '%s_%s_%s' % (platform[:4], fw_ver, rel_db)
