@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.206.2'
+title = 'ME Analyzer v1.206.4'
 
 import sys
 
@@ -10776,6 +10776,7 @@ for file_in in source :
 	mfsb_size = 0
 	pmcp_size = 0
 	pchc_size = 0
+	fitc_size = 0
 	phy_size = 0
 	pmc_count = 0
 	phy_count = 0
@@ -11336,7 +11337,9 @@ for file_in in source :
 				efs_size = p_size
 				
 			# Detect if firmware has FITC File System Configuration Partition
-			if p_name == 'FITC' and not p_empty : fitc_found = True
+			if p_name == 'FITC' :
+				if not p_empty : fitc_found = True
+				fitc_size = p_size
 			
 			# Detect if firmware has valid OEM Unlock/Security Token (UTOK/STKN)
 			if p_name in ['UTOK','STKN'] and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x10] != b'\xFF' * 0x10 : utok_found = True
@@ -11533,7 +11536,9 @@ for file_in in source :
 				efs_size = p_size
 				
 			# Detect if IFWI Primary includes FITC File System Configuration partition (Not POR, just in case)
-			if p_name == 'FITC' and not p_empty : fitc_found = True
+			if p_name == 'FITC' :
+				if not p_empty : fitc_found = True
+				fitc_size = p_size
 			
 			if p_type == 5 and not p_empty and p_offset_spi < file_end and reading[p_offset_spi:p_offset_spi + 0x2] == b'\xAA\x55' : # Secondary BPDT (S-BPDT)
 				s_bpdt_hdr = get_struct(reading, p_offset_spi, get_bpdt(reading, p_offset_spi))
@@ -11643,7 +11648,9 @@ for file_in in source :
 						efs_size = s_p_size
 						
 					# Detect if IFWI Secondary includes FITC File System Configuration partition (Not POR, just in case)
-					if s_p_name == 'FITC' and not s_p_empty : fitc_found = True
+					if s_p_name == 'FITC' :
+						if not s_p_empty : fitc_found = True
+						fitc_size = s_p_size
 					
 					# Store all Secondary BPDT entries for extraction
 					bpdt_part_all.append([s_p_name,s_p_offset_spi,s_p_offset_spi + s_p_size,s_p_type,s_p_empty,'Secondary',cse_in_id])
@@ -12756,7 +12763,7 @@ for file_in in source :
 			
 		elif major == 14 :
 			
-			if minor == 0 and not (sku_init_db,pos_sku_tbl) in [('COR','LP'),('SLM','H')] : upd_found = True # Superseded minor version
+			if minor == 0 : upd_found = True # Superseded minor version
 			
 			if minor in [0,1] and not pch_init_final : platform = 'CMP-H/LP' # Comet Point H/LP
 			elif minor == 5 and not pch_init_final : platform = 'CMP-V' # Comet Point V
@@ -13317,7 +13324,7 @@ for file_in in source :
 	print('\n%s' % msg_pt)
 	
 	if param.check : # Debug/Research
-		if mfs_state != 'Unconfigured' or oem_signed or oemp_found or utok_found : input('\nCFG_PRESENT!\n')
+		if mfs_state != 'Unconfigured' or oem_signed or oemp_found or utok_found or fitc_size : input('\nCFG_PRESENT!\n')
 		if pmcp_found or pchc_found or phy_found : input('\nIUP_PRESENT!\n')
 	
 	if param.write_html :
