@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.206.4'
+title = 'ME Analyzer v1.207.0'
 
 import sys
 
@@ -8422,6 +8422,8 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 			
 		efs_data_all += page_data_dat # Append Page/File Contents to Data Area Buffer
 	
+	efs_data_rest = bytearray(efs_data_all) # Initialize EFS Remaining Data Buffer to later detect wrong EFST
+	
 	# Check if EFS File Table Dictionary file exists
 	if os.path.isfile(ftbl_json) :
 		with open(ftbl_json, 'r') as json_file : ftbl_dict = json.load(json_file)
@@ -8464,12 +8466,11 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 				file_data_met = efs_data_all[efs_offset:efs_offset + meta_size] # Entry/File Metadata
 				file_met = get_struct(file_data_met, 0, EFS_File_Metadata) # EFS Entry/File Metadata Structure
 				file_met_size = file_met.Size # EFS Entry/File Size via its Metadata (always prefer over EFST Size)
+				file_min_size = min(file_met_size, file_length) # EFS Entry/File Minimum Size from EFST or Metadata
 				file_met_unk = file_met.Unknown # EFS Entry/File Unknown via its Metadata
 				
-				# Check for wrong EFST via placeholder EFS Entry/File Metadata Values
-				if (file_met_size,file_met_unk) == (0xFFFF,0xFFFF) :
-					efs_anl_msg(col_m + 'Warning: Detected empty EFS Metadata at %s, wrong EFST!' % file_name + col_e, warn_stor, False)
-					continue # No point in storing/recording EFS "files" when EFST is wrong
+				# Replace EFS Entry/File full data at the EFS Remaining Data Buffer to check for leftover data later
+				efs_data_rest[efs_offset:efs_offset + meta_size + file_min_size] = b'\xFF' * (meta_size + file_min_size)
 				
 				# Check for empty EFS Entry/File via its Metadata Size
 				if file_met_size == 0xFFFF :
@@ -8577,7 +8578,12 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 					efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > FTBL > VFS ID %0.4d!' % (
 								ftbl_plat_id, plat_name, ftbl_dict_id, file_id) + col_e, err_stor, True)
 			
-			if file_data_all : mfs_txt(efs_pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', True) # Store EFS File Records Log
+			if file_data_all : # Perform actions depending on whether EFS Files exist or not
+				mfs_txt(efs_pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', True) # Store EFS File Records Log
+			else :
+				# Check if any uncharted EFS data remain after EFST analysis at Empty/Non-Initialized EFS only w/o Scratch data
+				if efs_data_rest != b'\xFF' * len(efs_data_rest) :
+					efs_anl_msg(col_m + 'Warning: Detected additional EFS Data Buffer contents, wrong EFST!' + col_e, warn_stor, False)
 		else :
 			efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > EFST > Revision 0x%s!' % (
 						ftbl_plat_id, plat_name, ftbl_dict_id, efst_dict_rev) + col_e, err_stor, True)
@@ -9028,16 +9034,9 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 	
 	# Message Verbosity: All | Error | None
 	
-	# Check if Huffman dictionary version is supported
-	if (cse_variant,cse_major) in [('CSME',11),('CSSPS',4)] or (cse_variant,cse_major,cse_minor) in [('CSME',14,5)] : dict_version = 11
-	elif (cse_variant,cse_major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSME',18),('CSSPS',5),('GSC',100)] : dict_version = 12
-	else :
-		# CSTXE, CSSPS 1/IGN, PMC, PCHC & PHY firmware do not use Huffman compression, skip error message
-		if cse_variant != 'CSTXE' and (cse_variant,cse_major) != ('CSSPS',1) and not cse_variant.startswith(('PMC','PCHC','PHY','OROM')) and verbosity in ['all','error'] :
-			if param.me11_mod_bug : input_col(col_r + '\nNo Huffman dictionary for {0} {1}'.format(cse_variant, cse_major) + col_e)
-			else : print(col_r + '\nNo Huffman dictionary for {0} {1}'.format(cse_variant, cse_major) + col_e)
-		
-		return HUFFMAN_SHAPE, HUFFMAN_SYMBOLS, HUFFMAN_UNKNOWNS
+	# Check if a Huffman dictionary needs to be loaded and which version is required
+	if cse_variant.startswith(('CSTXE','PMC','PCHC','PHY','OROM')) or (cse_variant,cse_major) == ('CSSPS',1) : return HUFFMAN_SHAPE, HUFFMAN_SYMBOLS, HUFFMAN_UNKNOWNS
+	dict_version = 11 if (cse_variant,cse_major) in [('CSME',11),('CSSPS',4)] or (cse_variant,cse_major,cse_minor) == ('CSME',14,5) else 12
 	
 	# Check if supported Huffman dictionary file exists
 	if not os.path.isfile(huffman_dict) :
