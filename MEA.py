@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.207.0'
+title = 'ME Analyzer v1.210.0'
 
 import sys
 
@@ -5154,7 +5154,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 	if reading_msg : print('%s\n' % reading_msg)
 	
 	# CSSPS 4.4 (WTL) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
-	if (variant,major,minor) == ('CSSPS',4,4) : input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only!\n' + col_e)
+	if (variant,major,minor) == ('CSSPS',4,4) : input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only, errors are expected!\n' + col_e)
 	
 	# Show & Validate Flash Descriptor RSA Signature & Hash
 	if fdv_status[0] :
@@ -5931,8 +5931,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					intel_cfg_hash_len = len(ext_hdr.IMGDefaultHash) * 4
 					intel_cfg_hash_ext = '%0.*X' % (intel_cfg_hash_len * 2, int.from_bytes(ext_hdr.IMGDefaultHash, 'little'))
 					
-					# Validate CSME/CSSPS MFS Intel Configuration (Low Level File 6) Hash at Non-Initialized/Non-FWUpdated MFS
-					if intel_cfg_hash_mfs and mfs_found and mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and intel_cfg_hash_ext not in intel_cfg_hash_mfs :
+					# Validate CSME/CSSPS MFS Intel Configuration (Low Level File 6) Hash at Non-Initialized/Non-FWUpdated MFS. Ignore at (CS)SPS with different FTPR & OPR Versions.
+					if intel_cfg_hash_mfs and mfs_found and mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and not sps_extr_ignore and intel_cfg_hash_ext not in intel_cfg_hash_mfs :
 						cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong $FPT MFS Intel Configuration Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e,
 						(intel_cfg_hash_ext,intel_cfg_hash_mfs))
 					
@@ -7142,6 +7142,7 @@ def check_ftbl_pl(vol_ftbl_pl, ftbl_dict) :
 
 # Get CSE File System Integrity Table Structure Size
 def get_sec_hdr_size(variant,major,minor,hotfix) :
+	if (variant,major,minor) == ('CSME',14,5) : return 0x34
 	if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,minor,hotfix) == ('CSSPS',5,0,0) : return 0x28
 	if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : return 0x34
 	if (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15)] : return 0x28
@@ -7801,6 +7802,14 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
 			col_y + 'Group ID' + col_e, col_y + 'Unknown Access' + col_e, col_y + 'Unknown Options' + col_e, col_y + 'HMAC MD5' + col_e, col_y + 'AES-GCM Nonce' + col_e,
 			col_y + 'Unknown Integrity 1' + col_e, col_y + 'Unknown Integrity 2' + col_e], True, 1)
 			mfs_pt.title = col_y + 'VFS Home Directory Records' + col_e
+		
+		elif sec_hdr_size == 0x34 :
+			mfs_pt = ext_table([col_y + 'VFS ID' + col_e, col_y + 'Path' + col_e, col_y + 'File ID' + col_e, col_y + 'Size' + col_e, col_y + 'Integrity' + col_e, col_y + 'Encryption' + col_e,
+			col_y + 'SVN' + col_e, col_y + 'Anti-Replay' + col_e, col_y + 'AR Index' + col_e, col_y + 'AR Random' + col_e, col_y + 'AR Counter' + col_e, col_y + 'User ID' + col_e,
+			col_y + 'Group ID' + col_e, col_y + 'Unknown Access' + col_e, col_y + 'Unknown Options' + col_e, col_y + 'HMAC SHA-256' + col_e, col_y + 'Nonce' + col_e,
+			col_y + 'Unknown Integrity 1' + col_e, col_y + 'Unknown Integrity 2' + col_e], True, 1)
+			mfs_pt.title = col_y + 'VFS Home Directory Records' + col_e
+		
 		else :
 			mfs_pt = None
 		
@@ -7998,6 +8007,10 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 		if sec_hdr_size == 0x28 :
 			mfs_pt.add_row(['%0.4d' % mfs_file_idx, rec_path, 'Unknown', '0x%X' % len(file_data), 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown',
 			'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown'])
+		
+		elif sec_hdr_size == 0x34 :
+			mfs_pt.add_row(['%0.4d' % mfs_file_idx, rec_path, 'Unknown', '0x%X' % len(file_data), 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown',
+			'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown'])
 	else :
 		for ftbl_file_id in ftbl_dict[ftbl_plat_id][ftbl_dict_id]['FTBL'] :
 			ftbl_entry = ftbl_dict[ftbl_plat_id][ftbl_dict_id]['FTBL'][ftbl_file_id].split(',') # Split FTBL Entry string data
@@ -8079,11 +8092,38 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 							mfs_write(os.path.normpath(os.path.join(rec_parent)), sec_file, file_sec) # Store MFS Home Directory File Integrity Contents
 							mfs_txt(sec_hdr_pt, os.path.normpath(os.path.join(rec_parent)), sec_file, 'w', False) # Store/Print MFS Home Directory File Integrity Info
 				
+						elif sec_hdr_size == 0x34 :
+							sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Home Directory Low Level File Integrity Structure
+							
+							sec_unk0, sec_ar, sec_encr, sec_unk1, sec_ar_idx, sec_unk2, sec_svn, sec_unk3 = sec_hdr.get_flags()
+							
+							log_encr = sec_encr # Always prefer Integrity Info > Encryption value, if it exists
+							log_arpl = sec_ar # Always prefer Integrity Info > Anti-Replay value, if it exists
+							
+							sec_unk_flags = '{0:01b}b'.format(sec_unk0) + ' {0:07b}b'.format(sec_unk1) + ' {0:03b}b'.format(sec_unk2) + ' {0:01b}b'.format(sec_unk3)
+							sec_hmac = '%0.*X' % (0x20 * 2, int.from_bytes(sec_hdr.HMACSHA256, 'little'))
+							sec_aes_nonce = '%0.*X' % (0x10 * 2, int.from_bytes(sec_hdr.ARValues_Nonce, 'little')) if sec_encr else ''
+							sec_ar_random = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce)[0] if sec_ar else ''
+							sec_ar_counter = '0x%0.8X' % struct.unpack_from('<I', sec_hdr.ARValues_Nonce, 4)[0] if sec_ar else ''
+							if not sec_encr : sec_svn = ''
+							if not sec_ar : sec_ar_idx = ''
+							
+							sec_hdr_pt = sec_hdr.mfs_print() # Save MFS Home Directory File Integrity Info
+							if sec_extra_size : sec_hdr_pt.add_row(['Unknown', sec_unk]) # Append extra 0x10 Unknown data, if applicable
+							
+							mfs_write(os.path.normpath(os.path.join(rec_parent)), sec_file, file_sec) # Store MFS Home Directory File Integrity Contents
+							mfs_txt(sec_hdr_pt, os.path.normpath(os.path.join(rec_parent)), sec_file, 'w', False) # Store/Print MFS Home Directory File Integrity Info
+				
 				mfs_write(rec_parent, rec_file, file_data) # Store File to currently working Folder
 				mfs_txt(ftbl_pt, os.path.normpath(os.path.join(rec_parent)), rec_file, 'w', False) # Store/Print MFS Home Directory File Info
 				
 				# Append MFS Home Directory File Info to Log
 				if sec_hdr_size == 0x28 :
+					mfs_pt.add_row(['%0.4d' % ftbl_vfs_id, ftbl_path, '0x%s' % ftbl_file_id, '0x%X' % len(file_data), fvalue[ftbl_acc_int], fvalue[log_encr], sec_svn,
+					fvalue[log_arpl], sec_ar_idx, sec_ar_random, sec_ar_counter, '0x%0.4X' % ftbl_user_id, '0x%0.4X' % ftbl_group_id, '{0:013b}b'.format(ftbl_acc_unk),
+					'{0:064b}b'.format(ftbl_unk), sec_hmac, sec_aes_nonce, sec_unk_flags, sec_unk])
+				
+				elif sec_hdr_size == 0x34 :
 					mfs_pt.add_row(['%0.4d' % ftbl_vfs_id, ftbl_path, '0x%s' % ftbl_file_id, '0x%X' % len(file_data), fvalue[ftbl_acc_int], fvalue[log_encr], sec_svn,
 					fvalue[log_arpl], sec_ar_idx, sec_ar_random, sec_ar_counter, '0x%0.4X' % ftbl_user_id, '0x%0.4X' % ftbl_group_id, '{0:013b}b'.format(ftbl_acc_unk),
 					'{0:064b}b'.format(ftbl_unk), sec_hmac, sec_aes_nonce, sec_unk_flags, sec_unk])
@@ -8099,6 +8139,10 @@ def mfs_home13_anl(mfs_file_idx, mfs_file_data, vol_ftbl_id, sec_hdr_size, mfs_h
 			
 			# Append MFS Home Directory File Info to Log
 			if sec_hdr_size == 0x28 :
+				mfs_pt.add_row(['%0.4d' % mfs_file_idx, rec_path, 'Unknown', '0x%X' % len(file_data), 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown',
+				'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown'])
+			
+			elif sec_hdr_size == 0x34 :
 				mfs_pt.add_row(['%0.4d' % mfs_file_idx, rec_path, 'Unknown', '0x%X' % len(file_data), 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown',
 				'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown', 'Unknown'])
 			
@@ -8576,7 +8620,7 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 						break # Stop searching FTBL Dictionary at first VFS ID match
 				else :
 					efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > FTBL > VFS ID %0.4d!' % (
-								ftbl_plat_id, plat_name, ftbl_dict_id, file_id) + col_e, err_stor, True)
+								ftbl_plat_id, plat_name, ftbl_dict_id, file_id) + col_e, err_stor, False)
 			
 			if file_data_all : # Perform actions depending on whether EFS Files exist or not
 				mfs_txt(efs_pt, os.path.join(mod_f_path[:-4], ''), mod_f_path[:-4], 'a', True) # Store EFS File Records Log
@@ -8586,10 +8630,10 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 					efs_anl_msg(col_m + 'Warning: Detected additional EFS Data Buffer contents, wrong EFST!' + col_e, warn_stor, False)
 		else :
 			efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > EFST > Revision 0x%s!' % (
-						ftbl_plat_id, plat_name, ftbl_dict_id, efst_dict_rev) + col_e, err_stor, True)
+						ftbl_plat_id, plat_name, ftbl_dict_id, efst_dict_rev) + col_e, err_stor, False)
 	else :
 		efs_anl_msg(col_r + 'Error: Could not find File System Platform 0x%s (%s) > Dictionary 0x%s > EFST!' % (
-					ftbl_plat_id, plat_name, ftbl_dict_id) + col_e, err_stor, True)
+					ftbl_plat_id, plat_name, ftbl_dict_id) + col_e, err_stor, False)
 	
 	# Remember to also update any prior function return statements
 	return bool(file_data_all)
@@ -9639,7 +9683,7 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 	fd_input_size = len(reading[start_fd_match:start_fd_match + fd_comp_all_size])
 	if fd_input_size != fd_comp_all_size and not file_in.endswith('.scap') :
 		fd_is_cut = True
-		err_stor.append([col_r + 'Error: Detected incomplete firmware size 0x%X, expected 0x%X!' % (fd_input_size, fd_comp_all_size) + col_e, False])
+		err_stor.append([col_r + 'Error: Firmware is incomplete/corrupted, expected 0x%X not 0x%X!' % (fd_comp_all_size, fd_input_size) + col_e, False])
 	else :
 		fd_is_cut = False
 	
@@ -10861,6 +10905,15 @@ for file_in in source :
 		copy_on_msg(['PFAT']) # Close input and copy it in case of messages
 		
 		continue # Next input file
+
+	# Detect & Skip Intel (CS)SPS Capsule multi images
+	if reading[:0x10] == b'\x34\x59\xEF\x99\x22\x78\xC4\x49\x83\xA4\x50\xC1\xAF\xBC\xBE\x00' :
+		msg_pt = ext_table([], False, 1)
+		msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
+		
+		print('\n%s\n\nDetected' % msg_pt + col_y + ' Intel (CS)SPS Capsule ' + col_e + 'multi image, format is not supported!')
+		
+		continue # Next input file
 	
 	# Parse VFS & EFS File Table Blobs
 	if param.mfs_ftbl :
@@ -12036,7 +12089,7 @@ for file_in in source :
 			if eng_fw_end > me_fd_size :
 				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine/Graphics region, possible data loss!' + col_e, False]
 			elif eng_fw_end < me_fd_size and fd_is_cut :
-				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine/Graphics region, possible data loss!' + col_e, True]
+				eng_size_text = [col_m + 'Warning: Firmware size exceeds Engine/Graphics region, possible data loss!' + col_e, False]
 			elif eng_fw_end < me_fd_size :
 				# Extra data at Engine/Graphics FD region padding
 				padd_size_fd = me_fd_size - eng_fw_end
@@ -13002,7 +13055,7 @@ for file_in in source :
 		
 		if major == 4 :
 			
-			if minor == 4 : warn_stor.append([col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only!' + col_e, False])
+			if minor == 4 : warn_stor.append([col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only, errors are expected!' + col_e, False])
 			
 			if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
 		
