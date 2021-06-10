@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.210.0'
+title = 'ME Analyzer v1.210.2'
 
 import sys
 
@@ -10526,6 +10526,8 @@ cse_known_bad_hashes = [
 
 # Known Duplicate File Name Hashes
 known_dup_name_hahes = [
+'0B82FE076D0E41FDADB5ED009FD11CF54E65EAEDD1539B88C58B4949D578DBFD', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag)
+'EE91844EDD444805711DB8BA99611C594DF286B3102070116EF6554FC2504E79', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag)
 '115C0ECC472F2F68B9E78DD8DC384803A1C181B437DFB5F69C0AF2A06494E785', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
 '543C776F7B6BE85063263445FD3F0B429143F0E7358D94AB7A6C5EAC76CBE604', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
 '2842B771A1D12714429B30304E7BA343BA5561481C515CFB1D60E058C7CB3BD7', # SPS 03.00.07.024_DE_PRD_EXTR (Date)
@@ -11905,7 +11907,7 @@ for file_in in source :
 			# Due to 4K $FPT Partition alignment, Uncharted can start after 0x0 to 0x1000 bytes
 			if not fd_exist and not cse_lt_struct and reading[p_end_last:p_end_last + 0x4] != b'$CPD' :
 				p_end_last_back = p_end_last # Store $FPT-based p_end_last offset for CSME 12+ FWUpdate Support detection
-				uncharted_match = cpd_pat.search(reading[p_end_last:p_end_last + 0x100B]) # Should be within the next 4K bytes
+				uncharted_match = cpd_pat.search(reading[p_end_last:p_end_last + 0x200B]) # Should be within the next 4-8K bytes
 				if uncharted_match : p_end_last += uncharted_match.start() # Adjust p_end_last to actual Uncharted start
 			
 			# ME8-10 WCOD/LOCL but works for ME7, TXE1-2, SPS2-3 even though these end at last $FPT entry
