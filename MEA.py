@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.210.2'
+title = 'ME Analyzer v1.212.0'
 
 import sys
 
@@ -4762,7 +4762,7 @@ class CSE_Ext_1A_Mod_R3(ctypes.LittleEndianStructure) : # R3 - GSC FWI Manifest 
 		
 		return pt
 		
-class CSE_Ext_1B(ctypes.LittleEndianStructure) : # R1 - GSC PCOD Initial Vector (not in XML, Reverse Engineered)
+class CSE_Ext_1B(ctypes.LittleEndianStructure) : # R1 - GSC Alpha PCOD Initial Vector (not in XML, Reverse Engineered)
 	_pack_ = 1
 	_fields_ = [
 		('Tag',				uint32_t),		# 0x00
@@ -4771,17 +4771,34 @@ class CSE_Ext_1B(ctypes.LittleEndianStructure) : # R1 - GSC PCOD Initial Vector 
 		# 0x18
 	]
 	
-	# Only for GSC DG1 Alpha. Seems to be REVOCATION_EXTENSION now with TBD structure.
-	
 	def ext_print(self) :
 		Nonce = '%0.*X' % (0x10 * 2, int.from_bytes(self.Nonce, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
-		pt.title = col_y + 'Extension 27, GSC PCOD Initial Vector' + col_e
+		pt.title = col_y + 'Extension 27, GSC Alpha PCOD Initial Vector' + col_e
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['Nonce', Nonce])
+		
+		return pt
+
+class CSE_Ext_1B_R2(ctypes.LittleEndianStructure) : # R2 - OEM Key Revocation Manifest (REVOCATION_EXTENSION)
+	_pack_ = 1
+	_fields_ = [
+		('Tag',				uint32_t),		# 0x00
+		('Size',			uint32_t),		# 0x04
+		# 0x08
+	]
+	
+	# Should be followed by a MN2_Manifest_R2, awaiting for a sample
+	
+	def ext_print(self) :		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 27, OEM Key Revocation Manifest' + col_e
+		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
+		pt.add_row(['Size', '0x%X' % self.Size])
 		
 		return pt
 		
@@ -4917,7 +4934,7 @@ class CSE_Ext_23(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		pt.add_row(['Firmware Type Reserved', '0x%X' % f2])
 		pt.add_row(['Firmware SKU', ext15_fw_sku[f3][0] if f3 in ext15_fw_sku else 'Unknown (%d)' % f3])
 		pt.add_row(['Firmware SKU Reserved', '0x%X' % f4])
-		pt.add_row(['Module Count' % self.ModuleCount])
+		pt.add_row(['Module Count', self.ModuleCount])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
 		return pt
@@ -4929,6 +4946,33 @@ class CSE_Ext_23(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		fw_sub_type.asbytes = self.FWSKU
 		
 		return fw_type.b.FWType, fw_type.b.Reserved, fw_sub_type.b.FWSKU, fw_sub_type.b.Reserved
+
+class CSE_Ext_23_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO_EXT_ENTRY)
+	_pack_ = 1
+	_fields_ = [
+		('Name',			char*12),		# 0x00
+		('Type',			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
+		('HashAlgorithm',	uint8_t),		# 0x0D (0 None, 1 SHA-1, 2 SHA-256, 3 SHA-384)
+		('HashSize',		uint16_t),		# 0x0E
+		('MetadataSize',	uint32_t),		# 0x10
+		('MetadataHash',	uint32_t*12),	# 0x14 SHA-384
+		# 0x44
+	]
+	
+	def ext_print(self) :
+		MetadataHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.MetadataHash, 'little'))
+		
+		pt = ext_table(['Field', 'Value'], False, 1)
+		
+		pt.title = col_y + 'Extension 35, Entry' + col_e
+		pt.add_row(['Name', self.Name.decode('utf-8')])
+		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
+		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
+		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
+		pt.add_row(['Metadata Hash', MetadataHash])
+		
+		return pt
 		
 class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - SPS Platform ID (MFT_EXT_MANIFEST_PLATFORM_ID)
 	_pack_ = 1
@@ -5910,7 +5954,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				ext_hdr_extra = ['CSE_Ext_0C'] # Extensions which require extra get_struct parameters
 				
 				# Detect CSE Extension without Modules different size & notify user
-				if ext_tag in ext_tag_mod_none and cpd_ext_size != ext_length :
+				if (ext_tag,hdr_rev_tag) in ext_tag_mod_none and cpd_ext_size != ext_length :
 					cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X w/o Modules size difference at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
 				
 				# Check if Module data is divisible by Module size
@@ -5969,7 +6013,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					while cpd_mod_offset < cpd_ext_end :
 						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
 						met_name = mod_hdr.Name.decode('utf-8') + '.met'
-						# Some may include 03/0F/16, may have 03/0F/16 MetadataHash mismatch, may have Met name with ".met" included (GREAT WORK INTEL/OEMs...)
+						# Some Modules may have multiple 03/0F/16/23 and/or MetadataHash mismatch and/or double .met extension (GREAT WORK INTEL/OEMs...)
 						if met_name.endswith('.met.met') : met_name = met_name[:-4]
 						met_hash_len = len(mod_hdr.MetadataHash) * 4 # Metadata Hash Length
 						met_hash = '%0.*X' % (met_hash_len * 2, int.from_bytes(mod_hdr.MetadataHash, 'little')) # Metadata Hash
@@ -6029,7 +6073,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					while cpd_mod_offset < cpd_ext_end :
 						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
 						met_name = mod_hdr.Name.decode('utf-8') + '.met'
-						# Some may include 03/0F/16, may have 03/0F/16 MetadataHash mismatch, may have Met name with ".met" included (GREAT WORK INTEL/OEMs...)
+						# Some Modules may have multiple 03/0F/16/23 and/or MetadataHash mismatch and/or double .met extension (GREAT WORK INTEL/OEMs...)
 						if met_name.endswith('.met.met') : met_name = met_name[:-4]
 						met_hash_len = len(mod_hdr.MetadataHash) * 4 # Metadata Hash Length
 						met_hash = '%0.*X' % (met_hash_len * 2, int.from_bytes(mod_hdr.MetadataHash, 'little')) # Metadata Hash
@@ -6221,7 +6265,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					payload_knob_area = cpd_ext_end - cpd_payload_knob_offset
 					
 					# Check Extension full size when Module Counter exists
-					if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + part_id_count * CSE_Ext_15_PartID_length + CSE_Ext_15_Payload_length +
+					if (ext_tag,hdr_rev_tag) in ext_tag_mod_count and (cpd_ext_size != ext_length + part_id_count * CSE_Ext_15_PartID_length + CSE_Ext_15_Payload_length +
 					payload_knob_count * CSE_Ext_15_Payload_Knob_length) :
 						cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
 					
@@ -6347,6 +6391,27 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					if gmf_blob_info : gmf_blob_info[3][1] = gmf_body_data
 					else : gmf_blob_info = [cpd_name, in_id, cpd_offset, [b'', gmf_body_data]]
 				
+				elif ext_tag == 0x23 :
+					ext_pname = ext_hdr.PartitionName.decode('utf-8') # Partition Name
+					vcn = ext_hdr.VCN # Version Control Number
+					arb_svn = ext_hdr.ARBSVN # FPF Anti-Rollback (ARB) Security Version Number
+					ext15_info[0] = arb_svn # Adjust CSE Extension 15/35 Info with ARB SVN
+					special_mod_anl = True # CSE_Ext_23 requires special/unique Module processing
+					
+					while cpd_mod_offset < cpd_ext_end :
+						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
+						met_name = mod_hdr.Name.decode('utf-8') + '.met'
+						# Some Modules may have multiple 03/0F/16/23 and/or MetadataHash mismatch and/or double .met extension (GREAT WORK INTEL/OEMs...)
+						if met_name.endswith('.met.met') : met_name = met_name[:-4]
+						met_hash_len = len(mod_hdr.MetadataHash) * 4 # Metadata Hash Length
+						met_hash = '%0.*X' % (met_hash_len * 2, int.from_bytes(mod_hdr.MetadataHash, 'little')) # Metadata Hash
+						
+						cpd_ext_hash.append([cpd_name, met_name, met_hash])
+						
+						ext_print_temp.append(mod_hdr.ext_print())
+						
+						cpd_mod_offset += mod_length
+				
 				elif ext_tag == 0x32 :
 					ext50_type = ext_hdr.Type.decode('utf-8') # SPS Type (OP, RC)
 					ext50_plat = ext_hdr.Platform.decode('utf-8') # SPS Platform (GE, HA, PU, PE etc)
@@ -6354,7 +6419,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					ext50_info = [ext50_type, ext50_plat]
 				
 				# Check Extension full size when Module Counter exists
-				if ext_tag in ext_tag_mod_count and (cpd_ext_size != ext_length + ext_hdr.ModuleCount * mod_length) :
+				if (ext_tag,hdr_rev_tag) in ext_tag_mod_count and (cpd_ext_size != ext_length + ext_hdr.ModuleCount * mod_length) :
 					cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with Module Count size difference at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
 				
 				# Parse generic Extension Modules w/o special processing
@@ -6425,8 +6490,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	for attr in cpd_ext_attr :
 		for met_hash in cpd_ext_hash :
 			if attr[8] == met_hash[0] and attr[0] == met_hash[1] : # Verify $CPD and Metadata name match
-				attr[7] = met_hash[2] # Fill Metadata's Hash Attribute from Manifest Extension 0x3, 0xF or 0x16
-				break # To hopefully avoid some 03/0F/16 MetadataHash mismatch, assuming 1st has correct MetadataHash
+				attr[7] = met_hash[2] # Fill Metadata's Hash Attribute from Manifest Extension 0x3, 0xF, 0x16 or 0x23
+				break # To hopefully avoid some 03/0F/16/23 MetadataHash mismatch, assuming 1st has correct MetadataHash
 	
 	# Stage 5: Analyze Modules, Keys, Microcodes & Data (must be after all Manifest & Metadata Extension analysis)
 	for entry in range(0, cpd_num) :
@@ -10097,13 +10162,15 @@ ext_tag_rev_hdr_csme12 = {0xF:'_R2', 0x14:'_R2'}
 ext_tag_rev_mod_csme12 = {0x1:'_R2', 0xD:'_R2'}
 
 # CSME 15 Revised Extensions
-ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2', 0x17:'_R2'}
+ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2',
+						  0x17:'_R2', 0x1B:'_R2'}
 
 # CSME 15 Revised Extension Modules
 ext_tag_rev_mod_csme15 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R3', 0x10:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
 # GSC/OROM 100 Revised Extensions
-ext_tag_rev_hdr_gsc100 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
+ext_tag_rev_hdr_gsc100 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2',
+						  0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
 
 # GSC/OROM 100 Revised Extension Modules
 ext_tag_rev_mod_gsc100 = {0x1:'_R2', 0x7:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R2', 0x10:'_R2', 0x18:'_R3', 0x1A:'_R3'}
@@ -10120,11 +10187,12 @@ ext_tag_rev_hdr_cssps503 = {0xF:'_R2'}
 # CSSPS 5.0.0-3 Revised Extension Modules
 ext_tag_rev_mod_cssps503 = {0x0:'_R2'}
 
-# CSE Extensions without Modules
-ext_tag_mod_none = [0x4, 0xA, 0xC, 0x11, 0x13, 0x16, 0x17, 0x1B, 0x32]
+# CSE Extensions without Modules (exclude 0x1E, 0x1F, 0x544F4F46)
+ext_tag_mod_none = [(0x4,''), (0xA,''), (0xA,'_R2'), (0xC,''), (0x11,''), (0x11,'_R2'), (0x13,''), (0x13,'_R2'),
+					(0x16,''), (0x16,'_R2'), (0x17,''), (0x17,'_R2'), (0x1B,''), (0x1B,'_R2'), (0x32,'')]
 
 # CSE Extensions with Module Count
-ext_tag_mod_count = [0x1, 0x2, 0x12, 0x22, 0x23]
+ext_tag_mod_count = [(0x1,''), (0x2,''), (0x12,''), (0x22,''), (0x23,'')]
 
 # CSE SPS SKU Type ID
 cssps_type_fw = {'RC':'Recovery', 'OP':'Operational'}
@@ -10225,6 +10293,7 @@ ext_dict = {
 			'CSE_Ext_1A' : CSE_Ext_1A,
 			'CSE_Ext_1A_R2' : CSE_Ext_1A_R2,
 			'CSE_Ext_1B' : CSE_Ext_1B,
+			'CSE_Ext_1B_R2' : CSE_Ext_1B_R2,
 			'CSE_Ext_1E' : CSE_Ext_1E,
 			'CSE_Ext_1F' : CSE_Ext_1F,
 			'CSE_Ext_22' : CSE_Ext_22,
@@ -10269,6 +10338,7 @@ ext_dict = {
 			'CSE_Ext_1A_Mod_R2' : CSE_Ext_1A_Mod_R2,
 			'CSE_Ext_1A_Mod_R3' : CSE_Ext_1A_Mod_R3,
 			'CSE_Ext_22_Mod' : CSE_Ext_22_Mod,
+			'CSE_Ext_23_Mod' : CSE_Ext_23_Mod,
 			}
 			
 # CSE Key Manifest Hash Usages
@@ -10358,7 +10428,7 @@ bpdt_dict = {
 			31 : 'DPHY', # USB Type C Dekel PHY
 			32 : 'PCHC', # PCH Configuration
 			33 : 'ISIF', # Intel Safety Island Firmware
-			34 : 'ISIC', # Intel Safety Island Configuration
+			34 : 'ISIC', # Intel Safety Island Configuration (N/A)
 			35 : 'HBMI', # HBM IO Partition
 			36 : 'OMSM', # OOB MSM Partition
 			37 : 'GTGP', # GT-GPU Partition
