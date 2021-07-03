@@ -1,3 +1,7 @@
+v1.220.0
+
+Added automatic check for MEA & DB updates
+
 v1.212.0
 
 Improved support for future platforms

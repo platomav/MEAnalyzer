@@ -15,7 +15,27 @@
 
 ## **A. About ME Analyzer**
 
-ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Independent firmware from the (Converged Security) Management Engine - CS(ME), (Converged Security) Trusted Execution Engine - (CS)TXE, (Converged Security) Server Platform Services - (CS)SPS, Graphics System Controller - GSC, Power Management Controller - PMC, Platform Controller Hub Configuration - PCHC, USB Type C Physical - PHY and Graphics Option ROM - OROM families. It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform, Size, Updated/Outdated, Health Status etc. ME Analyzer is also a powerful Engine / Graphics / Independent firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) & Graphics System Controller (GSC) Code and File Systems such as Flash Partition Table (FPT), Boot Partition Descriptor Table (BPDT/IFWI), CSE Layout Table (LT), CSE File Table (FTBL/EFST), CSE Virtual File System (VFS), GSC OROM-PCIR (VBT/EFI) etc. Moreover, with the help of its extensive databases, ME Analyzer is capable of uniquely identifying and categorizing all supported Engine / Graphics / Independent firmware as well as check for any firmware which have not been stored at the equivalent, community supported, Firmware Repositories yet.
+ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Independent firmware from the following families:
+
+- (Converged Security) Management Engine - CS(ME)
+- (Converged Security) Trusted Execution Engine - (CS)TXE
+- (Converged Security) Server Platform Services - (CS)SPS
+- Graphics System Controller - GSC
+- Power Management Controller - PMC
+- Platform Controller Hub Configuration - PCHC
+- USB Type C Physical - PHY
+- Graphics Option ROM - OROM
+
+It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform, Size, Updated/Outdated, Health Status etc. ME Analyzer is also a powerful Engine / Graphics / Independent firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) & Graphics System Controller (GSC) Code and File Systems such as:
+
+- Flash Partition Table - FPT
+- Boot Partition Descriptor Table - BPDT/IFWI
+- CSE Layout Table - LT
+- CSE File Table - FTBL/EFST
+- CSE Virtual File System - VFS
+- GSC OROM-PCIR - VBT/EFI
+
+Moreover, with the help of its extensive databases, ME Analyzer is capable of uniquely identifying and categorizing all supported Engine / Graphics / Independent firmware as well as check for any firmware which have not been stored at the equivalent, community supported, Firmware Repositories yet.
 
 #### **A1. ME Analyzer Features**
 
@@ -38,6 +58,7 @@ ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Indepe
 - Ability to detect & analyze Integrated Firmware Images (IFWI/BPDT)
 - Ability to analyze multiple files by drag & drop or by input path
 - Ability to detect & categorize any firmware which require attention
+- Ability to automatically scan for newer ME Analyzer & Database releases
 - Reports firmware which are not found at the Engine/Graphics/IUP Repositories
 - Reports new, unknown, problematic, incomplete etc Engine/Graphics/IUP firmware
 - Features command line parameters to enhance functionality & assist research
@@ -138,7 +159,7 @@ Some Anti-Virus software may claim that the built/frozen/compiled MEA executable
 
 ## **D. Pictures**
 
-**Note:** Some pictures are outdated and depict older ME Analyzer versions.
+**Note:** Some pictures may be outdated and depict older ME Analyzer versions.
 
 ![](https://i.imgur.com/PoUD96g.png)
 
@@ -181,6 +202,8 @@ Some Anti-Virus software may claim that the built/frozen/compiled MEA executable
 ![](https://i.imgur.com/ZYprlQE.png)
 
 ![](https://i.imgur.com/d5nzMSE.png)
+
+![](https://i.imgur.com/UlMy3u6.png)
 
 ###### _Donate Button Card Image: [Credit and Loan Pack](https://flaticon.com/free-icon/credit-card_3898076) by **Freepik** under Flaticon license_
 ###### _Donate Button Paypal Image: [Credit Cards Pack](https://flaticon.com/free-icon/paypal_349278) by **Freepik** under Flaticon license_

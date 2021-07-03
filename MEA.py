@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.212.0'
+title = 'ME Analyzer v1.220.0'
 
 import sys
 
@@ -39,9 +39,11 @@ import ctypes
 import shutil
 import hashlib
 import inspect
+import threading
 import itertools
 import traceback
 import subprocess
+import urllib.request
 import importlib.util
 
 # Check code dependency installation
@@ -138,6 +140,17 @@ class MEA_Param :
 		if '-byp' in source : self.bypass = True # Hidden
 			
 		if self.mass_scan or self.db_print_new : self.skip_intro = True
+
+# https://stackoverflow.com/a/65447493 by Shail-Shouryya
+class Thread_With_Result(threading.Thread) :
+	def __init__(self, group=None, target=None, name=None, args=(), kwargs=None, *, daemon=None) :
+		self.result = None
+		if kwargs is None : kwargs = {}
+
+		def function() :
+			self.result = target(*args, **kwargs)
+
+		super().__init__(group=group, target=function, name=name, daemon=daemon)
 		
 # Engine/Graphics/Independent Structures
 class FPT_Pre_Header(ctypes.LittleEndianStructure) : # (ROM_BYPASS)
@@ -9470,7 +9483,7 @@ def get_rbe_pm_met(rbe_pm_data_d, rbe_pm_met_hashes) :
 		rbe_pm_met_hashes.append(rbe_pm_met_hash) # Store each "Metadata" entry Hash for Modules w/o Metadata Hash validation
 	
 	return rbe_pm_met_hashes
-	
+
 # https://github.com/skochinsky/me-tools/blob/master/me_unpack.py by Igor Skochinsky
 def get_struct(input_stream, start_offset, class_name, param_list = None) :
 	if param_list is None : param_list = []
@@ -9592,8 +9605,16 @@ def show_exception_and_exit(exc_type, exc_value, tb) :
 
 # Execute final actions
 def mea_exit(code) :
+	try :
+		# Before exiting, print output of MEA & DB update check Thread, if completed/dead
+		if not thread_update.is_alive() and thread_update.result : print(thread_update.result)
+	except :
+		pass
+	
 	colorama.deinit() # Stop Colorama
+	
 	if not param.skip_pause : input('\nPress enter to exit')
+	
 	sys.exit(code)
 	
 # Input Colorama Workaround (Windows, Python 3.5+)
@@ -10138,6 +10159,38 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 	
 	return variant, variant_p, var_rsa_db
 
+# Check online for MEA & DB Updates
+def mea_upd_check(db_path) :
+	result = None
+	
+	try :
+		with urllib.request.urlopen('https://raw.githubusercontent.com/platomav/MEAnalyzer/master/MEA.py') as gpy : git_py = gpy.read(0x100)
+		git_py_utf = git_py.decode('utf-8','ignore')
+		git_py_idx = git_py_utf.find('title = \'ME Analyzer v')
+		if git_py_idx == -1 : raise Exception('BAD_PY_FORMAT')
+		git_py_ver = git_py_utf[git_py_idx:][22:].split('\'')[0].split('_')[0]
+		cur_py_ver = title[13:].split('_')[0]
+		git_py_tup = git_py_ver.split('.')[:3]
+		cur_py_tup = cur_py_ver.split('.')[:3]
+		py_print = '(v%s --> v%s)' % (cur_py_ver, git_py_ver)
+		py_is_upd = bool(int(cur_py_tup[0]) > int(git_py_tup[0]) or (int(cur_py_tup[0]) == int(git_py_tup[0]) and (int(cur_py_tup[1]) > int(git_py_tup[1])
+					or (int(cur_py_tup[1]) == int(git_py_tup[1]) and int(cur_py_tup[2]) >= int(git_py_tup[2])))))
+		
+		with urllib.request.urlopen('https://raw.githubusercontent.com/platomav/MEAnalyzer/master/MEA.dat') as gdb : git_db = gdb.readlines(0x80)
+		git_db_ver = git_db[1].decode('utf-8','ignore')[14:].split('_')[0].split(' ')[0]
+		with open(db_path, 'r') as db : cur_db_ver = db.readlines()[1][14:].split('_')[0].split(' ')[0]
+		db_print = '(r%s --> r%s)' % (cur_db_ver, git_db_ver)
+		db_is_upd = cur_db_ver >= git_db_ver
+		
+		git_link = '\n         Download the latest from https://github.com/platomav/MEAnalyzer/'
+		if not py_is_upd and not db_is_upd : result = col_m + '\nWarning: Outdated ME Analyzer %s & Database %s!' % (py_print,db_print) + git_link + col_e
+		elif not py_is_upd : result = col_m + '\nWarning: Outdated ME Analyzer %s!' % py_print + git_link + col_e
+		elif not db_is_upd : result = col_m + '\nWarning: Outdated Database %s!' % db_print + git_link + col_e
+	except :
+		result = None
+	
+	return result
+
 # Scan all files of a given directory
 def mass_scan(f_path) :
 	mass_files = []
@@ -10625,6 +10678,10 @@ arg_num = len(sys.argv)
 
 # Set dependencies paths
 mea_db_path = os.path.join(mea_dir, 'MEA.dat')
+
+# Initialize & Start background Thread for MEA & DB update check
+thread_update = Thread_With_Result(target=mea_upd_check, args=(mea_db_path,), daemon=True)
+thread_update.start() # Start as soon as possible (mea_dir, mea_db_path)
 
 # Check if MEA DB exists
 if os.path.isfile(mea_db_path) :
