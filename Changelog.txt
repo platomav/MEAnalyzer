@@ -1,3 +1,8 @@
+r252
+
+CSME 15.0.23.1706_CON_H_A_PRD_EXTR
+CSME 15.0.10.1618_COR_LP_B_PRD_RGN
+
 v1.220.0
 
 Added automatic check for MEA & DB updates
