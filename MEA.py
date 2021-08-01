@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.220.0'
+title = 'ME Analyzer v1.221.0'
 
 import sys
 
@@ -10103,7 +10103,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod.startswith('dkl') and major == 10 and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYSLKF' # SPHY (LKF)
 				elif mod.startswith('dkl') and major == 11 and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PHYDG1' # PHYP (DG1)
 				elif mod == 'nphy' and major in (9,7) and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYNICP' # NPHY (ICP)
-				elif mod == 'nphy' and major in (15,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYNTGP' # NPHY (TGP)
+				elif mod == 'nphy' and major in (16,15,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYNTGP' # NPHY (TGP)
 				elif mod == 'pphy' and major in (12,14,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYPTGP' # PPHY (TGP)
 				elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP)
 				elif mod == 'IntelRec' and major == 16 : variant = 'PCHCADP' # ADP
