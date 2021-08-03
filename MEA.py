@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.221.0'
+title = 'ME Analyzer v1.230.0'
 
 import sys
 
@@ -5936,7 +5936,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 				hdr_rev_tag = '' # CSE Extension Header Revision Tag
 				mod_rev_tag = '' # CSE Extension Module Revision Tag
 				
-				if (variant,major) == ('GSC',100) or (variant_p,anl_meu_major) in [('PMC',100),('OROM',100)] :
+				if (variant,major) in [('GSC',100),('GSC',101)] or (variant_p,anl_meu_major) in [('PMC',100),('OROM',100),('PMC',101),('OROM',101)] :
 					if ext_tag in ext_tag_rev_hdr_gsc100 : hdr_rev_tag = ext_tag_rev_hdr_gsc100[ext_tag]
 					if ext_tag in ext_tag_rev_mod_gsc100 : mod_rev_tag = ext_tag_rev_mod_gsc100[ext_tag]
 				elif (variant,major) in [('CSME',15),('CSME',16)] or (variant_p,anl_major) in [('PMC',150),('PMC',160),('PCHC',15),('PCHC',16)] or mn2_rsa_key_len == 0x180 :
@@ -6930,6 +6930,25 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						else :
 							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+					elif mod_name != 'pavp' and rbe_pm_met_hashes :
+						# Ignore PAVP w/o Metadata Hash check at rbe/pm as it's LZMA compressed and then AES encrypted
+						# TODO: Maybe add a simple null byte count check to attempt AES Encryption detection dynamically
+						mea_hash = get_hash(mod_data, len(rbe_pm_met_hashes[0]) // 2)
+						
+						if param.me11_mod_bug :
+							print('\n    MOD: No Metadata, validation via RBEP > rbe and FTPR > pm Modules') # Debug
+							print('    MEA: %s' % mea_hash) # Debug
+							
+						if mea_hash in rbe_pm_met_hashes :
+							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							rbe_pm_met_valid.append(mea_hash) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
+						else :
+							if param.me11_mod_bug and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
+							elif param.me11_mod_bug and (mod_hash,mea_hash) in cse_known_bad_hashes :
+								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
+							else :
+								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					else :
 						print(col_m + '\n    Hash of %s %s "%s" is UNKNOWN' % (comp[mod_comp], mod_type, mod_name) + col_e)
 				
@@ -9998,6 +10017,9 @@ def release_fix(release, rel_db, rsa_key_hash) :
 	'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76',
 	'2BDB4349FEFF80F6F6341DB7AD40E2568363AC9ED96A0DAA950F26DAD4E4F71A',
 	'5D18E09F0135FAD8840989401F50C39A47A5E783CEDFC7AB1E1B11600425808F',
+	'8F4337EE7BCE88E0536FD735ED0631DACC666D088DE6400C86F06E4C14C39ECD',
+	'0AC9CC6D0A58DD8CD830E29106B4274A5D424EB3665FC6047592DD42082CEF25',
+	'CEF9C23206D97B4023B602960C310B82A610B2FD6DB063FBF994966F1CB50579',
 	]
 	
 	if release == 'Production' and rsa_key_hash in rsa_pre_keys :
@@ -10101,7 +10123,8 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				if mod == 'fwupdate' or is_pfu_img : variant = 'CSME' # CSME
 				elif mod in ['bup_rcv', 'sku_mgr', 'manuf'] : variant = 'CSSPS' # REC, OPR, IGN
 				elif mod.startswith('dkl') and major == 10 and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYSLKF' # SPHY (LKF)
-				elif mod.startswith('dkl') and major == 11 and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PHYDG1' # PHYP (DG1)
+				elif mod.startswith('dkl') and major in (11,0) and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PHYDG1' # PHYP (DG1)
+				elif mod.startswith('PCIE') and major in (11,0) and is_meu and mn2_struct.MEU_Major == 101 : variant = 'PHYDG2' # PHYP (DG2)
 				elif mod == 'nphy' and major in (9,7) and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYNICP' # NPHY (ICP)
 				elif mod == 'nphy' and major in (16,15,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYNTGP' # NPHY (TGP)
 				elif mod == 'pphy' and major in (12,14,11) and is_meu and mn2_struct.MEU_Major == 15 : variant = 'PHYPTGP' # PPHY (TGP)
@@ -10131,7 +10154,9 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'PMCC006' : variant = 'PMCGLKB' # 6 GLK B
 				elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
 				elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PMCDG1' # DG1
+				elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 101 : variant = 'PMCDG2' # DG2
 				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 100 : variant = 'OROMDG1' # DG1
+				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 101 : variant = 'OROMDG2' # DG2
 			
 			if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY/OROM detected
 		
@@ -10491,7 +10516,7 @@ bpdt_dict = {
 			41 : 'SAMF', # SAM Firmware
 			42 : 'PPHY', # PPHY Partition
 			43 : 'GBST', # GBST Partition
-			44 : 'TCCP', # USB Type C Controller Partition
+			44 : 'TCCP', # USB Type C Controller Partition (a.k.a. TPCC)
 			45 : 'PSEP', # Programmable Services Engine Partition
 			}
 			
@@ -10581,6 +10606,7 @@ pmc_dict = {
 			('CSSPS',5,0) : [300],
 			('CSSPS',5,1) : [300],
 			('GSC',100,0) : [0,10],
+			('GSC',101,0) : [0,10],
 			}
 			
 # CSE & PCHC Compatibility
@@ -10604,6 +10630,7 @@ phy_dict = {
 			('CSME',13,30) : ['S'],
 			('CSME',13,0) : ['N'],
 			('GSC',100,0) : ['G'],
+			('GSC',101,0) : ['G'],
 			}
 			
 # FD Component Sizes
@@ -10649,8 +10676,10 @@ cse_known_bad_hashes = [
 
 # Known Duplicate File Name Hashes
 known_dup_name_hahes = [
-'0B82FE076D0E41FDADB5ED009FD11CF54E65EAEDD1539B88C58B4949D578DBFD', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag)
-'EE91844EDD444805711DB8BA99611C594DF286B3102070116EF6554FC2504E79', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag)
+'568D2C9A268C2384CE244430999F9F9F832BCBA424738EF58DA56CFFA234D9DE', # CSME 15.0.35.1879_CON_LP_B_PRD (Tag, Cx)
+'900F6C05FE9338A7E7DA237FC36E1C146A136E01BC52E4D51BF257A80A44E10C', # CSME 15.0.35.1879_CON_LP_B_PRD (Tag, Bx)
+'0B82FE076D0E41FDADB5ED009FD11CF54E65EAEDD1539B88C58B4949D578DBFD', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag, Cx)
+'EE91844EDD444805711DB8BA99611C594DF286B3102070116EF6554FC2504E79', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag, Bx)
 '115C0ECC472F2F68B9E78DD8DC384803A1C181B437DFB5F69C0AF2A06494E785', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
 '543C776F7B6BE85063263445FD3F0B429143F0E7358D94AB7A6C5EAC76CBE604', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
 '2842B771A1D12714429B30304E7BA343BA5561481C515CFB1D60E058C7CB3BD7', # SPS 03.00.07.024_DE_PRD_EXTR (Date)
@@ -10659,6 +10688,8 @@ known_dup_name_hahes = [
 '83FD08D0CA822368D5CA609F62C0EBDE2D704ACBF9684EB753C6955EFA6E1297', # SPS 03.00.07.024_DE_PRD_OPR (Date)
 'AB5186FF7268433A90E8DA4BAEA17899E239BC9C8038A8D0BF5EADF9033C2FE2', # SPS 03.00.07.024_DE_PRD_REC (Date)
 '15D7FDD257400AC9C9E923996FAE277701EEBB3924FDDDD322A7EC1FA257AE23', # SPS 03.00.07.024_DE_PRD_REC (Date)
+'C1BB9477DC6A3B79ABE4BD2A32F01830DFB1B75E6FFC5BB6B7C732C5C2D7AB90', # PMC JSP_135.3.00.1029_N_A_PRD (Date, Data)
+'19A0A0D1857472CAC86B87FFA94DC859C01937795A39AD20D094D57070AD5345', # PMC JSP_135.3.00.1029_N_A_PRD (Date, Data)
 '094F8155EAF63909FAC8D01D7E58814B861074114515BCB807EF2596B64BD838', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
 'A4C21E6741439BF3208E2493DB8C86C820CCFD7792D50D635DD8531D364F205F', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
 '85BFC86B46805E82B0B4AAA8F98DBAE053C60590488ABD7651ABFB91B81D942F', # PHY ICP_N_9.0.1.0006_PRD (Date, Data)
@@ -10786,6 +10817,7 @@ pr_man_16_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x
 pr_man_17_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL)
 pr_man_18_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL)
 pr_man_19_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14].\x4E\x50\x48\x59', re.DOTALL)
+pr_man_21_pat = re.compile(br'\x46\x54\x50\x52\x2E\x6D\x61\x6E\x00{4}.{2}\x00{2}.{2}\x00{2}', re.DOTALL)
 
 for file_in in source :
 	
@@ -11168,7 +11200,7 @@ for file_in in source :
 		start_man_match = man_range.start() + 0xB # 8680.{9} sanity check before .$MN2 or .$MAN
 		end_man_match = man_range.end()
 		
-		pr_man_0 = reading[end_man_match + 0x374:end_man_match + 0x378] # FTPR,OPR (CSME 15 +, CSTXE 5 +, CSSPS 6 +)
+		pr_man_0 = reading[end_man_match + 0x374:end_man_match + 0x378] # FTPR,OPR (CSME 14 - 15.0.30)
 		pr_man_1 = reading[end_man_match + 0x274:end_man_match + 0x278] # FTPR,OPR (CSME 11 - 13, CSTXE 3 - 4, CSSPS 4 - 5.0.3)
 		pr_man_2 = reading[end_man_match + 0x264:end_man_match + 0x266] # FT,OP (ME 6 - 10 Part 1, TXE 0 - 2 Part 1, SPS 2 - 3 Part 1)
 		pr_man_3 = reading[end_man_match + 0x266:end_man_match + 0x268] # PR,xx (ME 6 - 10 Part 2, TXE 0 - 2 Part 2)
@@ -11188,14 +11220,18 @@ for file_in in source :
 		pr_man_17 = pr_man_17_pat.search(reading_16) # $CPD PPHY (CSE)
 		pr_man_18 = pr_man_18_pat.search(reading_16) # $CPD PHYP (GSC)
 		pr_man_19 = pr_man_19_pat.search(reading_16) # $CPD NPHY (CSE)
+		pr_man_20 = reading[end_man_match + 0x3B4:end_man_match + 0x3B8] # PCOD (GSC DG2)
+		pr_man_21 = pr_man_21_pat.search(reading[end_man_match - 0x500:end_man_match - 0x20]) # FTPR.man (CSME 15.0.35 +)
+		
+		# TODO: Maybe pr_man_21 can replace pr_man_0, pr_man_1, pr_man_9 and pr_man_11
 		
 		if param.bypass : break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
-		if pr_man_0 in (b'FTPR', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' \
+		if pr_man_0 in (b'FTPR', b'OPR\x00') or pr_man_1 in (b'FTPR', b'OPR\x00') or pr_man_2 + pr_man_3 == b'FTPR' or pr_man_20 == b'PCOD' \
 		or pr_man_2 + pr_man_6 + pr_man_7 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_4 == b'BRINGUP' or pr_man_5 in (b'EpsRecovery', b'EpsFirmware') \
 		or pr_man_6 + pr_man_7 == b'$MMEBUP$MMX' or pr_man_8 or pr_man_9 == b'FTPR' or pr_man_10 == b'OROM' or pr_man_11 == b'bup_rcv' \
-		or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 or pr_man_19 :
+		or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 or pr_man_19 or pr_man_21 :
 			if pr_man_8 or pr_man_12 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_10 == b'OROM' : is_orom_img = True # GSC Option ROM Image (OROM)
 			break
@@ -13243,6 +13279,10 @@ for file_in in source :
 		if major == 100 :
 			
 			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG01'] * 3 # Dedicated Xe Graphics 1
+		
+		elif major == 101 :
+			
+			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG02'] * 3 # Dedicated Xe Graphics 2
 			
 		# Check for Latest GSC status
 		_,_,db_hot,db_bld = check_upd(('Latest_%s_%s' % (variant, sku)))

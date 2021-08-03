@@ -1,3 +1,18 @@
+v1.230.0
+
+Added CSME >= 15.0.35 firmware detection
+Added GSC DG2 initial firmware detection
+Improved CSE w/o Metadata Hash checking
+Improved CSE Release (PRD/PRE) detection
+Improved duplicate firmware name detection
+
+r256
+
+CSME 15.0.35.1879_CON_LP_B_PRD_EXTR
+CSME 13.50.10.1274_ATM_N_A_PRD_EXTR
+PMC MCC_154.1.10.1021_LP_B_PRD
+PMC JSP_135.3.00.1029_N_A_PRD
+
 v1.221.0
 
 Improved PHY N TGP C IUP detection
