@@ -1,3 +1,20 @@
+v1.240.0
+
+Added initial support for future CSE platforms
+Added multiple same type CSE/GSC IUPs detection
+Improved CSE, GSC & IUP main Manifest detection
+Improved CSE/GSC & PMC IUP compatibility checks
+Improved CSE/GSC IFWI Layout Table Size detection
+Fixed CSE/GSC PHY IUP Engineering Release detection
+Fixed CSE/GSC Intel Configuration FS module parsing
+
+r257
+
+CSME 15.0.30.1716_COR_H_A_PRD_RGN
+CSME 15.0.23.1777_COR_H_A_PRD_EXTR-N
+CSME 15.0.22.1680_CON_H_A_PRD_RGN
+CSME 14.0.47.1545_CON_H_A_PRD_EXTR
+
 v1.230.0
 
 Added CSME >= 15.0.35 firmware detection

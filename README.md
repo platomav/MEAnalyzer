@@ -82,18 +82,18 @@ To use ME Analyzer, select one or multiple files and Drag & Drop them to its exe
 
 There are various parameters which enhance or modify the default behavior of ME Analyzer:
 
-* -?      : Displays help & usage screen
-* -skip   : Skips welcome & options screen
-* -exit   : Skips Press enter to exit prompt
-* -mass   : Scans all files of a given directory
-* -pdb    : Writes unique input file DB name to file
-* -dbname : Renames input file based on unique DB name
-* -dfpt   : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info
-* -unp86  : Unpacks all supported CSE, GSC and/or IUP firmware
-* -bug86  : Enables pause on error during CSE/GSC/IUP unpacking
-* -ver86  : Enables verbose output during CSE/GSC/IUP unpacking
-* -html   : Writes parsable HTML info files during MEA operation
-* -json   : Writes parsable JSON info files during MEA operation
+* -?     : Displays help & usage screen
+* -skip  : Skips welcome & options screen
+* -exit  : Skips Press enter to exit prompt
+* -mass  : Scans all files of a given directory
+* -pdb   : Writes unique input file DB name to file
+* -dbn   : Renames input file based on unique DB name
+* -dfpt  : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info
+* -unp86 : Unpacks all supported CSE, GSC and/or IUP firmware
+* -bug86 : Enables pause on error during CSE/GSC/IUP unpacking
+* -ver86 : Enables verbose output during CSE/GSC/IUP unpacking
+* -html  : Writes parsable HTML info files during MEA operation
+* -json  : Writes parsable JSON info files during MEA operation
 
 #### **B3. ME Analyzer Error Control**
 
