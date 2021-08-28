@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.240.0'
+title = 'ME Analyzer v1.241.0'
 
 import sys
 
@@ -7966,7 +7966,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
 		
 		# Check if MFS File Table Dictionary file exists
 		if os.path.isfile(ftbl_json) :
-			with open(ftbl_json, 'r') as json_file : ftbl_dict = json.load(json_file)
+			with open(ftbl_json, 'r', encoding='utf-8') as json_file : ftbl_dict = json.load(json_file)
 		else :
 			ftbl_dict = {}
 			_ = mfs_anl_msg(col_r + 'Error: MFS File Table Dictionary file is missing!' + col_e, 'error', True, False, False, [])
@@ -8341,7 +8341,7 @@ def mfs_cfg_anl(mfs_file, buffer, rec_folder, root_folder, config_rec_size, pch_
 		
 		# Check if MFS File Table Dictionary file exists
 		if os.path.isfile(ftbl_json) :
-			with open(ftbl_json, 'r') as json_file : ftbl_dict = json.load(json_file)
+			with open(ftbl_json, 'r', encoding='utf-8') as json_file : ftbl_dict = json.load(json_file)
 		else :
 			_ = mfs_anl_msg(col_r + 'Error: MFS File Table Dictionary file is missing!' + col_e, 'error', True, False, False, [])
 		
@@ -8646,7 +8646,7 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 	
 	# Check if EFS File Table Dictionary file exists
 	if os.path.isfile(ftbl_json) :
-		with open(ftbl_json, 'r') as json_file : ftbl_dict = json.load(json_file)
+		with open(ftbl_json, 'r', encoding='utf-8') as json_file : ftbl_dict = json.load(json_file)
 	else :
 		efs_anl_msg(col_r + 'Error: EFS File Table Dictionary file is missing!' + col_e, err_stor, True)
 	
@@ -9314,7 +9314,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 		
 		return HUFFMAN_SHAPE, HUFFMAN_SYMBOLS, HUFFMAN_UNKNOWNS
 	
-	with open(huffman_dict, 'r') as dict_file :
+	with open(huffman_dict, 'r', encoding='utf-8') as dict_file :
 		dict_json = json.load(dict_file)
 		
 		dict_mappings = dict_json[str(dict_version)]
@@ -9348,7 +9348,7 @@ def cse_huffman_dictionary_load(cse_variant, cse_major, cse_minor, verbosity) :
 			
 			for codeword_len, (codeword_min, codeword_max) in codeword_ranges.items() :
 				HUFFMAN_UNKNOWNS[mapping_type][codeword_len] = set()
-				HUFFMAN_SYMBOLS[mapping_type][codeword_len] = list()
+				HUFFMAN_SYMBOLS[mapping_type][codeword_len] = []
 				
 				for codeword in range(codeword_max, codeword_min - 1, -1) :
 					codeword_binary = format(codeword, '0' + str(codeword_len) + 'b')
@@ -10315,7 +10315,7 @@ def mea_upd_check(db_path) :
 		
 		with urllib.request.urlopen('https://raw.githubusercontent.com/platomav/MEAnalyzer/master/MEA.dat') as gdb : git_db = gdb.readlines(0x80)
 		git_db_ver = git_db[1].decode('utf-8','ignore')[14:].split('_')[0].split(' ')[0]
-		with open(db_path, 'r') as db : cur_db_ver = db.readlines()[1][14:].split('_')[0].split(' ')[0]
+		with open(db_path, 'r', encoding='utf-8') as db : cur_db_ver = db.readlines()[1][14:].split('_')[0].split(' ')[0]
 		db_print = '(r%s --> r%s)' % (cur_db_ver, git_db_ver)
 		db_is_upd = cur_db_ver >= git_db_ver
 		
@@ -10954,6 +10954,7 @@ pr_man_14_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\
 pr_man_15_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL)
 pr_man_16_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL)
 pr_man_17_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x4E\x50\x48\x59', re.DOTALL)
+pr_man_18_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x57\x43\x4F\x44', re.DOTALL)
 
 for file_in in source :
 	
@@ -11327,7 +11328,7 @@ for file_in in source :
 					with open('%s_EFST_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(efst_pt))
 				
 		o_dict = json.dumps(ftbl_blob_dict, indent=4, sort_keys=True)
-		with open('%s_FileTable.dat' % os.path.basename(file_in), 'w') as o : o.write(o_dict)
+		with open('%s_FileTable.dat' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write(o_dict)
 		
 		continue # Next input file
 	
@@ -11347,7 +11348,7 @@ for file_in in source :
 		pr_man_07 = reading[0x290:0x299] == b'$MMEWCOD_' # $MMEWCOD_ (ME 8+ PFU)
 		pr_man_08 = pr_man_08_pat.search(reading_4K) # FTPR.man (CSME 15.0.35 +)
 		pr_man_09 = pr_man_09_pat.search(reading_4K) # OROM.man (GSC)
-		pr_man_10 = pr_man_10_pat.search(reading_16) # $CPD LOCL (CSE PFU)
+		pr_man_10 = pr_man_10_pat.search(reading_16) # $CPD LOCL (CSE PFU, LMS)
 		pr_man_11 = pr_man_11_pat.search(reading_16) # $CPD PMCP (CSE)
 		pr_man_12 = pr_man_12_pat.search(reading_16) # $CPD PCOD (GSC)
 		pr_man_13 = pr_man_13_pat.search(reading_16) # $CPD PCHC (CSE)
@@ -11355,14 +11356,15 @@ for file_in in source :
 		pr_man_15 = pr_man_15_pat.search(reading_16) # $CPD PPHY (CSE)
 		pr_man_16 = pr_man_16_pat.search(reading_16) # $CPD PHYP (GSC)
 		pr_man_17 = pr_man_17_pat.search(reading_16) # $CPD NPHY (CSE)
+		pr_man_18 = pr_man_18_pat.search(reading_16) # $CPD WCOD (CSE PFU, WiMan)
 		
 		if param.bypass : break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
 		if pr_man_01 + pr_man_02 == b'FTPR' or pr_man_01 + pr_man_05 + pr_man_06 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_03 == b'BRINGUP' \
 		or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' or pr_man_07 or pr_man_08 or pr_man_09 \
-		or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 :
-			if pr_man_07 or pr_man_10 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
+		or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 :
+			if pr_man_07 or pr_man_10 or pr_man_18 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
 			break
 		
@@ -13654,10 +13656,10 @@ for file_in in source :
 		if pmc_all_init or pchc_all_init or phy_all_init : input('\nIUP_PRESENT!\n')
 	
 	if param.write_html :
-		with open('%s.html' % os.path.basename(file_in), 'w') as o : o.write('\n<br/>\n%s' % pt_html(msg_pt))
+		with open('%s.html' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_pt))
 	
 	if param.write_json :
-		with open('%s.json' % os.path.basename(file_in), 'w') as o : o.write('\n%s' % pt_json(msg_pt))
+		with open('%s.json' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_pt))
 	
 	for pmc in pmc_all_anl :
 		msg_pmc_pt = ext_table(['Field', 'Value'], False, 1)
@@ -13687,10 +13689,10 @@ for file_in in source :
 		print(msg_pmc_pt)
 		
 		if param.write_html :
-			with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<br/>\n%s' % pt_html(msg_pmc_pt))
+			with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_pmc_pt))
 			
 		if param.write_json :
-			with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % pt_json(msg_pmc_pt))
+			with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_pmc_pt))
 			
 	for pchc in pchc_all_anl :
 		msg_pchc_pt = ext_table(['Field', 'Value'], False, 1)
@@ -13717,10 +13719,10 @@ for file_in in source :
 		print(msg_pchc_pt)
 		
 		if param.write_html :
-			with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<br/>\n%s' % pt_html(msg_pchc_pt))
+			with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_pchc_pt))
 			
 		if param.write_json :
-			with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % pt_json(msg_pchc_pt))
+			with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_pchc_pt))
 			
 	for phy in phy_all_anl :
 		msg_phy_pt = ext_table(['Field', 'Value'], False, 1)
@@ -13748,10 +13750,10 @@ for file_in in source :
 		print(msg_phy_pt)
 		
 		if param.write_html :
-			with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<br/>\n%s' % pt_html(msg_phy_pt))
+			with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_phy_pt))
 		
 		if param.write_json :
-			with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % pt_json(msg_phy_pt))
+			with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_phy_pt))
 	
 	# Print Messages which must be at the end of analysis
 	if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
@@ -13771,13 +13773,13 @@ for file_in in source :
 			msg_set.add(msg_tuple)
 			print('\n' + msg_all[msg_idx][0])
 			if param.write_html :
-				with open('%s.html' % os.path.basename(file_in), 'a') as o : o.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_all[msg_idx][0])))
+				with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_all[msg_idx][0])))
 			if param.write_json :
 				msg_entries['Entry %0.4d' % msg_idx] = ansi_escape.sub('', str(msg_all[msg_idx][0]))
 	
 	if param.write_json :
 		msg_dict['Messages'] = msg_entries
-		with open('%s.json' % os.path.basename(file_in), 'a') as o : o.write('\n%s' % json.dumps(msg_dict, indent=4))
+		with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % json.dumps(msg_dict, indent=4))
 	
 	# Close input and copy it in case of messages
 	copy_on_msg(msg_all)
