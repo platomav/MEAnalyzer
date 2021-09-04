@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.241.0'
+title = 'ME Analyzer v1.242.0'
 
 import sys
 
@@ -12372,13 +12372,13 @@ for file_in in source :
 	# Calculate Firmware Size based on $FPT and/or IFWI LT
 	if (cse_lt_struct and not rgn_exist) or (rgn_exist and p_end_last != p_max_size) :
 		if cse_lt_struct :
-			# Check if Temp & ELog are within Data
-			for entry in cse_lt_hdr_info :
-				if entry[0] in ['Temp','ELog'] and cse_lt_hdr_info[0][1] < entry[1] \
-				and entry[1] + entry[2] < cse_lt_hdr_info[0][1] + cse_lt_hdr_info[0][2] :
-					cse_lt_dup_size += entry[2] # Store total duplicate Temp/ELog Sizes 
+			# Check for duplicate/nested CSE LT entries
+			for entry_c in cse_lt_hdr_info :
+				for entry_o in cse_lt_hdr_info :
+					if entry_c[0] != entry_o[0] and entry_c[1] >= entry_o[1] and entry_c[1] + entry_c[2] <= entry_o[1] + entry_o[2] :
+						cse_lt_dup_size += entry_c[2] # If entry_c different than entry_o and entry_c within entry_o, duplicated/nested
 			
-			# CSME 12+ consists of Layout Table (0x1000) + Data (MEA or LT size) + Boot/Temp/ELog (LT size) - Temp/ELog Duplicates (LT size)
+			# CSME 12+ consists of Layout Table (0x1000) + Data (MEA or LT size) + Boot/Temp/ELog (LT size) - Duplicates/Nested (LT size)
 			p_end_last = cse_lt_size + max(p_end_last,cse_lt_dp_size) + cse_lt_bp_size - cse_lt_dup_size
 		
 		# For Engine/Graphics alignment & size, remove fpt_start (included in p_end_last < eng_fw_end < p_offset_spi)

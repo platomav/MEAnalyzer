@@ -1,3 +1,11 @@
+v1.242.0
+
+Improved CSE Layout Table size detection
+
+r259
+
+CSSPS 04.04.04.033_WH_SVR_B_PRD_EXTR
+
 v1.241.0
 
 Improved CSME Partial Firmware Update detection
