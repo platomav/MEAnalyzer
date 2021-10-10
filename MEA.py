@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.250.0'
+title = 'ME Analyzer v1.253.0'
 
 import sys
 
@@ -564,7 +564,7 @@ class CSE_Layout_Table_17(ctypes.LittleEndianStructure) : # IFWI 1.7 (CseLayoutT
 		('BP5Size',			uint32_t),		# 0x44
 		('TempPagesOffset',	uint32_t),		# 0x48 Temporary Pages for DRAM cache, 0 for NVM
 		('TempPagesSize',	uint32_t),		# 0x4C
-		('ELogOffset',		uint32_t),		# 0x50 ELOG
+		('ELogOffset',		uint32_t),		# 0x50 External Fatal Error Log
 		('ELogSize',		uint32_t),		# 0x54
 		# 0x58
 	]
@@ -601,8 +601,8 @@ class CSE_Layout_Table_17(ctypes.LittleEndianStructure) : # IFWI 1.7 (CseLayoutT
 		pt.add_row(['Boot Partition 5 Size', '0x%X' % self.BP5Size])
 		pt.add_row(['Temporary Pages Offset', '0x%X' % self.TempPagesOffset])
 		pt.add_row(['Temporary Pages Size', '0x%X' % self.TempPagesSize])
-		if self.Size >= 0x48 : pt.add_row(['ELog Offset', '0x%X' % self.ELogOffset])
-		if self.Size >= 0x48 : pt.add_row(['ELog Size', '0x%X' % self.ELogSize])
+		if self.Size >= 0x48 : pt.add_row(['External Fatal Error Log Offset', '0x%X' % self.ELogOffset])
+		if self.Size >= 0x48 : pt.add_row(['External Fatal Error Log Size', '0x%X' % self.ELogSize])
 		
 		return pt
 		
@@ -812,7 +812,7 @@ class MN2_Manifest_R0(ctypes.LittleEndianStructure) : # Manifest $MAN/$MN2 Pre-C
 		flags = MN2_Manifest_GetFlags()
 		flags.asbytes = self.Flags
 		
-		return flags.b.PVBit, flags.b.Reserved, flags.b.IntelOwned, flags.b.DebugSigned
+		return flags.b.PVBit, flags.b.Reserved, flags.b.PIDBound, flags.b.IntelOwned, flags.b.DebugSigned
 	
 	@staticmethod
 	def hdr_print_cse() :
@@ -844,7 +844,14 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		('MEU_Build',		uint16_t),		# 0x36
 		('MEU_Man_Ver',		uint16_t),		# 0x38
 		('MEU_Man_Res',		uint16_t),		# 0x3A
-		('Reserved',		uint32_t*15),	# 0x3C
+		('GeneralData',		uint32_t),		# 0x3C General Data of RBE
+		('IPSpecific0',		uint32_t),		# 0x40 IP Specific Data
+		('IPSpecific1',		uint32_t),		# 0x44
+		('IPSpecific2',		uint32_t),		# 0x48
+		('IPSpecific3',		uint32_t),		# 0x4C
+		('IPSpecific4',		uint32_t),		# 0x50
+		('IPSpecific5',		uint32_t),		# 0x54
+		('Reserved',		uint32_t*8),	# 0x58
 		('PublicKeySize',	uint32_t),		# 0x78 dwords
 		('ExponentSize',	uint32_t),		# 0x7C dwords
 		('RSAPublicKey',	uint32_t*64),	# 0x80
@@ -855,7 +862,7 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 	
 	def hdr_print_cse(self) :
 		fvalue = ['No','Yes']
-		f1,f2,f3,f4 = self.get_flags()
+		f1,f2,f3,f4,f5 = self.get_flags()
 		
 		version = '%d.%d.%d.%d' % (self.Major,self.Minor,self.Hotfix,self.Build)
 		meu_version = '%d.%d.%d.%d' % (self.MEU_Major,self.MEU_Minor,self.MEU_Hotfix,self.MEU_Build)
@@ -872,8 +879,10 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		pt.add_row(['Header Size', '0x%X' % (self.HeaderLength * 4)])
 		pt.add_row(['Header Version', '0x%X' % self.HeaderVersion])
 		pt.add_row(['Production Ready', fvalue[f1]])
-		pt.add_row(['Flags Reserved', '0x%X' % (f2 + f3)])
-		pt.add_row(['Debug Signed', fvalue[f4]])
+		pt.add_row(['Flags Reserved', '0x%X' % f2])
+		pt.add_row(['PID Bound', fvalue[f3]])
+		pt.add_row(['Intel Owned', fvalue[f4]])
+		pt.add_row(['Debug Signed', fvalue[f5]])
 		pt.add_row(['Vendor ID', '0x%X' % self.VEN_ID])
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
@@ -884,6 +893,13 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
 		pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
 		pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
+		pt.add_row(['General Data', '0x%0.8X' % self.GeneralData])
+		pt.add_row(['IP Specific Data 0', '0x%0.8X' % self.IPSpecific0])
+		pt.add_row(['IP Specific Data 1', '0x%0.8X' % self.IPSpecific1])
+		pt.add_row(['IP Specific Data 2', '0x%0.8X' % self.IPSpecific2])
+		pt.add_row(['IP Specific Data 3', '0x%0.8X' % self.IPSpecific3])
+		pt.add_row(['IP Specific Data 4', '0x%0.8X' % self.IPSpecific4])
+		pt.add_row(['IP Specific Data 5', '0x%0.8X' % self.IPSpecific5])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		pt.add_row(['RSA Public Key Size', '0x%X' % PublicKeySize])
 		pt.add_row(['RSA Exponent Size', '0x%X' % (self.ExponentSize * 4)])
@@ -897,7 +913,7 @@ class MN2_Manifest_R1(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R1 (MA
 		flags = MN2_Manifest_GetFlags()
 		flags.asbytes = self.Flags
 		
-		return flags.b.PVBit, flags.b.Reserved, flags.b.IntelOwned, flags.b.DebugSigned
+		return flags.b.PVBit, flags.b.Reserved, flags.b.PIDBound, flags.b.IntelOwned, flags.b.DebugSigned
 
 class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MANIFEST_HEADER)
 	_pack_ = 1
@@ -926,7 +942,13 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		('MEU_Man_Ver',		uint16_t),		# 0x38
 		('MEU_Man_Res',		uint16_t),		# 0x3A
 		('GeneralData',		uint32_t),		# 0x3C General Data of RBE
-		('Reserved',		uint32_t*14),	# 0x40
+		('IPSpecific0',		uint32_t),		# 0x40 IP Specific Data
+		('IPSpecific1',		uint32_t),		# 0x44
+		('IPSpecific2',		uint32_t),		# 0x48
+		('IPSpecific3',		uint32_t),		# 0x4C
+		('IPSpecific4',		uint32_t),		# 0x50
+		('IPSpecific5',		uint32_t),		# 0x54
+		('Reserved',		uint32_t*8),	# 0x58
 		('PublicKeySize',	uint32_t),		# 0x78 dwords
 		('ExponentSize',	uint32_t),		# 0x7C dwords
 		('RSAPublicKey',	uint32_t*96),	# 0x80
@@ -937,7 +959,7 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 	
 	def hdr_print_cse(self) :
 		fvalue = ['No','Yes']
-		f1,f2,f3,f4 = self.get_flags()
+		f1,f2,f3,f4,f5 = self.get_flags()
 		
 		version = '%d.%d.%d.%d' % (self.Major,self.Minor,self.Hotfix,self.Build)
 		meu_version = '%d.%d.%d.%d' % (self.MEU_Major,self.MEU_Minor,self.MEU_Hotfix,self.MEU_Build)
@@ -954,8 +976,10 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		pt.add_row(['Header Size', '0x%X' % (self.HeaderLength * 4)])
 		pt.add_row(['Header Version', '0x%X' % self.HeaderVersion])
 		pt.add_row(['Production Ready', fvalue[f1]])
-		pt.add_row(['Flags Reserved', '0x%X' % (f2 + f3)])
-		pt.add_row(['Debug Signed', fvalue[f4]])
+		pt.add_row(['Flags Reserved', '0x%X' % f2])
+		pt.add_row(['PID Bound', fvalue[f3]])
+		pt.add_row(['Intel Owned', fvalue[f4]])
+		pt.add_row(['Debug Signed', fvalue[f5]])
 		pt.add_row(['Vendor ID', '0x%X' % self.VEN_ID])
 		pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
 		pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
@@ -967,6 +991,12 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
 		pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
 		pt.add_row(['General Data', '0x%0.8X' % self.GeneralData])
+		pt.add_row(['IP Specific Data 0', '0x%0.8X' % self.IPSpecific0])
+		pt.add_row(['IP Specific Data 1', '0x%0.8X' % self.IPSpecific1])
+		pt.add_row(['IP Specific Data 2', '0x%0.8X' % self.IPSpecific2])
+		pt.add_row(['IP Specific Data 3', '0x%0.8X' % self.IPSpecific3])
+		pt.add_row(['IP Specific Data 4', '0x%0.8X' % self.IPSpecific4])
+		pt.add_row(['IP Specific Data 5', '0x%0.8X' % self.IPSpecific5])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		pt.add_row(['RSA Public Key Size', '0x%X' % PublicKeySize])
 		pt.add_row(['RSA Exponent Size', '0x%X' % (self.ExponentSize * 4)])
@@ -980,12 +1010,13 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		flags = MN2_Manifest_GetFlags()
 		flags.asbytes = self.Flags
 		
-		return flags.b.PVBit, flags.b.Reserved, flags.b.IntelOwned, flags.b.DebugSigned
+		return flags.b.PVBit, flags.b.Reserved, flags.b.PIDBound, flags.b.IntelOwned, flags.b.DebugSigned
 		
 class MN2_Manifest_Flags(ctypes.LittleEndianStructure):
 	_fields_ = [
 		('PVBit', uint32_t, 1), # CSE
-		('Reserved', uint32_t, 29),
+		('Reserved', uint32_t, 28),
+		('PIDBound', uint32_t, 1), # CSE
 		('IntelOwned', uint32_t, 1), # ME 9 - 10
 		('DebugSigned', uint32_t, 1)
 	]
@@ -4808,7 +4839,7 @@ class CSE_Ext_1B_R2(ctypes.LittleEndianStructure) : # R2 - OEM Key Revocation Ma
 		# 0x08
 	]
 	
-	# Should be followed by a MN2_Manifest_R2, awaiting for a sample
+	# TODO: Should be followed by a MN2_Manifest_R2, sample required
 	
 	def ext_print(self) :		
 		pt = ext_table(['Field', 'Value'], False, 1)
@@ -5760,7 +5791,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			mn2_wo_rsa_data = buffer[mn2_offset:mn2_rsa_key_start] + buffer[mn2_rsa_sig_end:mn2_offset + mn2_size] # $MN2 Manifest w/o RSA Block
 			mn2_wo_rsa_hashes = [get_hash(mn2_wo_rsa_data, 0x30), get_hash(mn2_wo_rsa_data, 0x20)] # Hashes of $MN2 Manifest w/o RSA Block (RBEP)
 			
-			mn2_flags_pvbit,_,_,mn2_flags_debug = mn2_hdr.get_flags()
+			mn2_flags_pvbit,_,_,_,mn2_flags_debug = mn2_hdr.get_flags()
 			
 			if hasattr(mn2_hdr, 'MEU_Major') and mn2_hdr.MEU_Major not in (0,0xFFFF) :
 				cpd_mn2_info = [mn2_hdr.Major, mn2_hdr.Minor, mn2_hdr.Hotfix, mn2_hdr.Build, ['Production','Debug'][mn2_flags_debug],
@@ -10485,12 +10516,12 @@ key_dict = {
 			1 : 'CSE Main', # Non-Fault Tolerant Partition (NFTP)
 			2 : 'PMCP', # Power Management Controller
 			6 : 'USB Type C IOM', # USB Type C I/O Manageability
-			7 : 'USB Type C MG', # USB Type C Manageability (?)
+			7 : 'USB Type C PHY', # USB Type C Manageability, North
 			8 : 'USB Type C TBT', # USB Type C Thunderbolt
 			9 : 'WCOD', # Wireless Microcode
 			10 : 'LOCL', # AMT Localization
 			11 : 'Intel Unlock Token',
-			13 : 'USB Type C PHY',
+			13 : 'USB Type C PHY', # South
 			14 : 'PCHC',
 			16 : 'Intel ISI', # Intel Safety Island
 			17 : 'SAMF',
@@ -10743,6 +10774,7 @@ rsa_pre_keys = [
 'CEF9C23206D97B4023B602960C310B82A610B2FD6DB063FBF994966F1CB50579',
 '7C9C81380A1B62BCC7E0F7D7F54E16C94728A4351B305355180427781E3846B2',
 '01DE3BA4760CCAA7D7633BBB3EE0DF9223C24CF3FFF8042AAC9461CDF06B987A',
+'921A87206B3A9B2D1B60D9ACF797187962D103649FCCA9D789F4B5123A84731E',
 ]
 
 # CSE Known Bad Partition/Module Hashes
@@ -12490,7 +12522,7 @@ for file_in in source :
 		warn_stor.append([col_m + 'Warning: Fujitsu Intel Engine/Graphics firmware detected!' + col_e, False])
 	
 	# Detect Firmware Release (Production, Pre-Production, ROM-Bypass)
-	mn2_flags_pvbit,_,_,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
+	mn2_flags_pvbit,_,_,_,mn2_flags_debug = mn2_ftpr_hdr.get_flags()
 	rel_signed = ['Production', 'Debug'][mn2_flags_debug]
 	
 	if fpt_romb_found :
