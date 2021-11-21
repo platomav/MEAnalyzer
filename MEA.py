@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.253.0'
+title = 'ME Analyzer v1.254.0'
 
 import sys
 
@@ -952,9 +952,9 @@ class MN2_Manifest_R2(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 (MA
 		('PublicKeySize',	uint32_t),		# 0x78 dwords
 		('ExponentSize',	uint32_t),		# 0x7C dwords
 		('RSAPublicKey',	uint32_t*96),	# 0x80
-		('RSAExponent',		uint32_t),		# 0x180
-		('RSASignature',	uint32_t*96),	# 0x184 3072-bit (SSA-PSS)
-		# 0x284
+		('RSAExponent',		uint32_t),		# 0x200
+		('RSASignature',	uint32_t*96),	# 0x204 3072-bit (SSA-PSS)
+		# 0x384
 	]
 	
 	def hdr_print_cse(self) :
@@ -4223,8 +4223,8 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 	
 	def ext_print(self) :
 		knob_ids = {
-			0x80860001 : ['Intel Unlock', ['Disabled', 'Enabled']],
-			0x80860002 : ['OEM Unlock', ['Disabled', 'Enabled']],
+			0x80860001 : ['Intel Unlock', ['None', 'Intel/RED', 'DAM']],
+			0x80860002 : ['OEM Unlock', ['None', 'OEM/ORANGE', 'DAM']],
 			0x80860003 : ['PAVP Unlock', ['Disabled', 'Enabled']],
 			0x80860010 : ['Allow Visa Override', ['Disabled', 'Enabled']],
 			0x80860011 : ['Enable DCI', ['No', 'Yes']],
@@ -4242,6 +4242,8 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 			0x80860070 : ['Cancel OEM Signing', {0: 'Do Nothing', 0xFFFFFFFF: 'Cancel'}],
 			0x80860075 : ['CSE Tracing', {1: 'Enabled', 4: 'Disabled'}], # (lkf_knobs_values)
 			0x80860080 : ['Debug Interface (USB2.DBC)', ['Disabled', 'Enabled']], # (bxt_knobs_values)
+			0x80860090 : ['Authorized Debug (JTAG)', {1: 'Temporary re-enable TAP network', 16: 'Temporary re-enable BSCAN', \
+													  17: 'Temporary re-enable TAP network and BSCAN', 256: 'Permanently re-enable TAP network and BSCAN'}], # (bxt_knobs_values)
 			0x80860101 : ['DnX Capabilities', ['Get NVM Properties', 'NVM Configuration', 'Clear Platform Configuration', 'Write NVM Content', 'Read NVM Content']] \
 			if (self.variant == 'CSME' and self.major >= 15 or self.variant == 'CSTXE' and self.major >= 5 or self.variant == 'CSSPS' and self.major >= 6) else \
 			['Change Device Lifecycle', ['No', 'Customer Care', 'RnD', 'Refurbish']],
