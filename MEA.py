@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2021 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.254.0'
+title = 'ME Analyzer v1.255.0'
 
 import sys
 
@@ -4242,7 +4242,7 @@ class CSE_Ext_15_Payload_Knob(ctypes.LittleEndianStructure) : # After CSE_Ext_15
 			0x80860070 : ['Cancel OEM Signing', {0: 'Do Nothing', 0xFFFFFFFF: 'Cancel'}],
 			0x80860075 : ['CSE Tracing', {1: 'Enabled', 4: 'Disabled'}], # (lkf_knobs_values)
 			0x80860080 : ['Debug Interface (USB2.DBC)', ['Disabled', 'Enabled']], # (bxt_knobs_values)
-			0x80860090 : ['Authorized Debug (JTAG)', {1: 'Temporary re-enable TAP network', 16: 'Temporary re-enable BSCAN', \
+			0x80860090 : ['Authorized Debug (JTAG)', {1: 'Temporary re-enable TAP network', 16: 'Temporary re-enable BSCAN',
 													  17: 'Temporary re-enable TAP network and BSCAN', 256: 'Permanently re-enable TAP network and BSCAN'}], # (bxt_knobs_values)
 			0x80860101 : ['DnX Capabilities', ['Get NVM Properties', 'NVM Configuration', 'Clear Platform Configuration', 'Write NVM Content', 'Read NVM Content']] \
 			if (self.variant == 'CSME' and self.major >= 15 or self.variant == 'CSTXE' and self.major >= 5 or self.variant == 'CSSPS' and self.major >= 6) else \
@@ -9882,8 +9882,8 @@ def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
 		reading_msg = col_y + 'Note: Adjusted buffer to Flash Descriptor 0x%X - 0x%X!' % (start_fd_match,start_fd_match + fd_comp_all_size) + col_e
 		note_stor.append([reading_msg, False]) # Inform user of the new input buffer FD range
 		file_end = fd_comp_all_size # Update input file RAM buffer length, same as FD Flash Component Total Size
-		start_man_match -= start_fd_match  # Update Manifest Pattern Start Offset (before FD)
-		end_man_match -= start_fd_match  # Update Manifest Pattern End Offset (before FD)
+		start_man_match -= start_fd_match # Update Manifest Pattern Start Offset (before FD)
+		end_man_match -= start_fd_match # Update Manifest Pattern End Offset (before FD)
 		start_fd_match,end_fd_match = (0x0,0x4) if fd_is_ich else (0x0,0x14) # Update FD Pattern Start & End Offsets (after Manifest)
 	
 	# Do not notify for OEM Backup Flash Descriptors within the chosen/first Flash Descriptor
@@ -10562,9 +10562,15 @@ key_dict = {
 			104 : 'HUC Production',
 			105 : 'HUC Debug',
 			106 : 'IFR', # In Field Repair
+			107 : 'GFX Data 0',
+			108 : 'GFX Data 1',
 			192 : 'ESE',
 			193 : 'DMU',
 			194 : 'PUnit',
+			195 : 'SoC ESE',
+			196 : 'SoC PMC',
+			197 : 'SoC SoCC', # Configuration
+			198 : 'SoC SPHY',
 			}
 	
 # IFWI BPDT Entry Types ($CPD Partition Names)
@@ -10797,6 +10803,8 @@ cse_known_bad_hashes = [
 
 # Known Duplicate File Name Hashes
 known_dup_name_hahes = [
+'4D29C2A99FB5E3B8E883934D458DE5D34951A1ED1D6A318F8C133268908651B0', # CSME 15.0.35.1951_CON_LP_B_PRD (Tag, Cx)
+'6C386E96BBDBA4C103E0FE3124E3D4C86F9B40CBA00FE8E648D8267C5DA36FC8', # CSME 15.0.35.1951_CON_LP_B_PRD (Tag, Bx)
 '568D2C9A268C2384CE244430999F9F9F832BCBA424738EF58DA56CFFA234D9DE', # CSME 15.0.35.1879_CON_LP_B_PRD (Tag, Cx)
 '900F6C05FE9338A7E7DA237FC36E1C146A136E01BC52E4D51BF257A80A44E10C', # CSME 15.0.35.1879_CON_LP_B_PRD (Tag, Bx)
 '0B82FE076D0E41FDADB5ED009FD11CF54E65EAEDD1539B88C58B4949D578DBFD', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag, Cx)
@@ -12367,14 +12375,17 @@ for file_in in source :
 		eng_fw_align -= (p_end_last - fpt_start) % 0x1000 # 4K alignment Size of entire Engine/Graphics firmware
 		
 		if eng_fw_align != 0x1000 :
-			eng_fw_end = p_end_last + eng_fw_align - fpt_start
-			
 			file_has_align = min(eng_fw_align, file_end - p_end_last) # Check whatever alignment padding is actually available in file
 			file_bad_align = reading[p_end_last:p_end_last + file_has_align] not in [b'', b'\xFF' * file_has_align] # Data in alignment padding bool
 			if (fpt_start == 0 or (cse_lt_struct and cse_lt_off == 0)) and file_has_align > 0 and file_bad_align :
 				warn_stor.append([col_m + 'Warning: File has data in Firmware 4K alignment padding!' + col_e, param.check])
-				
-			check_fw_align = 0x0 if p_end_last > file_end else eng_fw_align - file_has_align
+			
+			# Ignore 4K alignment at CSME 16+ for FWUpdate image creation via MFIT (seriously Intel ?)
+			if variant == 'CSME' and major >= 16 :
+				eng_fw_end = p_end_last - fpt_start
+			else :
+				eng_fw_end = p_end_last + eng_fw_align - fpt_start
+				check_fw_align = 0x0 if p_end_last > file_end else eng_fw_align - file_has_align
 		else :
 			eng_fw_end = p_end_last - fpt_start
 	
@@ -12406,7 +12417,7 @@ for file_in in source :
 			
 			if eng_fw_end > file_end :
 				if eng_fw_end <= file_end + check_fw_align :
-					# Firmware ends at last $FPT entry but is not 4K aligned, can be ignored (CSME12+)
+					# Firmware ends at last $FPT entry but is not 4K aligned, can/must be ignored (CSME 12-15/16+)
 					eng_size_text = [col_y + 'Note: File is missing optional Firmware 4K alignment padding!' + col_e, False] # warn_stor
 					if param.check : # Add alignment padding, when missing (Debug/Research)
 						with open('__APADD__' + os.path.basename(file_in), 'wb') as o : o.write(reading + b'\xFF' * check_fw_align)
@@ -12450,17 +12461,23 @@ for file_in in source :
 				elif major in [2,3] : fw_type_fix = True # ME2-Only Fix 1, ME3-Only Fix 1
 				else : fw_type = 'Stock'
 		elif (variant == 'ME' and major >= 8) or variant in ['CSME','CSTXE','CSSPS','TXE','GSC'] :
-			# Check 1, FITC Version
-			if fpt_hdr.FitBuild in [0x0,0xFFFF] : # 0000/FFFF --> clean (CS)ME/(CS)TXE
+			fpt_upd_only = [] # Initialize $FPT w/ Update partitions only list
+			_ = [fpt_upd_only.append(part[0]) for part in fpt_part_all if not part[6]]
+			
+			# Check 1, $FPT Update image
+			if sorted(fpt_upd_only) == ['FTPR','FTUP','NFTP'] :
+				fw_type = 'Update' # $FPT exists but includes FTPR & FTUP/NFTP only, Update
+			# Check 2, FITC Version
+			elif fpt_hdr.FitBuild in [0x0,0xFFFF] : # 0000/FFFF --> clean (CS)ME/(CS)TXE
 				fw_type = 'Stock'
 				
-				# Check 2, FOVD partition
+				# Check 3, FOVD partition
 				if not fovd_clean('new') : fw_type = 'Extracted'
 				
-				# Check 3, CSTXE FIT placeholder $FPT Header entries
+				# Check 4, CSTXE FIT placeholder $FPT Header entries
 				if reading[fpt_start:fpt_start + 0x10] + reading[fpt_start + 0x1C:fpt_start + 0x30] == b'\xFF' * 0x24 : fw_type = 'Extracted'
 				
-				# Check 4, CSME 13+ FWUpdate EXTR has placeholder $FPT ROM-Bypass Vectors 0-3 (0xFF instead of 0x00 padding)
+				# Check 5, CSME 13+ FWUpdate EXTR has placeholder $FPT ROM-Bypass Vectors 0-3 (0xFF instead of 0x00 padding)
 				# If not enough (should be OK), MEA could further check if FTUP is empty and/or if PMCP/PCOD, PCHC & PHY exist or not
 				if variant == 'CSME' and major >= 13 and reading[fpt_start:fpt_start + 0x10] == b'\xFF' * 0x10 : fw_type = 'Extracted'
 			else :
@@ -13480,10 +13497,11 @@ for file_in in source :
 	# Check for CSME 12+ FWUpdate Support/Compatibility
 	fwu_iup_check = (variant,major >= 12,type_db,sku_db[:3],is_pfu_img) == ('CSME',True,'EXTR','COR',False)
 	if fwu_iup_check and (uncharted_match or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
+	if variant == 'CSME' and major >= 16 and not is_pfu_img and file_has_align > 0x0 and fpt_start == 0x0 : fwu_iup_result = 'Impossible'
 	if fwu_iup_result != 'Impossible' :
 		if major == 12 :
 			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
-		elif (major,minor) in [(13,0),(13,50),(14,0),(14,5),(15,40)] or (major,minor,sku_result) == (15,0,'LP') :
+		elif (major,minor) in [(13,0),(13,50),(14,0),(14,5),(15,40),(16,0)] or (major,minor,sku_result) == (15,0,'LP') :
 			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found)]
 		elif (major,minor) in [(13,30),(14,1)] or (major,minor,sku_result) == (15,0,'H') :
 			fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found and pchc_fwu_found and phy_fwu_found)]
@@ -13747,6 +13765,9 @@ for file_in in source :
 	if fwu_iup_result == 'Impossible' and uncharted_match :
 		fwu_iup_msg = (uncharted_match.start(),p_end_last_back,p_end_last_back + uncharted_match.start())
 		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from 0x%X - 0x%X for FWUpdate Support!' % fwu_iup_msg + col_e, False])
+	
+	if fwu_iup_result == 'Impossible' and file_has_align :
+		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from image end for FWUpdate Support!' % file_has_align + col_e, False])
 	
 	if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Partition Tables detected!' % fpt_count + col_e, True])
 	
