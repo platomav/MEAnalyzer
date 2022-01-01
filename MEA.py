@@ -11372,8 +11372,12 @@ for file_in in source :
 		if param.bypass : break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
-		if pr_man_01 + pr_man_02 == b'FTPR' or pr_man_01 + pr_man_05 + pr_man_06 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_03 == b'BRINGUP' \
-		or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' or pr_man_07 or pr_man_08 or pr_man_09 \
+		if pr_man_01 + pr_man_02 == b'FTPR' \
+		or pr_man_01 + pr_man_05 + pr_man_06 == b'OP$MMEBUP\x00\x00\x00\x00' \
+		or pr_man_03 == b'BRINGUP' \
+		or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') \
+		or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
+		or pr_man_07 or pr_man_08 or pr_man_09 \
 		or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 :
 			if pr_man_07 or pr_man_10 or pr_man_18 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
