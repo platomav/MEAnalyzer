@@ -10957,15 +10957,9 @@ fd_pat = re.compile(br'\x5A\xA5\xF0\x0F[\x01-\x10].{171}\xFF{16}', re.DOTALL)
 # Intel Engine/Graphics firmware Manifest probable patterns ($CPD + IUP, FTPR/OROM.man)
 pr_man_08_pat = re.compile(br'FTPR\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_09_pat = re.compile(br'OROM\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
-pr_man_10_pat = re.compile(cpd_pat.pattern + rb'.LOCL', re.DOTALL)
-pr_man_11_pat = re.compile(cpd_pat.pattern + rb'.PMCP', re.DOTALL)
-pr_man_12_pat = re.compile(cpd_pat.pattern + rb'.PCOD', re.DOTALL)
-pr_man_13_pat = re.compile(cpd_pat.pattern + rb'.PCHC', re.DOTALL)
-pr_man_14_pat = re.compile(cpd_pat.pattern + rb'.SPHY', re.DOTALL)
-pr_man_15_pat = re.compile(cpd_pat.pattern + rb'.PPHY', re.DOTALL)
-pr_man_16_pat = re.compile(cpd_pat.pattern + rb'.PHYP', re.DOTALL)
-pr_man_17_pat = re.compile(cpd_pat.pattern + rb'.NPHY', re.DOTALL)
-pr_man_18_pat = re.compile(cpd_pat.pattern + rb'.WCOD', re.DOTALL)
+
+pr_cpd_parts    = ['LOCL', 'PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY', 'WCOD']
+pr_man_cpd_pats = {part: re.compile(cpd_pat.pattern + b'.' + part.encode(), re.DOTALL) for part in pr_cpd_parts}
 
 for file_in in source :
 	
@@ -11359,16 +11353,9 @@ for file_in in source :
 		pr_man_07 = reading[0x290:0x299] == b'$MMEWCOD_' # $MMEWCOD_ (ME 8+ PFU)
 		pr_man_08 = pr_man_08_pat.search(reading_4K) # FTPR.man (CSME 15.0.35 +)
 		pr_man_09 = pr_man_09_pat.search(reading_4K) # OROM.man (GSC)
-		pr_man_10 = pr_man_10_pat.search(reading_16) # $CPD LOCL (CSE PFU, LMS)
-		pr_man_11 = pr_man_11_pat.search(reading_16) # $CPD PMCP (CSE)
-		pr_man_12 = pr_man_12_pat.search(reading_16) # $CPD PCOD (GSC)
-		pr_man_13 = pr_man_13_pat.search(reading_16) # $CPD PCHC (CSE)
-		pr_man_14 = pr_man_14_pat.search(reading_16) # $CPD SPHY (CSE)
-		pr_man_15 = pr_man_15_pat.search(reading_16) # $CPD PPHY (CSE)
-		pr_man_16 = pr_man_16_pat.search(reading_16) # $CPD PHYP (GSC)
-		pr_man_17 = pr_man_17_pat.search(reading_16) # $CPD NPHY (CSE)
-		pr_man_18 = pr_man_18_pat.search(reading_16) # $CPD WCOD (CSE PFU, WiMan)
 		
+		pr_man_cpd = {name: pr_man_cpd_pats[name].search(reading_16) for name in pr_cpd_parts}
+
 		if param.bypass : break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
@@ -11378,8 +11365,8 @@ for file_in in source :
 		or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') \
 		or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
 		or pr_man_07 or pr_man_08 or pr_man_09 \
-		or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 :
-			if pr_man_07 or pr_man_10 or pr_man_18 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
+		or any(pr_man_cpd.values()):
+			if pr_man_07 or pr_man_cpd['LOCL'] or pr_man_cpd['WCOD'] : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
 			break
 		
