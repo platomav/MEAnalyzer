@@ -88,6 +88,7 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -mass  : Scans all files of a given directory
 * -pdb   : Writes unique input file DB name to file
 * -dbn   : Renames input file based on unique DB name
+* -duc   : Disables automatic check for MEA & DB updates
 * -dfpt  : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info
 * -unp86 : Unpacks all supported CSE, GSC and/or IUP firmware
 * -bug86 : Enables pause on error during CSE/GSC/IUP unpacking

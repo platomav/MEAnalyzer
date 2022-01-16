@@ -4,10 +4,10 @@
 """
 ME Analyzer
 Intel Engine & Graphics Firmware Analysis Tool
-Copyright (C) 2014-2021 Plato Mavropoulos
+Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.255.0'
+title = 'ME Analyzer v1.260.0'
 
 import sys
 
@@ -84,6 +84,7 @@ def mea_help() :
 		  '-mass  : Scans all files of a given directory\n'
 		  '-pdb   : Writes unique input file DB name to file\n'
 		  '-dbn   : Renames input file based on unique DB name\n'
+		  '-duc   : Disables automatic check for MEA & DB updates\n'
 		  '-dfpt  : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info\n'
 		  '-unp86 : Unpacks all supported CSE, GSC and/or IUP firmware\n'
 		  '-bug86 : Enables pause on error during CSE/GSC/IUP unpacking\n'
@@ -92,7 +93,7 @@ def mea_help() :
 		  '-json  : Writes parsable JSON info files during MEA operation'
 		  )
 	
-	print(col_g + '\nCopyright (C) 2014-2021 Plato Mavropoulos' + col_e)
+	print(col_g + '\nCopyright (C) 2014-2022 Plato Mavropoulos' + col_e)
 	
 	if getattr(sys, 'frozen', False) : print(col_c + '\nIcon by Those Icons (thoseicons.com, CC BY 3.0)' + col_e)
 	
@@ -103,7 +104,8 @@ class MEA_Param :
 
 	def __init__(self, source) :
 	
-		self.val = ['-?','-skip','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbn','-mass','-dfpt','-exit','-ftbl','-rcfg','-chk','-byp']
+		self.val = ['-?','-skip','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbn',
+					'-mass','-dfpt','-exit','-ftbl','-rcfg','-chk','-byp','-duc']
 		
 		self.help_scr = False
 		self.skip_intro = False
@@ -121,6 +123,7 @@ class MEA_Param :
 		self.mfs_rcfg = False
 		self.check = False
 		self.bypass = False
+		self.upd_dis = False
 		
 		if '-?' in source : self.help_scr = True
 		if '-skip' in source : self.skip_intro = True
@@ -138,6 +141,7 @@ class MEA_Param :
 		if '-rcfg' in source : self.mfs_rcfg = True # Hidden
 		if '-chk' in source : self.check = True # Hidden
 		if '-byp' in source : self.bypass = True # Hidden
+		if '-duc' in source : self.upd_dis = True
 			
 		if self.mass_scan or self.db_print_new : self.skip_intro = True
 
@@ -2532,8 +2536,8 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # R1 - Module Information (
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Type",			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
-		("Compression",		uint8_t),		# 0x0D (0 None, 1 Huffman, 2 LZMA)
+		("Type",			uint8_t),		# 0x0C 0 Process, 1 Shared Library, 2 Data, 3 Independent (MODULE_TYPES)
+		("Compression",		uint8_t),		# 0x0D 0 None, 1 Huffman, 2 LZMA
 		("Reserved",		uint16_t),		# 0x0E FFFF
 		("MetadataSize",	uint32_t),		# 0x10
 		("MetadataHash",	uint32_t*8),	# 0x14
@@ -2541,13 +2545,14 @@ class CSE_Ext_03_Mod(ctypes.LittleEndianStructure) : # R1 - Module Information (
 	]
 	
 	def ext_print(self) :
+		Type = cse_mod_type[self.Type] if self.Type in cse_mod_type else 'Unknown (%d)' % self.Type
 		MetadataHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 3, Module Information' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
+		pt.add_row(['Type', Type])
 		pt.add_row(['Compression', ['None','Huffman','LZMA'][self.Compression]])
 		pt.add_row(['Reserved', '0x%X' % self.Reserved])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
@@ -3090,7 +3095,7 @@ class CSE_Ext_0C_FWSKUAttrib(ctypes.LittleEndianStructure):
 		('M3', uint64_t, 1), # 0 CON & SLM, 1 COR
 		('M0', uint64_t, 1), # 1 CON & SLM & COR
 		('SKUPlatform', uint64_t, 2), # 0 H/LP <= 11.0.0.1202, 0 H & 1 LP >= 11.0.0.1205 (CSME 11 only)
-		('SiClass', uint64_t, 4), # 2 CON & SLM, 4 COR (not sure if bitmap or decimal)
+		('SiClass', uint64_t, 4), # 2 CON & SLM, 4 COR (all, H, M, L)
 		('Reserved', uint64_t, 50) # 0
 	]
 
@@ -3211,6 +3216,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 		hash_usages = get_key_usages(self.UsageBitmap)
 		
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3219,7 +3225,7 @@ class CSE_Ext_0E_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
 		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Modulus & Exponent Hash', Hash])
 		
@@ -3248,6 +3254,7 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 		hash_usages = get_key_usages(self.UsageBitmap)
 		
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3256,7 +3263,7 @@ class CSE_Ext_0E_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (KEY_MANIFEST_EXT
 		pt.add_row(['Reserved 0', '0x%X' % int.from_bytes(self.Reserved0, 'little')])
 		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Modulus & Exponent Hash', Hash])
 		
@@ -3324,8 +3331,6 @@ class CSE_Ext_0F_R2(ctypes.LittleEndianStructure) : # R2 - Signed Package Inform
 		('Reserved',		uint8_t*10),  	# 0x2A
 		# 0x34
 	]
-	
-	# Firmware SKU value at older CSE_Ext_0F_R2 should be ignored in favor of CSE_Ext_0C, as explained at ext_anl > 0xF
 	
 	# FWType & FWSKU are also used by CSE_Ext_23 & GSC_Info_FWI, remember to change them as well!
 	
@@ -3403,8 +3408,8 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO
 	_pack_ = 1
 	_fields_ = [
 		("Name",			char*12),		# 0x00
-		("Type",			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
-		("HashAlgorithm",	uint8_t),		# 0x0D (0 None, 1 SHA-1, 2 SHA-256)
+		("Type",			uint8_t),		# 0x0C 0 Process, 1 Shared Library, 2 Data, 3 Independent (MODULE_TYPES)
+		("HashAlgorithm",	uint8_t),		# 0x0D 0 None, 1 SHA-1, 2 SHA-256
 		("HashSize",		uint16_t),		# 0x0E
 		("MetadataSize",	uint32_t),		# 0x10
 		("MetadataHash",	uint32_t*8),	# 0x14 SHA-256
@@ -3412,14 +3417,16 @@ class CSE_Ext_0F_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO
 	]
 	
 	def ext_print(self) :
+		Type = cse_mod_type[self.Type] if self.Type in cse_mod_type else 'Unknown (%d)' % self.Type
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		MetadataHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 15, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
+		pt.add_row(['Type', Type])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
 		pt.add_row(['Metadata Hash', MetadataHash])
@@ -3430,8 +3437,8 @@ class CSE_Ext_0F_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (SIGNED_PACKAGE_I
 	_pack_ = 1
 	_fields_ = [
 		('Name',			char*12),		# 0x00
-		('Type',			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
-		('HashAlgorithm',	uint8_t),		# 0x0D (0 None, 1 SHA-1, 2 SHA-256, 3 SHA-384)
+		('Type',			uint8_t),		# 0x0C 0 Process, 1 Shared Library, 2 Data, 3 Independent (MODULE_TYPES)
+		('HashAlgorithm',	uint8_t),		# 0x0D 0 None, 1 SHA-1, 2 SHA-256, 3 SHA-384
 		('HashSize',		uint16_t),		# 0x0E
 		('MetadataSize',	uint32_t),		# 0x10
 		('MetadataHash',	uint32_t*12),	# 0x14 SHA-384
@@ -3439,14 +3446,16 @@ class CSE_Ext_0F_Mod_R2(ctypes.LittleEndianStructure) : # R2 - (SIGNED_PACKAGE_I
 	]
 	
 	def ext_print(self) :
+		Type = cse_mod_type[self.Type] if self.Type in cse_mod_type else 'Unknown (%d)' % self.Type
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		MetadataHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 15, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Type', Type])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
 		pt.add_row(['Metadata Hash', MetadataHash])
@@ -3457,7 +3466,7 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 	_pack_ = 1
 	_fields_ = [
 		('Name',			char*12),		# 0x00
-		('Type',			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
+		('Type',			uint8_t),		# 0x0C 0 Process, 1 Shared Library, 2 Data, 3 Independent (MODULE_TYPES)
 		('ModuleSVN',		uint8_t),		# 0x0D
 		('HashSize',		uint16_t),		# 0x0E
 		('MetadataSize',	uint32_t),		# 0x10
@@ -3466,13 +3475,14 @@ class CSE_Ext_0F_Mod_R3(ctypes.LittleEndianStructure) : # R3 - (SIGNED_PACKAGE_I
 	]
 	
 	def ext_print(self) :
+		Type = cse_mod_type[self.Type] if self.Type in cse_mod_type else 'Unknown (%d)' % self.Type
 		MetadataHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 15, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
+		pt.add_row(['Type', Type])
 		pt.add_row(['Module SVN', self.ModuleSVN])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
@@ -3722,11 +3732,12 @@ class CSE_Ext_13(ctypes.LittleEndianStructure) : # R1 - Boot Policy (BOOT_POLICY
 	]
 	
 	def ext_print(self) :
-		hash_alg = ['None','SHA-1','SHA-256']
-		
 		IBBLHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.IBBLHash, 'big'))
 		IBBHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.IBBHash, 'big'))
 		OBBHash = '%0.*X' % (0x20 * 2, int.from_bytes(self.OBBHash, 'big'))
+		IBBLHashAlg = cse_hash_alg[self.IBBLHashAlg] if self.IBBLHashAlg in cse_hash_alg else 'Unknown (%d)' % self.IBBLHashAlg
+		IBBHashAlg = cse_hash_alg[self.IBBHashAlg] if self.IBBHashAlg in cse_hash_alg else 'Unknown (%d)' % self.IBBHashAlg
+		OBBHashAlg = cse_hash_alg[self.OBBHashAlg] if self.OBBHashAlg in cse_hash_alg else 'Unknown (%d)' % self.OBBHashAlg
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3734,13 +3745,13 @@ class CSE_Ext_13(ctypes.LittleEndianStructure) : # R1 - Boot Policy (BOOT_POLICY
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['No Evict Mode Size', '0x%X' % (self.IBBNEMSize * 4096)])
-		pt.add_row(['IBBL Hash Algorithm', hash_alg[self.IBBLHashAlg]])
+		pt.add_row(['IBBL Hash Algorithm', IBBLHashAlg])
 		pt.add_row(['IBBL Hash Size', '0x%X' % self.IBBLHashSize])
 		pt.add_row(['IBBL Hash', IBBLHash])
-		pt.add_row(['IBB Hash Algorithm', hash_alg[self.IBBHashAlg]])
+		pt.add_row(['IBB Hash Algorithm', IBBHashAlg])
 		pt.add_row(['IBB Hash Size', '0x%X' % self.IBBHashSize])
 		pt.add_row(['IBB Hash', IBBHash])
-		pt.add_row(['OBB Hash Algorithm', hash_alg[self.OBBHashAlg]])
+		pt.add_row(['OBB Hash Algorithm', OBBHashAlg])
 		pt.add_row(['OBB Hash Size', '0x%X' % self.OBBHashSize])
 		pt.add_row(['OBB Hash', OBBHash])
 		pt.add_row(['IBB Flags', '0x%X' % self.IBBFlags])
@@ -3785,11 +3796,12 @@ class CSE_Ext_13_R2(ctypes.LittleEndianStructure) : # R2 - Boot Policy (BOOT_POL
 	]
 	
 	def ext_print(self) :
-		hash_alg = ['None','SHA-1','SHA-256','SHA-384']
-		
 		IBBLHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.IBBLHash, 'big'))
 		IBBHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.IBBHash, 'big'))
 		OBBHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.OBBHash, 'big'))
+		IBBLHashAlg = cse_hash_alg[self.IBBLHashAlg] if self.IBBLHashAlg in cse_hash_alg else 'Unknown (%d)' % self.IBBLHashAlg
+		IBBHashAlg = cse_hash_alg[self.IBBHashAlg] if self.IBBHashAlg in cse_hash_alg else 'Unknown (%d)' % self.IBBHashAlg
+		OBBHashAlg = cse_hash_alg[self.OBBHashAlg] if self.OBBHashAlg in cse_hash_alg else 'Unknown (%d)' % self.OBBHashAlg
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3797,13 +3809,13 @@ class CSE_Ext_13_R2(ctypes.LittleEndianStructure) : # R2 - Boot Policy (BOOT_POL
 		pt.add_row(['Tag', '0x%0.2X' % self.Tag])
 		pt.add_row(['Size', '0x%X' % self.Size])
 		pt.add_row(['No Evict Mode Size', '0x%X' % (self.IBBNEMSize * 4096)])
-		pt.add_row(['IBBL Hash Algorithm', hash_alg[self.IBBLHashAlg]])
+		pt.add_row(['IBBL Hash Algorithm', IBBLHashAlg])
 		pt.add_row(['IBBL Hash Size', '0x%X' % self.IBBLHashSize])
 		pt.add_row(['IBBL Hash', IBBLHash])
-		pt.add_row(['IBB Hash Algorithm', hash_alg[self.IBBHashAlg]])
+		pt.add_row(['IBB Hash Algorithm', IBBHashAlg])
 		pt.add_row(['IBB Hash Size', '0x%X' % self.IBBHashSize])
 		pt.add_row(['IBB Hash', IBBHash])
-		pt.add_row(['OBB Hash Algorithm', hash_alg[self.OBBHashAlg]])
+		pt.add_row(['OBB Hash Algorithm', OBBHashAlg])
 		pt.add_row(['OBB Hash Size', '0x%X' % self.OBBHashSize])
 		pt.add_row(['OBB Hash', OBBHash])
 		pt.add_row(['IBB Flags', '0x%X' % self.IBBFlags])
@@ -3913,9 +3925,9 @@ class CSE_Ext_14_R2(ctypes.LittleEndianStructure) : # R2 - DnX Manifest (DnxMani
 	]
 	
 	def ext_print(self) :
-		hash_alg = ['None','SHA-1','SHA-256']
-		
 		PublicKey = '%0.*X' % (0x100 * 2, int.from_bytes(self.PublicKey, 'little'))
+		HashArrHashAlg = cse_hash_alg[self.HashArrHashAlg] if self.HashArrHashAlg in cse_hash_alg else 'Unknown (%d)' % self.HashArrHashAlg
+		ChunkHashAlg = cse_hash_alg[self.ChunkHashAlg] if self.ChunkHashAlg in cse_hash_alg else 'Unknown (%d)' % self.ChunkHashAlg
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -3942,9 +3954,9 @@ class CSE_Ext_14_R2(ctypes.LittleEndianStructure) : # R2 - DnX Manifest (DnxMani
 		pt.add_row(['Hashes Array Header Minor', '%d' % self.HashArrHdrMinor])
 		pt.add_row(['Hashes Array Header Count', '%d' % self.HashArrHdrCount])
 		pt.add_row(['Reserved 6', '0x%X' % self.Reserved6])
-		pt.add_row(['Hashes Array Hash Algorithm', hash_alg[self.HashArrHashAlg]])
+		pt.add_row(['Hashes Array Hash Algorithm', HashArrHashAlg])
 		pt.add_row(['Hashes Array Hash Size', '0x%X' % self.HashArrHashSize])
-		pt.add_row(['IFWI Chunk Hash Algorithm', hash_alg[self.ChunkHashAlg]])
+		pt.add_row(['IFWI Chunk Hash Algorithm', ChunkHashAlg])
 		pt.add_row(['Reserved 7', '0x%X' % self.Reserved7])
 		pt.add_row(['Reserved 8', '0x%X' % self.Reserved8])
 		pt.add_row(['Reserved 9', '0x%X' % self.Reserved9])
@@ -3994,9 +4006,9 @@ class CSE_Ext_14_R3(ctypes.LittleEndianStructure) : # R3 - DnX Manifest (DnxMani
 	]
 	
 	def ext_print(self) :
-		hash_alg = ['None','SHA-1','SHA-256','SHA-384']
-		
 		PublicKey = '%0.*X' % (0x180 * 2, int.from_bytes(self.PublicKey, 'little'))
+		HashArrHashAlg = cse_hash_alg[self.HashArrHashAlg] if self.HashArrHashAlg in cse_hash_alg else 'Unknown (%d)' % self.HashArrHashAlg
+		ChunkHashAlg = cse_hash_alg[self.ChunkHashAlg] if self.ChunkHashAlg in cse_hash_alg else 'Unknown (%d)' % self.ChunkHashAlg
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4023,9 +4035,9 @@ class CSE_Ext_14_R3(ctypes.LittleEndianStructure) : # R3 - DnX Manifest (DnxMani
 		pt.add_row(['Hashes Array Header Minor', '%d' % self.HashArrHdrMinor])
 		pt.add_row(['Hashes Array Header Count', '%d' % self.HashArrHdrCount])
 		pt.add_row(['Reserved 6', '0x%X' % self.Reserved6])
-		pt.add_row(['Hashes Array Hash Algorithm', hash_alg[self.HashArrHashAlg]])
+		pt.add_row(['Hashes Array Hash Algorithm', HashArrHashAlg])
 		pt.add_row(['Hashes Array Hash Size', '0x%X' % self.HashArrHashSize])
-		pt.add_row(['IFWI Chunk Hash Algorithm', hash_alg[self.ChunkHashAlg]])
+		pt.add_row(['IFWI Chunk Hash Algorithm', ChunkHashAlg])
 		pt.add_row(['Reserved 7', '0x%X' % self.Reserved7])
 		pt.add_row(['Reserved 8', '0x%X' % self.Reserved8])
 		pt.add_row(['Reserved 9', '0x%X' % self.Reserved9])
@@ -4288,6 +4300,7 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12 = self.get_flags()
 		
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'little'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4309,7 +4322,7 @@ class CSE_Ext_16(ctypes.LittleEndianStructure) : # R1 - IFWI Partition Informati
 		pt.add_row(['Partial Update Only', fvalue[f8]])
 		pt.add_row(['Not Measured', fvalue[f9]])
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
-		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256'][self.HashAlgorithm]])
+		pt.add_row(['Hash Type', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % int.from_bytes(self.HashSize, 'little')])
 		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Ignore FWU Disable Policy', fvalue[f11]])
@@ -4358,6 +4371,7 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11,f12 = self.get_flags()
 		
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'little'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
@@ -4379,7 +4393,7 @@ class CSE_Ext_16_R2(ctypes.LittleEndianStructure) : # R2 - IFWI Partition Inform
 		pt.add_row(['Partial Update Only', fvalue[f8]])
 		pt.add_row(['Not Measured', fvalue[f9]])
 		pt.add_row(['Flags Reserved', '0x%X' % f10])
-		pt.add_row(['Hash Type', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % int.from_bytes(self.HashSize, 'little')])
 		pt.add_row(['Partition Hash', Hash])
 		pt.add_row(['Ignore FWU Disable Policy', fvalue[f11]])
@@ -4568,12 +4582,13 @@ class CSE_Ext_18_Mod(ctypes.LittleEndianStructure) : # R1 - USB Type C IO Manage
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = tcs_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in tcs_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 24, USB Type C IO Manageability Hash' + col_e
 		pt.add_row(['Hash Type', '0x%X' % self.HashType])
-		pt.add_row(['Hash Algorithm', ['SHA-1','SHA-256','MD5'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Hash', Hash])
 		
@@ -4591,12 +4606,13 @@ class CSE_Ext_18_Mod_R2(ctypes.LittleEndianStructure) : # R2 - USB Type C IO Man
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 24, USB Type C IO Manageability Hash' + col_e
 		pt.add_row(['Hash Type', '0x%X' % self.HashType])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Hash', Hash])
 		
@@ -4677,12 +4693,13 @@ class CSE_Ext_19_Mod(ctypes.LittleEndianStructure) : # R1 - USB Type C MG Hash (
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = tcs_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in tcs_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 25, USB Type C MG Hash' + col_e
 		pt.add_row(['Hash Type', '0x%X' % self.HashType])
-		pt.add_row(['Hash Algorithm', ['SHA-1','SHA-256','MD5'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Hash', Hash])
 		
@@ -4700,12 +4717,13 @@ class CSE_Ext_19_Mod_R2(ctypes.LittleEndianStructure) : # R2 - USB Type C MG Has
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 25, USB Type C MG Hash' + col_e
 		pt.add_row(['Hash Type', '0x%X' % self.HashType])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Hash', Hash])
 		
@@ -4759,12 +4777,13 @@ class CSE_Ext_1A_Mod(ctypes.LittleEndianStructure) : # R1 - USB Type C Thunderbo
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x20 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = tcs_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in tcs_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 26, USB Type C Thunderbolt Hash' + col_e
 		pt.add_row(['Hash Type', '0x%X' % self.HashType])
-		pt.add_row(['Hash Algorithm', ['SHA-1','SHA-256','MD5'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Hash', Hash])
 		
@@ -4782,12 +4801,13 @@ class CSE_Ext_1A_Mod_R2(ctypes.LittleEndianStructure) : # R2 - USB Type C Thunde
 	
 	def ext_print(self) :
 		Hash = '%0.*X' % (0x30 * 2, int.from_bytes(self.Hash, 'big'))
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 26, USB Type C Thunderbolt Hash' + col_e
 		pt.add_row(['Hash Type', '0x%X' % self.HashType])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Hash', Hash])
 		
@@ -4930,13 +4950,15 @@ class CSE_Ext_22_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
 	def ext_print(self) :
 		f1,f2 = self.get_flags()
 		
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
+		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 34, Entry' + col_e
 		pt.add_row(['Hash Usage', key_dict[self.Usage] if self.Usage in key_dict else 'Unknown (%d)' % self.Usage])
 		pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
 		pt.add_row(['Flags Reserved', '0x%X' % f2])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Minimal SVN', self.MinimalSVN])
 		pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
 		
@@ -4963,8 +4985,6 @@ class CSE_Ext_23(ctypes.LittleEndianStructure) : # R1 - Signed Package Informati
 		('Reserved',		uint8_t*15),  	# 0x19
 		# 0x28
 	]
-	
-	# Firmware SKU value at older CSE_Ext_0F_R2 should be ignored in favor of CSE_Ext_0C, as explained at ext_anl > 0xF
 	
 	# FWType & FWSKU are also used by CSE_Ext_0F_R2 & GSC_Info_FWI, remember to change them as well!
 	
@@ -5001,8 +5021,8 @@ class CSE_Ext_23_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO
 	_pack_ = 1
 	_fields_ = [
 		('Name',			char*12),		# 0x00
-		('Type',			uint8_t),		# 0x0C (MODULE_TYPES) (0 Process, 1 Shared Library, 2 Data, 3 Independent)
-		('HashAlgorithm',	uint8_t),		# 0x0D (0 None, 1 SHA-1, 2 SHA-256, 3 SHA-384)
+		('Type',			uint8_t),		# 0x0C 0 Process, 1 Shared Library, 2 Data, 3 Independent (MODULE_TYPES)
+		('HashAlgorithm',	uint8_t),		# 0x0D 0 None, 1 SHA-1, 2 SHA-256, 3 SHA-384
 		('HashSize',		uint16_t),		# 0x0E
 		('MetadataSize',	uint32_t),		# 0x10
 		('MetadataHash',	uint32_t*12),	# 0x14 SHA-384
@@ -5010,14 +5030,16 @@ class CSE_Ext_23_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO
 	]
 	
 	def ext_print(self) :
+		Type = cse_mod_type[self.Type] if self.Type in cse_mod_type else 'Unknown (%d)' % self.Type
+		HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
 		MetadataHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.MetadataHash, 'little'))
 		
 		pt = ext_table(['Field', 'Value'], False, 1)
 		
 		pt.title = col_y + 'Extension 35, Entry' + col_e
 		pt.add_row(['Name', self.Name.decode('utf-8')])
-		pt.add_row(['Type', ['Process','Shared Library','Data','Independent'][self.Type]])
-		pt.add_row(['Hash Algorithm', ['None','SHA-1','SHA-256','SHA-384'][self.HashAlgorithm]])
+		pt.add_row(['Type', Type])
+		pt.add_row(['Hash Algorithm', HashAlgorithm])
 		pt.add_row(['Hash Size', '0x%X' % self.HashSize])
 		pt.add_row(['Metadata Size', '0x%X' % self.MetadataSize])
 		pt.add_row(['Metadata Hash', MetadataHash])
@@ -5466,9 +5488,9 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 						elif mn2_signs[0] :
 							print(col_g + '\n    RSA Signature of partition %s is VALID' % part_name + col_e)
 						else :
-							if param.cse_pause and (mn2_signs[1],mn2_signs[2]) not in cse_known_bad_hashes :
+							if param.cse_pause and [mn2_signs[1],mn2_signs[2]] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    RSA Signature of partition %s is INVALID!' % part_name + col_e) # Debug
-							elif (mn2_signs[1],mn2_signs[2]) in cse_known_bad_hashes :
+							elif [mn2_signs[1],mn2_signs[2]] in cse_known_bad_hashes :
 								print(col_r + '\n    RSA Signature of partition %s is INVALID (Known CSE Bad RSA Signature)!' % part_name + col_e)
 							else :
 								print(col_r + '\n    RSA Signature of partition %s is INVALID!' % part_name + col_e)
@@ -5600,9 +5622,9 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
 						elif mn2_signs[0] :
 							print(col_g + '\n    RSA Signature of partition %s is VALID' % part_name + col_e)
 						else :
-							if param.cse_pause and (mn2_signs[1],mn2_signs[2]) not in cse_known_bad_hashes :
+							if param.cse_pause and [mn2_signs[1],mn2_signs[2]] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    RSA Signature of partition %s is INVALID!' % part_name + col_e) # Debug
-							elif (mn2_signs[1],mn2_signs[2]) in cse_known_bad_hashes :
+							elif [mn2_signs[1],mn2_signs[2]] in cse_known_bad_hashes :
 								print(col_r + '\n    RSA Signature of partition %s is INVALID (Known CSE Bad RSA Signature)!' % part_name + col_e)
 							else :
 								print(col_r + '\n    RSA Signature of partition %s is INVALID!' % part_name + col_e)
@@ -5736,7 +5758,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 	ext50_info = ['UNK', 'XX']
 	ext15_info = [0, '', ('',''), '']
 	fptemp_info = [False, -1, -1]
-	cpd_chk_info = [True,('','')]
+	cpd_chk_info = [True,['','']]
 	ibbp_bpm = ['IBBL', 'IBB', 'OBB']
 	ext12_info = [[], ('',''), 0, 0] # SKU Capabilities, SKU Type, LBG Support, SKU Platform
 	ext_dnx_val = [-1, False, False] # [DnXVer, AllHashArrValid, AllChunkValid]
@@ -5919,7 +5941,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 			cpd_entry_name = bytes(single_man_name, 'utf-8')
 			dnx_rcip_off = 0
 			dnx_rcip_len = 0
-			cpd_chk_info = [True,('','')]
+			cpd_chk_info = [True,['','']]
 			
 		ext_print_temp = []
 		cpd_ext_offset = 0
@@ -6028,12 +6050,12 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					# Validate CSME/CSSPS MFS Intel Configuration (Low Level File 6) Hash at Non-Initialized/Non-FWUpdated MFS. Ignore at (CS)SPS with different FTPR & OPR Versions.
 					if intel_cfg_hash_mfs and mfs_found and mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and not sps_extr_ignore and intel_cfg_hash_ext not in intel_cfg_hash_mfs :
 						cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong $FPT MFS Intel Configuration Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e,
-						(intel_cfg_hash_ext,intel_cfg_hash_mfs))
+						[intel_cfg_hash_ext,intel_cfg_hash_mfs])
 					
 					# Validate CSTXE or CSME 12 Alpha MFS/AFS Intel Configuration (FTPR > intl.cfg) Hash
 					if intel_cfg_hash_ftpr and intel_cfg_ftpr and intel_cfg_hash_ext not in intel_cfg_hash_ftpr :
 						cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong FTPR MFS Intel Configuration Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e,
-						(intel_cfg_hash_ext,intel_cfg_hash_ftpr))
+						[intel_cfg_hash_ext,intel_cfg_hash_ftpr])
 					
 					# Detect unexpected inability to validate Non-Initialized/Non-FWUpdated $FPT (Low Level File 6) or FTPR (intl.cfg) MFS/AFS Intel Configuration Hash
 					if ((mfs_found and 6 in mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and not intel_cfg_hash_mfs) or (intel_cfg_ftpr and not intel_cfg_hash_ftpr)) and not param.cse_unpack :
@@ -6059,7 +6081,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 							if (variant,major,minor,ext_psize) == ('CSME',11,8,0x88000) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSME 11.8 Slim Partition Hash is always wrong, ignore
 							elif (variant,major) == ('CSSPS',1) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 1/IGN Partition Hash is always wrong, ignore
 							elif (variant,major,minor) == ('CSSPS',4,2) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 4.2/IGN Partition Hash is always wrong, ignore
-							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, (ext_phash,mea_phash))
+							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, [ext_phash,mea_phash])
 						
 					while cpd_mod_offset < cpd_ext_end :
 						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
@@ -6113,11 +6135,6 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 						ext15_type = ext15_fw_type[ext_hdr.FWType] if ext_hdr.FWType in ext15_fw_type else 'Unknown' # Firmware Type (Client, SPS etc)
 						ext15_sku = ext15_fw_sku[ext_hdr.FWSKU] if ext_hdr.FWSKU in ext15_fw_sku else ('Unknown','UNK') # Firmware SKU (CON, COR, SLM, LIT, SVR etc)
 						ext15_nvm = ext15_nvm_type[ext_hdr.NVMCompatibility] if ext_hdr.NVMCompatibility in ext15_nvm_type else 'Unknown' # NVM Compatibility (SPI, UFS etc)
-						
-						# When CSE_Ext_0F_R2 was introduced, Firmware SKU field was reserved to the meaningless value 1. After some time, Firmware SKU
-						# was adjusted with actual values 0-5 and 1 now means Corporate (COR). To avoid confusion when comparing against the SKU value
-						# from CSE_Ext_0C, MEA should ignore the placeholder "Corporate" SKU at CSE_Ext_0F_R2 and use the actual value from CSE_Ext_0C.
-						# Generally though, when CSE_Ext_0F_R2 has an non-1 SKU value, it is always preferred over the seemingly deprecated CSE_Ext_0C.
 						
 						ext15_info[1:4] = ext15_type, ext15_sku, ext15_nvm # Adjust CSE Extension 15 Info with FW Type, FW SKU, NVM Type
 					
@@ -6347,7 +6364,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 							if (variant,major) in [('CSSPS',5),('CSSPS',6)] : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 5-6 Partition Hash is always wrong, ignore
 							elif (variant,major,minor) == ('CSSPS',4,4) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 4.4 Partition Hash is always wrong, ignore
 							elif (variant,anl_major,anl_meu_major) == ('PHY',12,0) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # PHYP EBG Partition Hash is always wrong, ignore
-							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, (ext_phash,mea_phash))
+							cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, [ext_phash,mea_phash])
 							
 				elif ext_tag == 0x17 :
 					fd_ranges = [(ext_hdr.Range1Start,ext_hdr.Range1End),(ext_hdr.Range2Start,ext_hdr.Range2End),(ext_hdr.Range3Start,ext_hdr.Range3End),(ext_hdr.Range4Start,ext_hdr.Range4End),
@@ -6449,6 +6466,14 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 					arb_svn = ext_hdr.ARBSVN # FPF Anti-Rollback (ARB) Security Version Number
 					ext15_info[0] = arb_svn # Adjust CSE Extension 15/35 Info with ARB SVN
 					special_mod_anl = True # CSE_Ext_23 requires special/unique Module processing
+					
+					'''
+					# Extension 35 FWType & FWSKU processing, waiting for first sample before implementation
+					ext15_type = ext15_fw_type[ext_hdr.FWType] if ext_hdr.FWType in ext15_fw_type else 'Unknown' # Firmware Type (Client, SPS etc)
+					ext15_sku = ext15_fw_sku[ext_hdr.FWSKU] if ext_hdr.FWSKU in ext15_fw_sku else ('Unknown','UNK') # Firmware SKU (CON, COR, SLM, LIT, SVR etc)
+					
+					ext15_info[1:3] = ext15_type, ext15_sku # Adjust CSE Extension 15 Info with FW Type, FW SKU
+					'''
 					
 					while cpd_mod_offset < cpd_ext_end :
 						mod_hdr = get_struct(buffer, cpd_mod_offset, ext_struct_mod)
@@ -6829,9 +6854,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					elif mn2_valid :
 						print(col_g + '\n    RSA Signature of partition "%s" is VALID' % cpd_pname + col_e)
 					else :
-						if param.cse_pause and (mn2_sig_dec,mn2_sig_sha) not in cse_known_bad_hashes :
+						if param.cse_pause and [mn2_sig_dec,mn2_sig_sha] not in cse_known_bad_hashes :
 							input_col(col_r + '\n    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e) # Debug
-						elif (mn2_sig_dec,mn2_sig_sha) in cse_known_bad_hashes :
+						elif [mn2_sig_dec,mn2_sig_sha] in cse_known_bad_hashes :
 							print(col_r + '\n    RSA Signature of partition "%s" is INVALID (Known CSE Bad RSA Signature)' % cpd_pname + col_e)
 						else :
 							print(col_r + '\n    RSA Signature of partition "%s" is INVALID' % cpd_pname + col_e)
@@ -6861,9 +6886,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d.%d Ignore)' % (cpd_pname,variant,major,minor) + col_e)
 						elif (variant,cpd_mn2_info[0],cpd_mn2_info[10]) == ('PHYPEBG',12,0) :
 							print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d Ignore)' % (cpd_pname,variant,cpd_mn2_info[0]) + col_e)
-						elif param.cse_pause and (ext_phval[2],ext_phval[3]) not in cse_known_bad_hashes :
+						elif param.cse_pause and [ext_phval[2],ext_phval[3]] not in cse_known_bad_hashes :
 							input_col(col_r + '\n    Hash of partition "%s" is INVALID' % cpd_pname + col_e) # Debug
-						elif param.cse_pause and (ext_phval[2],ext_phval[3]) in cse_known_bad_hashes :
+						elif param.cse_pause and [ext_phval[2],ext_phval[3]] in cse_known_bad_hashes :
 							print(col_r + '\n    Hash of partition "%s" is INVALID (Known CSE Bad Hash)' % cpd_pname + col_e)
 						else :
 							print(col_r + '\n    Hash of partition "%s" is INVALID' % cpd_pname + col_e)
@@ -6888,9 +6913,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					if mod_hash == mea_hash :
 						print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					else :
-						if param.cse_pause and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+						if param.cse_pause and [mod_hash,mea_hash] not in cse_known_bad_hashes :
 							input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-						elif param.cse_pause and (mod_hash,mea_hash) in cse_known_bad_hashes :
+						elif param.cse_pause and [mod_hash,mea_hash] in cse_known_bad_hashes :
 							print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						else :
 							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -6943,9 +6968,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 						if mod_hash == mea_hash :
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						else :
-							if param.cse_pause and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+							if param.cse_pause and [mod_hash,mea_hash] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-							elif param.cse_pause and (mod_hash,mea_hash) in cse_known_bad_hashes :
+							elif param.cse_pause and [mod_hash,mea_hash] in cse_known_bad_hashes :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							else :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -6992,9 +7017,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							rbe_pm_met_valid.append(mea_hash) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
 						else :
-							if param.cse_pause and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+							if param.cse_pause and [mod_hash,mea_hash] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-							elif param.cse_pause and (mod_hash,mea_hash) in cse_known_bad_hashes :
+							elif param.cse_pause and [mod_hash,mea_hash] in cse_known_bad_hashes :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							else :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -7020,9 +7045,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 					if mod_hash == mea_hash :
 						print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 					else :
-						if param.cse_pause and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+						if param.cse_pause and [mod_hash,mea_hash] not in cse_known_bad_hashes :
 							input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-						elif param.cse_pause and (mod_hash,mea_hash) in cse_known_bad_hashes :
+						elif param.cse_pause and [mod_hash,mea_hash] in cse_known_bad_hashes :
 							print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 						else :
 							print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -7053,9 +7078,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
-							if param.cse_pause and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+							if param.cse_pause and [mod_hash,mea_hash] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-							elif param.cse_pause and (mod_hash,mea_hash) in cse_known_bad_hashes :
+							elif param.cse_pause and [mod_hash,mea_hash] in cse_known_bad_hashes :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							else :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -7076,9 +7101,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							rbe_pm_met_valid.append(mea_hash) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
-							if param.cse_pause and (mod_hash,mea_hash) not in cse_known_bad_hashes :
+							if param.cse_pause and [mod_hash,mea_hash] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-							elif param.cse_pause and (mod_hash,mea_hash) in cse_known_bad_hashes :
+							elif param.cse_pause and [mod_hash,mea_hash] in cse_known_bad_hashes :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							else :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -7145,9 +7170,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							print(col_g + '\n    Hash of %s %s "%s" is VALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							with open(mod_fname, 'wb') as mod_file : mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
-							if param.cse_pause and (mod_hash,mea_hash_c) not in cse_known_bad_hashes :
+							if param.cse_pause and [mod_hash,mea_hash_c] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-							elif param.cse_pause and (mod_hash,mea_hash_c) in cse_known_bad_hashes :
+							elif param.cse_pause and [mod_hash,mea_hash_c] in cse_known_bad_hashes :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							else :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -7183,9 +7208,9 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
 							rbe_pm_met_valid.append(mea_hash_u) # Store valid RBEP > rbe or FTPR > pm Hash to single out leftovers
 							with open(mod_fname, 'wb') as mod_file: mod_file.write(mod_data_d) # Decompression complete, valid data
 						else :
-							if param.cse_pause and (mod_hash,mea_hash_c) not in cse_known_bad_hashes :
+							if param.cse_pause and [mod_hash,mea_hash_c] not in cse_known_bad_hashes :
 								input_col(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e) # Debug
-							elif param.cse_pause and (mod_hash,mea_hash_c) in cse_known_bad_hashes :
+							elif param.cse_pause and [mod_hash,mea_hash_c] in cse_known_bad_hashes :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID (Known CSE Bad Hash)' % (comp[mod_comp], mod_type, mod_name) + col_e)
 							else :
 								print(col_r + '\n    Hash of %s %s "%s" is INVALID' % (comp[mod_comp], mod_type, mod_name) + col_e)
@@ -7233,7 +7258,7 @@ def get_key_usages(key_bitmap) :
 	
 # Store and show CSE Analysis Errors
 def cse_anl_err(ext_err_msg, checked_hashes) :
-	if checked_hashes is None : checked_hashes = ('','')
+	if checked_hashes is None : checked_hashes = ['','']
 	
 	copy_file = not checked_hashes in cse_known_bad_hashes
 	err_stor.append([ext_err_msg, copy_file])
@@ -8839,7 +8864,7 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
 		else : pch_true_stp = pch_stp_val[pch_init_stp] # Fallback to Absolute value
 	
 	# Detect Actual Chipset Stepping(s) for CSME 13, CSME 15 & CSSPS 6
-	elif (variant,major) in [('CSME',13),('CSME',15),('CSSPS',6)] :
+	elif (variant,major) in [('CSME',13),('CSME',15),('CSME',16),('CSSPS',6)] :
 		if rec_data[0x2:0x6] == b'\xFF' * 4 :
 			# Absolute for CSME 13 >=~ 13.0.0.1061 (0 = A, 1 = B, 2 = C, 3 = D etc)
 			pch_true_stp = pch_stp_val[pch_init_stp]
@@ -8990,9 +9015,9 @@ def info_anl(mod_f_path, part_start, part_end) :
 def pmc_anl(mn2_info) :
 	pmc_pch_sku = 'Unknown'
 	pmcp_upd_found = False
-	pch_sku_val = {0: 'LP', 1: 'LP', 2: 'H', 3:'N'}
-	pch_sku_old = {0: 'H', 2: 'LP'}
-	pch_rev_val = {0:'A',1:'B',2:'C',3:'D',4:'E',5:'F',6:'G',7:'H',8:'I',9:'J',10:'K',11:'L',12:'M',13:'N',14:'O',15:'P'}
+	pch_sku_val = {0:'SoC', 1:'LP', 2:'H', 3:'N'}
+	pch_sku_old = {0:'H', 2:'LP'}
+	pch_rev_val = {0:'A', 1:'B', 2:'C', 3:'D', 4:'E', 5:'F', 6:'G', 7:'H', 8:'I', 9:'J', 10:'K', 11:'L', 12:'M', 13:'N', 14:'O', 15:'P'}
 	
 	# mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
 	# 			  MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
@@ -9033,8 +9058,8 @@ def pmc_anl(mn2_info) :
 		pmc_pch_rev = pmc_variant[-1]
 	
 	elif pmc_variant != 'Unknown' and mn2_info[1] in pch_sku_val :
-		# 133.1.10.1003 = LKF + LP + PCH Compatibility B + PMC Maintenance 0 + PMC Revision 1003
-		pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 LP (SoC), 1 LP, 2 H, 3 N
+		# 130.1.10.1003 = ICP + LP + PCH Compatibility B + PMC Maintenance 0 + PMC Revision 1003
+		pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 SoC, 1 LP, 2 H, 3 N
 	
 	# Check PMC Latest status
 	if pmc_variant == 'PMCWTL' :
@@ -9099,6 +9124,7 @@ def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_s
 		if (variant,major,minor,pmc_platform) == ('CSME',13,0,'ICP') and pmc_pch_gen != 130 : return # Ignore CSME 13.0 Alpha ICP PMC
 		if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'H','B','A') : sku_stp = 'Unknown' # Skip CSME 15.0 H A w/ PMC B
 		if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'LP','C','B') : sku_stp = 'Unknown' # Skip CSME 15.0 LP B w/ PMC C
+		if (variant,major,minor,sku_result,pmc_pch_sku) in pmc_soc_dict : pmc_pch_sku = sku_result # Adjust known compatible PMC "SoC" SKU to CSE SKU
 		
 		if pmc_mn2_signed != release or pmc_pch_gen not in pmc_dict[(variant,major,minor)] or pmc_pch_sku != sku_result \
 		or (sku_stp != 'Unknown' and pmc_pch_rev[0] not in sku_stp) :
@@ -9509,7 +9535,7 @@ def cpd_chk(cpd_data, variant, major) :
 		cpd_chk_calc = crccheck.crc.Crc32.calc(cpd_data[:0x10] + b'\x00' * 4 + cpd_data[0x14:])
 	
 	# Store $CPD Checksum Values to check if they exist in the known bad CSE Hashes/Checksums list
-	cpd_chk_rslt = ('$CPD_%s_%d_0x%0.8X' % (variant,major,cpd_chk_file),'$CPD_%s_%d_0x%0.8X' % (variant,major,cpd_chk_calc))
+	cpd_chk_rslt = ['$CPD_%s_%d_0x%0.8X' % (variant,major,cpd_chk_file),'$CPD_%s_%d_0x%0.8X' % (variant,major,cpd_chk_calc)]
 	
 	return cpd_chk_file == cpd_chk_calc, cpd_chk_file, cpd_chk_calc, cpd_chk_rslt
 
@@ -9835,6 +9861,19 @@ def check_upd(key) :
 	if upd_key_found : return vlp[0],vlp[1],vlp[2],vlp[3]
 	
 	return 0,0,0,0
+
+# Get JSON Structure from DB
+def get_db_json_obj(obj_name) :
+	obj_bgn = mea_db_read.find(obj_name + '*BGN')
+	obj_end = mea_db_read.find(obj_name + '*END')
+	
+	if obj_bgn == -1 or obj_end == -1 or obj_bgn >= obj_end : return None
+	
+	obj_data = mea_db_read[obj_bgn + len(obj_name + '*BGN'):obj_end]
+	
+	obj_data = ''.join([line.split(' # ')[0] for line in obj_data.split('\n')])
+	
+	return json.loads(obj_data)
 
 # Detect Intel Flash Descriptor (FD)
 def fd_anl_init(reading, file_end, start_man_match, end_man_match) :
@@ -10376,9 +10415,6 @@ ext15_nvm_type = {0:'Undefined', 1:'UFS', 2:'SPI'}
 # CSE Extension 0x0F Firmware Type
 ext15_fw_type = {0:'Default', 1:'SPS', 2:'SPS EPO', 3:'Client', 4:'GFX'}
 
-# CSE Extension 0x0C Firmware SKU
-ext12_fw_sku = {0:('Corporate','COR'), 1:('Consumer','CON'), 2:('Slim','SLM'), 3:('Server','SVR')}
-
 # CSE File System Home Directory Record Structures
 home_rec_struct = {0x18:MFS_Home_Record_0x18, 0x1C:MFS_Home_Record_0x1C}
 
@@ -10397,6 +10433,24 @@ sector_types = {0:'4K', 2:'8K', 4:'64K', 8:'64K-8K Mixed'}
 # GSC Option ROM PCI Register Code Types
 pcir_code_types = {0x0: 'BIOS', 0x1: 'OpenBIOS', 0x2: 'PA-RISC', 0x3: 'UEFI', 0xF0: 'Data', 0xF1: 'Code', 0xFF: 'Reserved'}
 
+# CSE Module Types
+cse_mod_type = {0:'Process', 1:'Shared Library', 2:'Data', 3:'Independent'}
+
+# CSE/GSC Hash Algorithms
+cse_hash_alg = {0:'None', 1:'SHA-1', 2:'SHA-256', 3:'SHA-384'}
+
+# CSE USB Type C Hash Algorithms
+tcs_hash_alg = {0:'SHA-1', 1:'SHA-256', 2:'MD5'}
+
+# CSE Extension 0x0C Firmware SKU
+ext12_fw_sku = {
+			0 : ('Corporate','COR'),
+			1 : ('Consumer','CON'),
+			2 : ('Slim','SLM'),
+			3 : ('Server','SVR'),
+			5 : ('Chrome','CHR'),
+			}
+
 # CSE Extension 0x0F Firmware SKU
 ext15_fw_sku = {
 			0 : ('Undefined','NA'),
@@ -10406,6 +10460,7 @@ ext15_fw_sku = {
 			4 : ('Lite','LIT'),
 			5 : ('Server','SVR'),
 			6 : ('Atom','ATM'), # Guess/Placeholder (JSP)
+			255 : ('All','ALL'),
 			}
 
 # CSE SPS SKU Platform ID
@@ -10669,7 +10724,7 @@ pch_dict = {
 			0xF : 'MCC-LP', # Mule Creek Canyon (Elkhart Lake) LP
 			0x10 : 'JSP-N', # Jasper Point N
 			0x11 : 'EBG-H', # Emmitsburg H
-			0x12 : 'ADP-LP', # Alder Point P (LP?)
+			0x12 : 'ADP-LP', # Alder Point P (LP)
 			}
 
 # CSE MFS Low Level File Names
@@ -10707,6 +10762,12 @@ pmc_dict = {
 			('CSSPS',6,0) : [150],
 			('GSC',100,0) : [0,10],
 			('GSC',101,0) : [0,10],
+			}
+
+# CSE & PMC SoC SKU Compatibility
+pmc_soc_dict = {
+			('CSME',16,0,'H','SoC'),
+			('CSME',13,30,'LP','SoC'),
 			}
 			
 # CSE & PCHC Compatibility
@@ -10764,71 +10825,6 @@ ftbl_efst_plat = {
 			0x13 : 'EBG', # TGP-H (Tatlow)
 			}
 
-# Known Pre-Production RSA Public Key Hashes
-rsa_pre_keys = [
-'0EFA4E47B05819533ECCC4C09EE6B628F117C64ECD51BB1685EA90A52DE784B9',
-'543CA971F2E53A3E8AB3A3305487EA4A00426BF556BC617F995B09AAB3623769',
-'D5D0E7408B39D603861CC22EBC68AF7A2D36F659EEBC1C387679CF91F8EF0F61',
-'F00916F0080505A5A377D5F013DAB6C82EB2952AC6AEADCCC104662CA206BA70',
-'B48B05EAB48710FC0A0EC30AEBADE252D5CE4669E27244FEEB861C7E16688345',
-'6F4BDE36CB1DD10A797CCE74BEA122F7609BA29630458E93586B2B447E58C38C',
-'C3416BFF2A9A85414F584263CE6BC0083979DC90FC702FCB671EA497994BA1A7',
-'86C0E5EF0CFEFF6D810D68D83D8C6ECB68306A644C03C0446B646A3971D37894',
-'BA93EEE4B70BAE2554FF8B5B9B1556341E5E5E3E41D7A2271AB00E65B560EC76',
-'2BDB4349FEFF80F6F6341DB7AD40E2568363AC9ED96A0DAA950F26DAD4E4F71A',
-'5D18E09F0135FAD8840989401F50C39A47A5E783CEDFC7AB1E1B11600425808F',
-'8F4337EE7BCE88E0536FD735ED0631DACC666D088DE6400C86F06E4C14C39ECD',
-'0AC9CC6D0A58DD8CD830E29106B4274A5D424EB3665FC6047592DD42082CEF25',
-'CEF9C23206D97B4023B602960C310B82A610B2FD6DB063FBF994966F1CB50579',
-'7C9C81380A1B62BCC7E0F7D7F54E16C94728A4351B305355180427781E3846B2',
-'01DE3BA4760CCAA7D7633BBB3EE0DF9223C24CF3FFF8042AAC9461CDF06B987A',
-'921A87206B3A9B2D1B60D9ACF797187962D103649FCCA9D789F4B5123A84731E',
-]
-
-# CSE Known Bad Partition/Module Hashes
-cse_known_bad_hashes = [
-('1ECACBC6DA437574FAF920030B129DABFDF28ED7E06035859C23BF93C82EC659','50DEE8794273FF35CABC1C3DA66A0A92E1FE3F4E81959BBE4F1D0937B59ADC01'), # CSME 14.0.50.1394_CON_H_A_PRD > Extension 0x16
-('B42458010144CB5708148C31590637372021FCBF21CE079679772FBD2990CF5F','CFB464D442FB477C1642B3C8F60809F764C727509A2112AB921430E2625ECB9B'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > mu_init
-('89BFFD3CFAA25C0CA3AE4ABBDBFAA06F21566CEE653EF65401A80EAB36EB6F08','3A294E6196783ED22310AA3031706E7F6B774FCAFE479D5AFA1C6433E192652E'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > mu_d0d3
-('B63D75602385A6CFE56EC8B79481E46074B1E39217F191B3C9AB961CE4A03139','3B3866517F1C3B1F07BA9692A8B1599F5DDAA24BFFB3F704C711F30D1E067288'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24FD > umac_d0
-('470A0E018AF18F6477029AFE0207307BCD77991272CF23DA741712DAB109C8F8','B570786DAAA91A9A0119BD6F4143160044B054663FB06317650AE77DD6842401'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_init
-('35C7D3383E6B380C3B07CB41444448EC63E3F219C77E7D99DA19C5BFB856713B','785F395BC28544253332ACB1C5C65CDA7C24662D55DC8AB8F0E56543B865A4C3'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > mu_d0d3
-('4DCF921DC0A48D2967063969ED1314CB17AA03E86635A366E2750BE43A219D95','058C09ABE1D1AB2B28D1D06153908EDAE8B420967D54EC4F1F99AC0D0101454C'), # CSME 11.8.50.3399_COR_H_DA_PRD > WCOD 24F3 > umac_d0
-('7A97C07EC2946EAE04E1BF216638B2355CB58AE9F7E65164F479466449E650A9','355A669DF2427B54B85A3BFF5DC76A9A4496554EEAB0658712FA2A9289BBC9FF'), # CSSPS 04.02.04.014_HA_IGN_PRE_REC > RSA Signature
-('884F90866EC877F03DAABE59231E56A07AECCD79C403D8657C7DCB1B5FCE2511062305FE82F40B5BC0B450D720582781','81275820D750B4C05B0BF482FE0523061125CE5F1BCB7D7C65D803C479CDEC7AA0561E2359BEAA3DF077C86E86904F88'), # SAMF 1.11.0.0 > samf (Endianess)
-('$CPD_CSSPS_4_0x000000B1','$CPD_CSSPS_4_0x00000005'), # CSSPS 04.02.04.014_HA_IGN_PRE_REC > FTPR > $CPD
-('$CPD_CSSPS_1_0x000000B2','$CPD_CSSPS_1_0x0000003F'), # CSSPS 01.00.02.029_HA_IGN_PRD_REC & 01.00.02.043_HA_IGN_PRD_REC > FTPR > $CPD
-('IGNORE','IGNORE') # Ignore CSE firmware groups which are always hashed wrongly (CSME 11.8 SLM & CSSPS 1/4.2 Extension 0x3, CSSPS 4.4/5/6 & PHYP EBG Extension 0x16)
-]
-
-# Known Duplicate File Name Hashes
-known_dup_name_hahes = [
-'4D29C2A99FB5E3B8E883934D458DE5D34951A1ED1D6A318F8C133268908651B0', # CSME 15.0.35.1951_CON_LP_B_PRD (Tag, Cx)
-'6C386E96BBDBA4C103E0FE3124E3D4C86F9B40CBA00FE8E648D8267C5DA36FC8', # CSME 15.0.35.1951_CON_LP_B_PRD (Tag, Bx)
-'568D2C9A268C2384CE244430999F9F9F832BCBA424738EF58DA56CFFA234D9DE', # CSME 15.0.35.1879_CON_LP_B_PRD (Tag, Cx)
-'900F6C05FE9338A7E7DA237FC36E1C146A136E01BC52E4D51BF257A80A44E10C', # CSME 15.0.35.1879_CON_LP_B_PRD (Tag, Bx)
-'0B82FE076D0E41FDADB5ED009FD11CF54E65EAEDD1539B88C58B4949D578DBFD', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag, Cx)
-'EE91844EDD444805711DB8BA99611C594DF286B3102070116EF6554FC2504E79', # CSME 15.0.30.1776_CON_LP_B_PRD (Tag, Bx)
-'115C0ECC472F2F68B9E78DD8DC384803A1C181B437DFB5F69C0AF2A06494E785', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
-'543C776F7B6BE85063263445FD3F0B429143F0E7358D94AB7A6C5EAC76CBE604', # CSME 15.0.21.1503_CON_H_A_PRD (Data)
-'2842B771A1D12714429B30304E7BA343BA5561481C515CFB1D60E058C7CB3BD7', # SPS 03.00.07.024_DE_PRD_EXTR (Date)
-'66661AD2E24380900B7D72C76EE28B4F2417C7498D696215CB8A8373B9FB1D8D', # SPS 03.00.07.024_DE_PRD_EXTR (Date)
-'0FE001FC26E846BF81DEC51CF485060700F9AD25356F84FAD4865B3B7B4C9CB5', # SPS 03.00.07.024_DE_PRD_OPR (Date)
-'83FD08D0CA822368D5CA609F62C0EBDE2D704ACBF9684EB753C6955EFA6E1297', # SPS 03.00.07.024_DE_PRD_OPR (Date)
-'AB5186FF7268433A90E8DA4BAEA17899E239BC9C8038A8D0BF5EADF9033C2FE2', # SPS 03.00.07.024_DE_PRD_REC (Date)
-'15D7FDD257400AC9C9E923996FAE277701EEBB3924FDDDD322A7EC1FA257AE23', # SPS 03.00.07.024_DE_PRD_REC (Date)
-'C1BB9477DC6A3B79ABE4BD2A32F01830DFB1B75E6FFC5BB6B7C732C5C2D7AB90', # PMC JSP_135.3.00.1029_N_A_PRD (Date, Data)
-'19A0A0D1857472CAC86B87FFA94DC859C01937795A39AD20D094D57070AD5345', # PMC JSP_135.3.00.1029_N_A_PRD (Date, Data)
-'094F8155EAF63909FAC8D01D7E58814B861074114515BCB807EF2596B64BD838', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
-'A4C21E6741439BF3208E2493DB8C86C820CCFD7792D50D635DD8531D364F205F', # PCHC TGP_15.0.0.1013_PRD (Date, Data)
-'2F272417601834E18D70085CBA726823029DBA6D6DF972154D734B2473379AB8', # PCHC TGP_15.0.0.1013_PRE (Date, Data)
-'9FAADD25748F42197C73C193D924073210D1C224B7B7A658407521277E29D0BF', # PCHC TGP_15.0.0.1013_PRE (Date, Data)
-'85BFC86B46805E82B0B4AAA8F98DBAE053C60590488ABD7651ABFB91B81D942F', # PHY ICP_N_9.0.1.0006_PRD (Date, Data)
-'B198CE2350424A447FCB0A5BC1D4A2DCF6CF1074D0A3072A0DEFF6B0AC70752E', # PHY ICP_N_9.0.1.0006_PRD (Date, Data)
-'3A98E7F1075029AF6AE23BF352A65F0F09C0417D035445E1EEEB6D0C4D83A0B8', # PHY ICP_N_9.0.1.0006_PRE (Date, Data)
-'F47A69561A851482E66D78836519DE25A3FED14B5B5A92F5C00AC3B6D7E9F631', # PHY ICP_N_9.0.1.0006_PRE (Date, Data)
-]
-
 # Get MEA Parameters from input
 param = MEA_Param(sys.argv)
 
@@ -10843,7 +10839,7 @@ mea_db_path = os.path.join(mea_dir, 'MEA.dat')
 
 # Initialize & Start background Thread for MEA & DB update check
 thread_update = Thread_With_Result(target=mea_upd_check, args=(mea_db_path,), daemon=True)
-thread_update.start() # Start as soon as possible (mea_dir, mea_db_path)
+if not param.upd_dis : thread_update.start() # Start as soon as possible (mea_dir, mea_db_path)
 
 # Check if MEA DB exists
 if os.path.isfile(mea_db_path) :
@@ -10854,6 +10850,15 @@ else :
 	mea_hdr('')
 	print(col_r + '\nError: MEA.dat file is missing!' + col_e)
 	mea_exit(1)
+
+# Get Known Pre-Production RSA Public Key Hashes from DB
+rsa_pre_keys = get_db_json_obj('rsa_pre_keys')
+
+# Get CSE Known Bad Partition/Module Hashes from DB
+cse_known_bad_hashes = get_db_json_obj('cse_known_bad_hashes')
+
+# Get Known Duplicate File Name Hashes from DB
+known_dup_name_hahes = get_db_json_obj('known_dup_name_hahes')
 
 # Get Database Revision
 mea_db_rev, mea_db_rev_p = mea_hdr_init()
@@ -12145,7 +12150,7 @@ for file_in in source :
 	# Detect RSA Signature Validity
 	man_valid = rsa_sig_val(mn2_ftpr_hdr, reading, start_man_match - 0x1B)
 	if not man_valid[0] :
-		rsa_check = (man_valid[1],man_valid[2]) not in cse_known_bad_hashes # Ignore known bad RSA Signatures
+		rsa_check = bool([man_valid[1],man_valid[2]] not in cse_known_bad_hashes) # Ignore known bad RSA Signatures
 		err_stor.append([col_r + 'Error: Invalid %s %d.%d RSA Signature!' % (variant, major, minor) + col_e, rsa_check])
 	
 	if rgn_exist :
@@ -12987,16 +12992,21 @@ for file_in in source :
 		
 		fw_0C_sku0,fw_0C_sku1,fw_0C_lbg,fw_0C_sku2 = ext12_info # Get SKU Capabilities, SKU Type, HEDT Support, SKU Platform
 		
-		# Set SKU Type via Extension 12 or 15 (CON, COR, SLM, LIT, SVR)
-		if ext15_info[2][1] in ['','NA','COR'] and fw_0C_sku1[1] == 'UNK' : # SKU not in 15 and 12
-			sku_init = 'Unknown'
-			sku_init_db = 'UNK'
-		elif ext15_info[2][1] not in ['','NA','COR'] : # SKU in 15, prefer over 12
-			sku_init = ext15_info[2][0]
-			sku_init_db = ext15_info[2][1]
-		else : # SKU in 12, fallback if no 15
+		# Set SKU Type via Extension 12 or 15 or 35 (CSME logic)
+		# When CSE_Ext_0F_R2 was introduced, Firmware SKU field was reserved to the meaningless value 1. After some time, Firmware SKU
+		# was adjusted with actual values 0+ and 1 now means Corporate (COR). To avoid confusion when comparing against the SKU value
+		# from CSE_Ext_0C, MEA should ignore the placeholder "Corporate" SKU at CSE_Ext_0F_R2 and use the actual value from CSE_Ext_0C.
+		# Generally, due to CSE_Ext_0F_R2 confusion, CSE_Ext_0C should be prefered when CSE_Ext_0F_R2 SKU is CON,COR,ALL,NA or missing.
+		# There are plans for another (seriously ?) SKU Type extension, CSE_Ext_23. Support for CSE_Ext_23 can be added once it's used.
+		if fw_0C_sku1[1] != 'UNK' and ext15_info[2][1] in ['','NA','ALL','CON','COR'] :
 			sku_init = fw_0C_sku1[0]
 			sku_init_db = fw_0C_sku1[1]
+		elif ext15_info[2][1] not in ['','NA','ALL'] :
+			sku_init = ext15_info[2][0]
+			sku_init_db = ext15_info[2][1]
+		else :
+			sku_init = 'Unknown'
+			sku_init_db = 'UNK'
 		
 		# Detect SKU Platform via MFS Intel PCH Initialization Table
 		if pch_init_final and '-LP' in pch_init_final[-1][0] : pos_sku_tbl = 'LP'
@@ -13123,6 +13133,10 @@ for file_in in source :
 			
 			if minor == 0 and not pch_init_final : platform = 'TGP' # Tiger Point
 			elif minor == 40 and not pch_init_final : platform = 'MCC' # Mule Creek Canyon (Elkhart Lake)
+		
+		elif major == 16 :
+			
+			if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
 			
 		# Get CSME 12+ DB SKU and check for Latest status
 		sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, sku_db, upd_found, False, True)
@@ -13302,7 +13316,7 @@ for file_in in source :
 		elif not ifwi_exist and not sps_opr_found :
 			fw_type = 'Recovery' # Intel POR for REC ($FPT + FTPR)
 		
-		# Set SKU Type via Extension 12 or 15 (CON, COR, SLM, LIT, SVR)
+		# Set SKU Type via Extension 12 or 15 (CSSPS logic)
 		if not fw_0C_sku0 and ext15_info[0] == 0 : # CSE_Ext_0C > FWSKUCaps and CSE_Ext_0F_R2 > ARBSVN cannot be empty/0
 			sku = 'Unknown'
 			sku_init_db = 'UNK'
@@ -13542,8 +13556,10 @@ for file_in in source :
 	# Create Firmware Database Name/Entry
 	name_db = name_fw + '_' + rsa_sig_hash
 	
-	# Append part of RSA Signature Hash to known Firmware with duplicate Names 
-	if rsa_sig_hash in known_dup_name_hahes : name_fw += '_%s' % rsa_sig_hash[:8]
+	# Append part of RSA Signature Hash to known Firmware with duplicate Names
+	# All CSME 15.0 LP must have RSA Signature appended due to Bx & Cx Stepping
+	if rsa_sig_hash in known_dup_name_hahes or (variant,major,minor,sku_result) == ('CSME',15,0,'LP') :
+		name_fw += '_%s' % rsa_sig_hash[:8]
 	
 	# Store Firmware DB entry to file
 	if param.db_print_new :
@@ -13766,7 +13782,7 @@ for file_in in source :
 		fwu_iup_msg = (uncharted_match.start(),p_end_last_back,p_end_last_back + uncharted_match.start())
 		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from 0x%X - 0x%X for FWUpdate Support!' % fwu_iup_msg + col_e, False])
 	
-	if fwu_iup_result == 'Impossible' and file_has_align :
+	if variant == 'CSME' and major >= 16 and fwu_iup_result == 'Impossible' and file_has_align :
 		warn_stor.append([col_m + 'Warning: Remove 0x%X padding from image end for FWUpdate Support!' % file_has_align + col_e, False])
 	
 	if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Partition Tables detected!' % fpt_count + col_e, True])
