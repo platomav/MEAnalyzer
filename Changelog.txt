@@ -1,3 +1,8 @@
+r269
+
+CSME 15.0.35.1951_COR_H_B_PRD_RGN
+CSME 13.50.15.1436_ATM_N_A_PRD_RGN
+
 v1.260.0
 
 Added option to disable automatic update check
