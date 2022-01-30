@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.260.0'
+title = 'ME Analyzer v1.270.0'
 
 import sys
 
@@ -4662,8 +4662,8 @@ class CSE_Ext_19_R2(ctypes.LittleEndianStructure) : # R2 - GSC Project Info (gsc
 		('Tag',				uint32_t),		# 0x00
 		('Size',			uint32_t),		# 0x04
 		('Project',			char*4),		# 0x08
-		('Hotfix',			uint16_t),		# 0x0C
-		('Build',			uint16_t),		# 0x0E Year/Week (e.g. 2033 = 2020/33)
+		('Hotfix',			uint16_t),		# 0x0C Hotfix at DG1, SKU at DG2+
+		('Build',			uint16_t),		# 0x0E Year & Week at DG1, Stepping/Build at DG2+
 		# 0x10
 	]
 	
@@ -6411,8 +6411,8 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 
 				elif ext_tag == 0x19 :
 					gsc_project = ext_hdr.Project.decode('utf-8') # DG01, DG02 etc
-					gsc_hotfix = ext_hdr.Hotfix # 0,1,2 etc
-					gsc_build = ext_hdr.Build # Year[2]/Week[2] (2035 --> 2020, Week 35)
+					gsc_hotfix = ext_hdr.Hotfix # Hotfix for DG1 (e.g. 0), SKU at DG2+ (e.g. 1 = SOC1, 2 = SOC2)
+					gsc_build = ext_hdr.Build # Year/Week at DG1 (2035 = 2020 W35), Stepping/Build at DG2 (e.g. 2054 = B)
 					
 					gsc_info = [gsc_project, gsc_hotfix, gsc_build]
 				
@@ -9089,7 +9089,7 @@ def pmc_anl(mn2_info) :
 	elif pmc_platform.startswith('DG') :
 		pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
-		pmc_name_db = '%s_%s_%s_%s' % (pmc_platform[:4], pmc_fw_ver, pmc_mn2_signed_db, mn2_info[6])
+		pmc_name_db = '%s_%s_%s_%s_%s' % (pmc_platform[:4], pmc_fw_ver, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
 	else :
 		pmc_fw_ver = '%s.%s.%0.2d.%0.4d' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 		pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
@@ -9116,7 +9116,7 @@ def pmc_anl(mn2_info) :
 # Verify CSE FTPR/OPR & stitched PMC compatibility
 def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
 	if variant == 'CSSPS' : sku_result = 'H' # Manually adjust some fields at CSSPS
-	elif variant == 'GSC' : pmc_pch_sku = 'Unknown' # Manually adjust some fields at GSC
+	elif variant == 'GSC' : pmc_pch_sku,sku_stp = ['Unknown'] * 2 # Manually adjust some fields at GSC
 	elif variant == 'CSTXE' : pmc_pch_gen,pmc_pch_sku,sku_result = [-1,'N/A','N/A'] # Manually adjust some fields at CSTXE
 	
 	if (variant,major,minor) in pmc_dict :
@@ -9255,7 +9255,10 @@ def phy_anl(mn2_info) :
 	
 	phy_fw_ver = '%d.%d.%d.%0.4d' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
 	phy_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
-	phy_name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], phy_sku, phy_fw_ver, phy_mn2_signed_db, mn2_info[6])
+	if phy_variant.startswith('PHYDG') :
+		phy_name_db = '%s_%s_%s_%s_%s_%s' % (phy_platform[:3], phy_sku, phy_fw_ver, mn2_info[7], phy_mn2_signed_db, mn2_info[6])
+	else :
+		phy_name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], phy_sku, phy_fw_ver, phy_mn2_signed_db, mn2_info[6])
 	
 	# Search DB for PHY firmware
 	for line in mea_db_lines :
@@ -10285,7 +10288,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod == 'PMCC006' : variant = 'PMCGLKB' # 6 GLK B
 				elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
 				elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PMCDG1' # DG1
-				elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 101 : variant = 'PMCDG2' # DG2
+				elif mod.startswith('PCOD') and is_meu and (major == 4 or mn2_struct.MEU_Major == 101) : variant = 'PMCDG2' # DG2
 				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 100 : variant = 'OROMDG1' # DG1
 				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 101 : variant = 'OROMDG2' # DG2
 			
@@ -10414,6 +10417,9 @@ ext15_nvm_type = {0:'Undefined', 1:'UFS', 2:'SPI'}
 
 # CSE Extension 0x0F Firmware Type
 ext15_fw_type = {0:'Default', 1:'SPS', 2:'SPS EPO', 3:'Client', 4:'GFX'}
+
+# GSC SKU Build Major to Stepping Dictionary
+gsc_stp_dict = {0:'A', 1:'A', 2:'B', 3:'C', 4:'D', 5:'E', 6:'F', 7:'G', 8:'H', 9:'I'}
 
 # CSE File System Home Directory Record Structures
 home_rec_struct = {0x18:MFS_Home_Record_0x18, 0x1C:MFS_Home_Record_0x1C}
@@ -10761,7 +10767,7 @@ pmc_dict = {
 			('CSSPS',5,1) : [300],
 			('CSSPS',6,0) : [150],
 			('GSC',100,0) : [0,10],
-			('GSC',101,0) : [0,10],
+			('GSC',101,0) : [0,4],
 			}
 
 # CSE & PMC SoC SKU Compatibility
@@ -13392,13 +13398,18 @@ for file_in in source :
 		elif mfs_state == 'Unconfigured' and (oem_config or fitc_found or mfsb_found or cdmd_found) : mfs_state = 'Configured'
 		
 		# Get GSC Project Info
-		if gsc_info : sku,sku_db = [gsc_info[0]] * 2
+		if gsc_info :
+			sku = '%s SOC%d %0.4d' % (gsc_info[0], gsc_info[1], gsc_info[2])
+			sku_stp = 'A' if gsc_info[0] == 'DG01' else gsc_stp_dict[gsc_info[2] // 1000]
+			sku_db = '%s_SOC%s_%s_%0.4d' % (gsc_info[0], gsc_info[1], sku_stp, gsc_info[2])
 		
 		# Parse all detected stitched PMC firmware
 		pmc_all_anl = pmc_parse(pmc_all_init, pmc_all_anl)
 		
 		# Parse all detected stitched PHY firmware
 		phy_all_anl = phy_parse(phy_all_init, phy_all_anl)
+		
+		# TODO: GSC information should be taken by RBEP, not FTPR
 		
 		if major == 100 :
 			
@@ -13409,8 +13420,12 @@ for file_in in source :
 			if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG02'] * 3 # Dedicated Xe Graphics 2
 			
 		# Check for Latest GSC status
-		_,_,db_hot,db_bld = check_upd(('Latest_%s_%s' % (variant, sku)))
-		if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
+		if gsc_info :
+			db_bld,_,_,_ = check_upd(('Latest_%s_%s_%d_%s' % (variant, gsc_info[0], gsc_info[1], sku_stp)))
+			if gsc_info[2] < db_bld : upd_found = True
+		else :
+			_,_,db_hot,db_bld = check_upd(('Latest_%s_%s' % (variant, sku)))
+			if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
 	
 	elif variant.startswith('OROM') : # Graphics System Controller Option ROM
 		
@@ -13535,12 +13550,14 @@ for file_in in source :
 		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_stp[0], date, rel_db)
 	elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 30 or major == 3232) : # PMC CNP A, WTL
 		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_db, date, rel_db)
-	elif variant.startswith('PMCDG') : # PMC DG1
-		name_fw = '%s_%s_%s' % (platform[:4], fw_ver, rel_db)
+	elif variant.startswith('PMCDG') : # PMC DG
+		name_fw = '%s_%s_%s_%s' % (platform[:4], fw_ver, date, rel_db)
 	elif variant.startswith('PMC') : # PMC CNP A/B, ICP, LKF, CMP, TGP, ADP, DG1
 		name_fw = '%s_%s_%s_%s' % (platform[:3], fw_ver, sku_db, rel_db)
 	elif variant.startswith('PCHC') : # PCHC ICP, LKF, CMP, TGP, ADP
 		name_fw = '%s_%s_%s' % (platform[:3], fw_ver, rel_db)
+	elif variant.startswith('PHYDG') : # PHY DG
+		name_fw = '%s_%s_%s_%s_%s' % (platform[:3], sku, fw_ver, date, rel_db)
 	elif variant.startswith('PHY') : # PHY S, P
 		name_fw = '%s_%s_%s_%s' % (platform[:3], sku, fw_ver, rel_db)
 	elif variant.startswith('OROM') : # OROM
@@ -13611,14 +13628,13 @@ for file_in in source :
 	msg_pt.add_row(['Type', fw_type])
 	
 	if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') or is_pfu_img \
-	or variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PCHC','PMCDG','GSC','OROM')) :
+	or variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PCHC','PMCDG','OROM')) :
 		pass
 	else :
 		msg_pt.add_row(['SKU', sku])
 	
 	if variant.startswith(('CS','PMC','GSC')) and not variant.startswith('PMCDG') and not is_pfu_img :
 		if pch_init_final : msg_pt.add_row(['Chipset', pch_init_final[-1][0]])
-		elif gsc_info : msg_pt.add_row(['Chipset', gsc_info[0]])
 		elif sku_stp == 'Unknown' : msg_pt.add_row(['Chipset', 'Unknown'])
 		else : msg_pt.add_row(['Chipset Stepping', ', '.join(map(str, list(sku_stp)))])
 	
