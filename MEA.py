@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.270.0'
+title = 'ME Analyzer v1.271.0'
 
 import sys
 
@@ -10289,8 +10289,9 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 				elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
 				elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PMCDG1' # DG1
 				elif mod.startswith('PCOD') and is_meu and (major == 4 or mn2_struct.MEU_Major == 101) : variant = 'PMCDG2' # DG2
-				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 100 : variant = 'OROMDG1' # DG1
-				elif mod == 'VBT' and is_meu and mn2_struct.MEU_Major == 101 : variant = 'OROMDG2' # DG2
+				elif mod == 'VBT' and major == 19 : variant = 'OROMDG1' # DG1
+				elif mod == 'VBT' and major == 20 : variant = 'OROMDG2' # DG2
+				elif mod == 'VBT' : variant = 'OROM' # Unknown
 			
 			if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY/OROM detected
 		
@@ -13440,7 +13441,7 @@ for file_in in source :
 		ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
 		= ext_anl(reading, '$MN2', start_man_match, file_end, ['OROM',-1,-1,-1,-1,-1,-1,'OROM'], None, [[],''], [[],-1,-1,-1])
 		
-		if mn2_meu_ver.startswith('100.') : platform = 'DG01' # Dedicated Xe Graphics 1
+		platform = variant[4:] if len(variant) > 4 else 'Unknown'
 		
 		orom_all_size = max(orom_pci_size, orom_cpd_size) # Get total OROM IUP Size ($CPD Size may exceed PCIR)
 		eng_fw_end = orom_all_size + 0x1000 - (orom_all_size % 0x1000) # Calculate 4K aligned OROM IUP Size
@@ -13683,7 +13684,7 @@ for file_in in source :
 	
 	if platform != 'NaN' : msg_pt.add_row(['Chipset Support', platform])
 	
-	if variant not in ['SPS','CSSPS','OROM'] and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
+	if not variant.startswith(('SPS','CSSPS','OROM')) and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
 	
 	print('\n%s' % msg_pt)
 	
