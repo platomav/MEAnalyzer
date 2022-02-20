@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.271.0'
+title = 'ME Analyzer v1.272.0'
 
 import sys
 
@@ -5786,7 +5786,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
 		cpd_offset = input_offset
 		
 		# Scan forward for .$MN2 (max $CPD size = 0x2000, .$MN2 Tag ends at 0x20, works with both RGN --> $FPT & UPD --> 0x0)
-		mn2_pat = re.compile(br'\x00\x24\x4D\x4E\x32').search(buffer[cpd_offset:cpd_offset + 0x2020]) # .$MN2 detection, 0x00 for extra sanity check
+		mn2_pat = re.compile(br'\x00\$MN2').search(buffer[cpd_offset:cpd_offset + 0x2020]) # .$MN2 detection, 0x00 for extra sanity check
 		if mn2_pat is not None :
 			(start_man_match, end_man_match) = mn2_pat.span()
 			start_man_match += cpd_offset
@@ -10299,8 +10299,8 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
 			# $MME: ME2-5/SPS1 = 0x50, ME6-10/SPS2-3 = 0x60, TXE1-2 = 0x80
 			variant = 'TXE'
 		
-		elif re.compile(br'\x24\x53\x4B\x55\x03\x00\x00\x00\x2F\xE4\x01\x00').search(buffer) or \
-		re.compile(br'\x24\x53\x4B\x55\x03\x00\x00\x00\x08\x00\x00\x00').search(buffer) :
+		elif re.compile(br'\$SKU\x03\x00\x00\x00\x2F\xE4\x01\x00').search(buffer) or \
+		re.compile(br'\$SKU\x03\x00\x00\x00\x08\x00\x00\x00').search(buffer) :
 			variant = 'SPS'
 		
 		else :
@@ -10934,38 +10934,32 @@ for arg in source :
 	if arg in param.val : in_count -= 1
 
 # Intel Engine/Graphics/Independent firmware Manifest pattern ($MN2 or $MAN, VEN_ID 0x8086)
-man_pat = re.compile(br'\x86\x80.{9}\x00\x24\x4D((\x4E\x32)|(\x41\x4E))', re.DOTALL)
+man_pat = re.compile(br'\x86\x80.{9}\x00\$((MN2)|(MAN))', re.DOTALL)
 
 # Intel Engine/Graphics/Independent placeholder Manifest pattern ($MN2, VEN_ID 0xBCCB)
-bccb_pat = re.compile(br'\xCB\xBC.{9}\x00\x24\x4D\x4E\x32', re.DOTALL)
+bccb_pat = re.compile(br'\xCB\xBC.{9}\x00\$MN2', re.DOTALL)
 
 # Intel Engine/Graphics/Independent firmware Code Partition Directory pattern ($CPD)
-cpd_pat = re.compile(br'\x24\x43\x50\x44.\x00\x00\x00[\x01\x02]\x01[\x10\x14]', re.DOTALL)
+cpd_pat = re.compile(br'\$CPD.\x00\x00\x00[\x01\x02]\x01[\x10\x14]', re.DOTALL)
 
 # Intel Engine/Graphics firmware Flash Partition Table pattern ($FPT)
-fpt_pat = re.compile(br'\x24\x46\x50\x54[\x01-\x7F]\x00\x00\x00')
+fpt_pat = re.compile(br'\$FPT[\x01-\x7F]\x00\x00\x00')
 
 # Intel Engine/Graphics firmware Boot Partition Descriptor Table pattern (BPDT)
 bpdt_pat = re.compile(br'\xAA\x55[\x00\xAA]\x00.\x00[\x01\x02][\x00\x01].{16}(.\x00.\x00.{3}\x00.{3}\x00){3}', re.DOTALL)
 
 # Intel Graphics firmware Option ROM Header & PCI Register pattern (PCIR)
-orom_pat = re.compile(br'\x55\xAA.{22}\x1C\x00.{2}\x50\x43\x49\x52\x86\x80.{4}[\x18\x1C]\x00', re.DOTALL)
+orom_pat = re.compile(br'\x55\xAA.{22}\x1C\x00.{2}PCIR\x86\x80.{4}[\x18\x1C]\x00', re.DOTALL)
 
 # Intel Flash Descriptor pattern (FD)
 fd_pat = re.compile(br'\x5A\xA5\xF0\x0F[\x01-\x10].{171}\xFF{16}', re.DOTALL)
 
 # Intel Engine/Graphics firmware Manifest probable patterns ($CPD + IUP, FTPR/OROM.man)
-pr_man_08_pat = re.compile(br'\x46\x54\x50\x52\x2E\x6D\x61\x6E\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
-pr_man_09_pat = re.compile(br'\x4F\x52\x4F\x4D\x2E\x6D\x61\x6E\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
-pr_man_10_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x4C\x4F\x43\x4C', re.DOTALL)
-pr_man_11_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x4D\x43\x50', re.DOTALL)
-pr_man_12_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x43\x4F\x44', re.DOTALL)
-pr_man_13_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x43\x48\x43', re.DOTALL)
-pr_man_14_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x53\x50\x48\x59', re.DOTALL)
-pr_man_15_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x50\x48\x59', re.DOTALL)
-pr_man_16_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x50\x48\x59\x50', re.DOTALL)
-pr_man_17_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x4E\x50\x48\x59', re.DOTALL)
-pr_man_18_pat = re.compile(br'\x24\x43\x50\x44.\x00{3}[\x01\x02]\x01[\x10\x14].\x57\x43\x4F\x44', re.DOTALL)
+pr_man_08_pat = re.compile(br'FTPR\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
+pr_man_09_pat = re.compile(br'OROM\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
+
+pr_cpd_parts    = ['LOCL', 'PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY', 'WCOD']
+pr_man_cpd_pats = {part: re.compile(cpd_pat.pattern + b'.' + part.encode(), re.DOTALL) for part in pr_cpd_parts}
 
 for file_in in source :
 	
@@ -11359,23 +11353,20 @@ for file_in in source :
 		pr_man_07 = reading[0x290:0x299] == b'$MMEWCOD_' # $MMEWCOD_ (ME 8+ PFU)
 		pr_man_08 = pr_man_08_pat.search(reading_4K) # FTPR.man (CSME 15.0.35 +)
 		pr_man_09 = pr_man_09_pat.search(reading_4K) # OROM.man (GSC)
-		pr_man_10 = pr_man_10_pat.search(reading_16) # $CPD LOCL (CSE PFU, LMS)
-		pr_man_11 = pr_man_11_pat.search(reading_16) # $CPD PMCP (CSE)
-		pr_man_12 = pr_man_12_pat.search(reading_16) # $CPD PCOD (GSC)
-		pr_man_13 = pr_man_13_pat.search(reading_16) # $CPD PCHC (CSE)
-		pr_man_14 = pr_man_14_pat.search(reading_16) # $CPD SPHY (CSE)
-		pr_man_15 = pr_man_15_pat.search(reading_16) # $CPD PPHY (CSE)
-		pr_man_16 = pr_man_16_pat.search(reading_16) # $CPD PHYP (GSC)
-		pr_man_17 = pr_man_17_pat.search(reading_16) # $CPD NPHY (CSE)
-		pr_man_18 = pr_man_18_pat.search(reading_16) # $CPD WCOD (CSE PFU, WiMan)
 		
+		pr_man_cpd = {name: pr_man_cpd_pats[name].search(reading_16) for name in pr_cpd_parts}
+
 		if param.bypass : break # Force MEA to accept any $MAN/$MN2 (Debug/Research)
 		
 		# Break if a valid Recovery Manifest is found
-		if pr_man_01 + pr_man_02 == b'FTPR' or pr_man_01 + pr_man_05 + pr_man_06 == b'OP$MMEBUP\x00\x00\x00\x00' or pr_man_03 == b'BRINGUP' \
-		or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' or pr_man_07 or pr_man_08 or pr_man_09 \
-		or pr_man_10 or pr_man_11 or pr_man_12 or pr_man_13 or pr_man_14 or pr_man_15 or pr_man_16 or pr_man_17 or pr_man_18 :
-			if pr_man_07 or pr_man_10 or pr_man_18 : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
+		if pr_man_01 + pr_man_02 == b'FTPR' \
+		or pr_man_01 + pr_man_05 + pr_man_06 == b'OP$MMEBUP\x00\x00\x00\x00' \
+		or pr_man_03 == b'BRINGUP' \
+		or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') \
+		or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
+		or pr_man_07 or pr_man_08 or pr_man_09 \
+		or any(pr_man_cpd.values()):
+			if pr_man_07 or pr_man_cpd['LOCL'] or pr_man_cpd['WCOD'] : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
 			if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
 			break
 		
@@ -12466,7 +12457,7 @@ for file_in in source :
 			if (major >= 3 and not fovd_clean('new')) or (major == 2 and not fovd_clean('old')) : fw_type = 'Extracted'
 			else :
 				# Check 2, EFFS/NVKR strings
-				fitc_match = re.compile(br'\x4B\x52\x4E\x44\x00').search(reading) # KRND. detection = FITC, 0x00 adds old ME RGN support
+				fitc_match = re.compile(br'KRND\x00').search(reading) # KRND. detection = FITC, 0x00 adds old ME RGN support
 				if fitc_match is not None :
 					if major == 4 : fw_type_fix = True # ME4-Only Fix 3
 					else : fw_type = 'Extracted'
@@ -12571,7 +12562,7 @@ for file_in in source :
 	
 	# Detect PV/PC bit (0 or 1)
 	if (variant == 'ME' and major >= 8) or variant == 'TXE' :
-		pvbit_match = (re.compile(br'\x24\x44\x41\x54.{20}\x49\x46\x52\x50', re.DOTALL)).search(reading[start_man_match:]) # $DAT + [0x14] + IFRP detection
+		pvbit_match = (re.compile(br'\$DAT.{20}IFRP', re.DOTALL)).search(reading[start_man_match:]) # $DAT + [0x14] + IFRP detection
 		if pvbit_match : pvbit = reading[start_man_match + pvbit_match.start() + 0x10]
 	elif variant in ['CSME','CSTXE','CSSPS','GSC'] or variant.startswith(('PMC','PCHC','PHY','OROM')) :
 		pvbit = mn2_flags_pvbit
@@ -12579,7 +12570,7 @@ for file_in in source :
 	if variant == 'ME' : # Management Engine
 		
 		# Detect SKU Attributes
-		sku_match = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00').search(reading[start_man_match:]) # $SKU detection
+		sku_match = re.compile(br'\$SKU[\x03-\x04]\x00\x00\x00').search(reading[start_man_match:]) # $SKU detection
 		if sku_match is not None :
 			start_sku_match = sku_match.start() + start_man_match
 			
@@ -12614,15 +12605,15 @@ for file_in in source :
 			# ME2-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME2
 			if fw_type_fix :
 				if sku == 'QST' or (sku == 'AMT' and minor >= 5) :
-					nvkr_match = (re.compile(br'\x4E\x56\x4B\x52\x4B\x52\x49\x44')).search(reading) # NVKRKRID detection
+					nvkr_match = (re.compile(br'NVKRKRID')).search(reading) # NVKRKRID detection
 					if nvkr_match is not None :
 						(start_nvkr_match, end_nvkr_match) = nvkr_match.span()
 						nvkr_start = int.from_bytes(reading[end_nvkr_match:end_nvkr_match + 0x4], 'little')
 						nvkr_size = int.from_bytes(reading[end_nvkr_match + 0x4:end_nvkr_match + 0x8], 'little')
 						nvkr_data = reading[fpt_start + nvkr_start:fpt_start + nvkr_start + nvkr_size]
 						# NVKR sections : Name[0xC] + Size[0x3] + Data[Size]
-						prat_match = (re.compile(br'\x50\x72\x61\x20\x54\x61\x62\x6C\x65\xFF\xFF\xFF')).search(nvkr_data) # "Pra Table" detection (2.5/2.6)
-						maxk_match = (re.compile(br'\x4D\x61\x78\x55\x73\x65\x64\x4B\x65\x72\x4D\x65\x6D\xFF\xFF\xFF')).search(nvkr_data) # "MaxUsedKerMem" detection
+						prat_match = (re.compile(br'Pra Table\xFF\xFF\xFF')).search(nvkr_data) # "Pra Table" detection (2.5/2.6)
+						maxk_match = (re.compile(br'MaxUsedKerMem\xFF\xFF\xFF')).search(nvkr_data) # "MaxUsedKerMem" detection
 						if prat_match is not None :
 							(start_prat_match, end_prat_match) = prat_match.span()
 							prat_start = fpt_start + nvkr_start + end_prat_match + 0x3
@@ -12636,9 +12627,9 @@ for file_in in source :
 							me2_type_fix = int.from_bytes(reading[qstpat_start:qstpat_end], 'big')
 							me2_type_exp = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 				elif sku == 'AMT' and minor < 5 :
-					nvsh_match = (re.compile(br'\x4E\x56\x53\x48\x4F\x53\x49\x44')).search(reading) # NVSHOSID detection
+					nvsh_match = (re.compile(br'NVSHOSID')).search(reading) # NVSHOSID detection
 					if nvsh_match is not None :
-						netip_match = (re.compile(br'\x6E\x65\x74\x2E\x69\x70\xFF\xFF\xFF')).search(reading) # "net.ip" detection (2.0-2.2)
+						netip_match = (re.compile(br'net\.ip\xFF\xFF\xFF')).search(reading) # "net.ip" detection (2.0-2.2)
 						if netip_match is not None :
 							(start_netip_match, end_netip_match) = netip_match.span()
 							netip_size = int.from_bytes(reading[end_netip_match + 0x0:end_netip_match + 0x3], 'little')
@@ -12660,7 +12651,7 @@ for file_in in source :
 			
 			# ME2-Only Fix 3 : Detect ROMB RGN/EXTR image correctly (at $FPT v1 ROMB was before $FPT)
 			if rgn_exist and release == 'Pre-Production' :
-				byp_pat = re.compile(br'\x24\x56\x45\x52\x02\x00\x00\x00') # $VER2... detection (ROM-Bypass)
+				byp_pat = re.compile(br'\$VER\x02\x00\x00\x00') # $VER2... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
 				if byp_match :
@@ -12698,15 +12689,15 @@ for file_in in source :
 				me3_type_fix2a = 0x10 * 0xFF
 				me3_type_fix2b = 0x10 * 0xFF
 				me3_type_fix3 = 0x10 * 0xFF
-				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
+				effs_match = (re.compile(br'EFFSOSID')).search(reading) # EFFSOSID detection
 				if effs_match is not None :
 					(start_effs_match, end_effs_match) = effs_match.span()
 					effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
 					effs_size = int.from_bytes(reading[end_effs_match + 0x4:end_effs_match + 0x8], 'little')
 					effs_data = reading[fpt_start + effs_start:fpt_start + effs_start + effs_size]
 					
-					me3_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46\x04\x4E\x56\x4B\x52')).findall(effs_data) # ME_CFG_DEF.NVKR detection (RGN have <= 2)
-					me3_type_fix2 = (re.compile(br'\x4D\x61\x78\x55\x73\x65\x64\x4B\x65\x72\x4D\x65\x6D\x04\x4E\x56\x4B\x52\x7F\x78\x01')).search(effs_data) # MaxUsedKerMem.NVKR.x. detection
+					me3_type_fix1 = (re.compile(br'ME_CFG_DEF\x04NVKR')).findall(effs_data) # ME_CFG_DEF.NVKR detection (RGN have <= 2)
+					me3_type_fix2 = (re.compile(br'MaxUsedKerMem\x04NVKR\x7Fx\x01')).search(effs_data) # MaxUsedKerMem.NVKR.x. detection
 					me3_type_fix3 = int.from_bytes(reading[fpt_start + effs_start + effs_size - 0x20:fpt_start + effs_start + effs_size - 0x10], 'big')
 					
 					if me3_type_fix2 is not None :
@@ -12731,7 +12722,7 @@ for file_in in source :
 			
 			# ME3-Only Fix 3 : Detect Pre-Alpha ($FPT v1) ROMB RGN/EXTR image correctly
 			if rgn_exist and fpt_version == 16 and release == 'Pre-Production' :
-				byp_pat = re.compile(br'\x24\x56\x45\x52\x03\x00\x00\x00') # $VER3... detection (ROM-Bypass)
+				byp_pat = re.compile(br'\$VER\x03\x00\x00\x00') # $VER3... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
 				if byp_match :
@@ -12761,7 +12752,7 @@ for file_in in source :
 			
 			# ME4-Only Fix 1 : Detect ROMB UPD image correctly
 			if fw_type == "Update" :
-				byp_pat = re.compile(br'\x52\x4F\x4D\x42') # ROMB detection (ROM-Bypass)
+				byp_pat = re.compile(br'ROMB') # ROMB detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				if byp_match :
 					release = 'ROM-Bypass'
@@ -12770,11 +12761,11 @@ for file_in in source :
 			# ME4-Only Fix 2 : Detect SKUs correctly, only for Pre-Alpha firmware
 			if minor == 0 and hotfix == 0 :
 				if fw_type == 'Update' :
-					tpm_tag = (re.compile(br'\x24\x4D\x4D\x45.{24}\x54\x50\x4D', re.DOTALL)).search(reading) # $MME + [0x18] + TPM
-					amt_tag = (re.compile(br'\x24\x4D\x4D\x45.{24}\x4D\x4F\x46\x46\x4D\x31\x5F\x4F\x56\x4C', re.DOTALL)).search(reading) # $MME + [0x18] + MOFFM1_OVL
+					tpm_tag = (re.compile(br'\$MME.{24}TPM', re.DOTALL)).search(reading) # $MME + [0x18] + TPM
+					amt_tag = (re.compile(br'\$MME.{24}MOFFM1_OVL', re.DOTALL)).search(reading) # $MME + [0x18] + MOFFM1_OVL
 				else :
-					tpm_tag = (re.compile(br'\x4E\x56\x54\x50\x54\x50\x49\x44')).search(reading) # NVTPTPID partition found at ALL or TPM
-					amt_tag = (re.compile(br'\x4E\x56\x43\x4D\x41\x4D\x54\x43')).search(reading) # NVCMAMTC partition found at ALL or AMT
+					tpm_tag = (re.compile(br'NVTPTPID')).search(reading) # NVTPTPID partition found at ALL or TPM
+					amt_tag = (re.compile(br'NVCMAMTC')).search(reading) # NVCMAMTC partition found at ALL or AMT
 				
 				if tpm_tag is not None and amt_tag is not None :
 					sku = 'AMT + TPM' # CA_ICH9_REL_ALL_SKUs_
@@ -12788,16 +12779,16 @@ for file_in in source :
 			
 			# ME4-Only Fix 3 : The usual method to detect EXTR vs RGN does not work for ME4, KRND. not enough
 			if fw_type_fix :
-				effs_match = (re.compile(br'\x45\x46\x46\x53\x4F\x53\x49\x44')).search(reading) # EFFSOSID detection
+				effs_match = (re.compile(br'EFFSOSID')).search(reading) # EFFSOSID detection
 				if effs_match is not None :
 					(start_effs_match, end_effs_match) = effs_match.span()
 					effs_start = int.from_bytes(reading[end_effs_match:end_effs_match + 0x4], 'little')
 					effs_size = int.from_bytes(reading[end_effs_match + 0x4:end_effs_match + 0x8], 'little')
 					effs_data = reading[fpt_start + effs_start:fpt_start + effs_start + effs_size]
 				
-					me4_type_fix1 = (re.compile(br'\x4D\x45\x5F\x43\x46\x47\x5F\x44\x45\x46')).findall(effs_data) # ME_CFG_DEF detection (RGN have 2-4)
-					me4_type_fix2 = (re.compile(br'\x47\x50\x49\x4F\x31\x30\x4F\x77\x6E\x65\x72')).search(effs_data) # GPIO10Owner detection
-					me4_type_fix3 = (re.compile(br'\x41\x70\x70\x52\x75\x6C\x65\x2E\x30\x33\x2E\x30\x30\x30\x30\x30\x30')).search(effs_data) # AppRule.03.000000 detection
+					me4_type_fix1 = (re.compile(br'ME_CFG_DEF')).findall(effs_data) # ME_CFG_DEF detection (RGN have 2-4)
+					me4_type_fix2 = (re.compile(br'GPIO10Owner')).search(effs_data) # GPIO10Owner detection
+					me4_type_fix3 = (re.compile(br'AppRule\.03\.000000')).search(effs_data) # AppRule.03.000000 detection
 				
 					if len(me4_type_fix1) > 5 or me4_type_fix2 is not None or me4_type_fix3 is not None : fw_type = "Extracted"
 					else : fw_type = 'Stock'
@@ -12829,7 +12820,7 @@ for file_in in source :
 			
 			# ME5-Only Fix : Detect ROMB UPD image correctly
 			if fw_type == 'Update' :
-				byp_pat = re.compile(br'\x52\x4F\x4D\x42') # ROMB detection (ROM-Bypass)
+				byp_pat = re.compile(br'ROMB') # ROMB detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				if byp_match :
 					release = 'ROM-Bypass'
@@ -13151,7 +13142,7 @@ for file_in in source :
 	elif variant == 'TXE' : # Trusted Execution Engine
 		
 		# Detect SKU Attributes
-		sku_match = re.compile(br'\x24\x53\x4B\x55[\x03-\x04]\x00\x00\x00').search(reading[start_man_match:]) # $SKU detection
+		sku_match = re.compile(br'\$SKU[\x03-\x04]\x00\x00\x00').search(reading[start_man_match:]) # $SKU detection
 		if sku_match is not None :
 			start_sku_match = sku_match.start() + start_man_match
 			
@@ -13262,7 +13253,7 @@ for file_in in source :
 	elif variant == 'SPS' : # Server Platform Services
 		
 		if major == 1 and not rgn_exist :
-			sps1_rec_match = re.compile(br'\x45\x70\x73\x52\x65\x63\x6F\x76\x65\x72\x79').search(reading[start_man_match:]) # EpsRecovery detection
+			sps1_rec_match = re.compile(br'EpsRecovery').search(reading[start_man_match:]) # EpsRecovery detection
 			if sps1_rec_match : fw_type = 'Recovery'
 			else : fw_type = 'Operational'
 		
@@ -13278,7 +13269,7 @@ for file_in in source :
 			
 			elif sps_type == 'FT' :
 				if not rgn_exist : fw_type = 'Recovery'
-				rec_sku_match = re.compile(br'\x52\x32\x4F\x50.{6}\x4F\x50', re.DOTALL).search(reading[start_man_match:start_man_match + 0x2000]) # R2OP.{6}OP detection
+				rec_sku_match = re.compile(br'R2OP.{6}OP', re.DOTALL).search(reading[start_man_match:start_man_match + 0x2000]) # R2OP.{6}OP detection
 				if rec_sku_match :
 					sku = (reading[start_man_match + rec_sku_match.start() + 0x8:start_man_match + rec_sku_match.start() + 0xA]).decode('utf-8')
 					sku_db = sku
