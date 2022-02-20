@@ -1,3 +1,12 @@
+v1.272.0
+
+Applied regex improvements (thanks @c0d3z3r0, #32)
+
+r273
+
+CSME 15.40.16.2485_SVR_LP_B_SPI_PRD_RGN
+PMC MCC_154.1.10.1025_LP_B_PRD
+
 v1.271.0
 
 Added GSC DG2 OROM IUP support
