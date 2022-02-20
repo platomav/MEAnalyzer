@@ -12651,7 +12651,7 @@ for file_in in source :
 			
 			# ME2-Only Fix 3 : Detect ROMB RGN/EXTR image correctly (at $FPT v1 ROMB was before $FPT)
 			if rgn_exist and release == 'Pre-Production' :
-				byp_pat = re.compile(br'\$VER2\x00\x00\x00') # $VER2... detection (ROM-Bypass)
+				byp_pat = re.compile(br'\$VER\x02\x00\x00\x00') # $VER2... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
 				if byp_match :
@@ -12722,7 +12722,7 @@ for file_in in source :
 			
 			# ME3-Only Fix 3 : Detect Pre-Alpha ($FPT v1) ROMB RGN/EXTR image correctly
 			if rgn_exist and fpt_version == 16 and release == 'Pre-Production' :
-				byp_pat = re.compile(br'\$VER3\x00\x00\x00') # $VER3... detection (ROM-Bypass)
+				byp_pat = re.compile(br'\$VER\x03\x00\x00\x00') # $VER3... detection (ROM-Bypass)
 				byp_match = byp_pat.search(reading)
 				
 				if byp_match :
