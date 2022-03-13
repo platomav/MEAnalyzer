@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.273.0'
+title = 'ME Analyzer v1.273.1'
 
 import sys
 
@@ -11139,6 +11139,7 @@ for file_in in source :
 	fitc_build = -1
 	fitc_hotfix = -1
 	p_end_last = 0
+	old_mn2_off = 0
 	mod_end_max = 0
 	cse_lt_off = -1
 	cse_lt_size = 0
@@ -11736,13 +11737,13 @@ for file_in in source :
 						
 						if rec_man_match :
 							# Store the old/initial SPS Manifest (i.e. Recovery instead of Operational) for RSA Signature validation
-							old_mn2_hdr = get_struct(reading, start_man_match - 0x1B, get_manifest(reading, start_man_match - 0x1B))
+							old_mn2_off = start_man_match - 0x1B
+							old_mn2_hdr = get_struct(reading, old_mn2_off, get_manifest(reading, old_mn2_off))
 							
 							# Adjust new/correct Manifest match range (start, end)
 							(start_man_match, end_man_match) = rec_man_match.span()
 							start_man_match += p_rec_fix[1] + 0xB # Add Recovery/Operational offset and 8680.{9} sanity check before .$MN2 or .$MAN
 							end_man_match += p_rec_fix[1]
-							
 		else :
 			# More than two $FPT detected, probably Intel Engine Capsule image
 			mfs_found = False
@@ -12153,7 +12154,7 @@ for file_in in source :
 	
 	# Detect (CS)SPS Old/Initial RSA Signature Validity
 	if variant.endswith('SPS') and old_mn2_hdr :
-		old_man_valid = rsa_sig_val(old_mn2_hdr, reading, init_man_match[0] - 0x1B)
+		old_man_valid = rsa_sig_val(old_mn2_hdr, reading, old_mn2_off)
 		if not old_man_valid[0] :
 			rsa_check = bool([old_man_valid[1],old_man_valid[2]] not in cse_known_bad_hashes) # Ignore known bad RSA Signatures
 			err_stor.append([col_r + 'Error: Invalid %s %d.%d RSA Signature (Recovery)!' % (variant, major, minor) + col_e, rsa_check])
