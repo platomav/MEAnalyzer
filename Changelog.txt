@@ -1,3 +1,18 @@
+v1.278.0
+
+Added basic support for CSSPS 5 (IDV) firmware
+Improved CSTXE initialized File System (AFS) analysis
+Removed all CSE/GSC & stitched IUP compatibility checks
+Adjusted report message link from drop folder to forum
+
+r290
+
+CSSPS 05.00.04.017_ID_LIT_A_PRD_EXTR
+GSC 101.0.0.1705_DG02_SOC2_B_2243_PRD_EXTR
+PMC IDV_14.0.00.0_SoC_A_PRD
+PMC DG2_4.0.0.2181_2022-04-25_PRD
+OROM DG2_20.1049.0.0_PRD
+
 r289
 
 CSME 15.0.41.2158_COR_H_B_PRD_EXTR-Y

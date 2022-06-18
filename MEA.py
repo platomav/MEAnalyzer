@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.274.0'
+title = 'ME Analyzer v1.278.0'
 
 import sys
 
@@ -5253,7 +5253,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     len_fpt_part_all = len(fpt_part_all)
     len_bpdt_part_all = len(bpdt_part_all)
     len_orom_hdr_all = len(orom_hdr_all)
-    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix)
+    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl)
     huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error') # Load Huffman Dictionaries for rbe/pm Decompression
     
     # Create main Firmware Extraction Directory
@@ -7312,17 +7312,17 @@ def check_ftbl_pl(vol_ftbl_pl, ftbl_dict) :
     return vol_ftbl_pl
 
 # Get CSE File System Integrity Table Structure Size
-def get_sec_hdr_size(variant,major,minor,hotfix) :
+def get_sec_hdr_size(variant,major,minor,hotfix,vol_ftbl_pl) :
     if (variant,major,minor) == ('CSME',14,5) : return 0x34
-    if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,minor,hotfix) == ('CSSPS',5,0,0) : return 0x28
+    if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,vol_ftbl_pl) == ('CSSPS',5,10) : return 0x28
     if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : return 0x34
     if (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15)] : return 0x28
     
     return 0x28
 
 # Get CSE File System Configuration Record Structure Size
-def get_cfg_rec_size(variant,major,minor,hotfix) :
-    if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,minor,hotfix) == ('CSSPS',5,0,0) : return 0xC
+def get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl) :
+    if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,vol_ftbl_pl) == ('CSSPS',5,10) : return 0xC
     if (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : return 0x1C
     if (variant,major) in [('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSSPS',6)] : return 0xC
     
@@ -7341,7 +7341,7 @@ def get_vfs_start_0(variant,major,minor,hotfix) : # pylint: disable=W0613
 def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_init_final) :
     vol_ftbl_id = -0x1
     vol_ftbl_pl = -0x1
-    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix) # Get CSE File System Configuration Record Structure Size
+    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl) # Get CSE File System Configuration Record Structure Size
     
     if mfs_found and not param.cse_unpack :
         try :
@@ -7364,8 +7364,8 @@ def get_mfs_anl(mfs_state, mfs_parsed_idx, intel_cfg_hash_mfs, mfs_info, pch_ini
 # noinspection PyUnusedLocal
 def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, mfs_is_afs) :
     mfs_buffer_init = reading[mfs_start:mfs_end] # MFS Initial Buffer
-    sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix) # Get CSE File System Integrity Table Structure Size
-    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix) # Get CSE File System Configuration Record Structure Size
+    sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix,vol_ftbl_pl) # Get CSE File System Integrity Table Structure Size
+    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl) # Get CSE File System Configuration Record Structure Size
     vfs_starts_at_0 = get_vfs_start_0(variant,major,minor,hotfix) # Get CSE File System Files start at 0 or not
     page_size = 0x2000 # MFS Page Length
     chunk_all_size = 0x42 # MFS Chunk Payload + CRC Length
@@ -7702,6 +7702,10 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
     if vol_total_size != mea_total_size : _ = mfs_anl_msg(col_r + 'Error: Detected MFS System Volume Size mismatch!' + col_e, 'error', True, False, False, [])
     else : _ = mfs_anl_msg(col_g + 'MFS System Volume Size is VALID' + col_e, '', True, False, False, [])
     
+    # Re-calculate CSE File System Integrity Table and Configuration Record Structure Sizes once FTBL/EFST Platform is known
+    sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix,vol_ftbl_pl) # Get CSE File System Integrity Table Structure Size
+    config_rec_size = get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl) # Get CSE File System Configuration Record Structure Size
+    
     # Parse MFS File Allocation Table
     fat_count = vol_file_rec + chunks_max_dat # MFS FAT Value Count (Low Level Files + their Data Chunks)
     fat_trail = len(all_mfs_sys) - fat_count * 2 - vol_hdr_size # MFS FAT Value End Trail Count
@@ -7757,49 +7761,32 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             file_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Path
             mfs_write(file_folder, file_path, mfs_file[1]) # Store MFS Low Level File
         
-        # Parse MFS Low Level Files 1 (Unknown), 2-3 (Anti-Replay) and 4 (SVN Migration)
-        # At AFSP, MFS Low Level Files 6 & 7 are not Intel & OEM Configurations (Unknown)
-        elif mfs_file[1] and ((mfs_file[0] in (1,2,3,4)) or (mfs_is_afs and mfs_file[0] in (6,7))) :
+        # Parse MFS Low Level Files 1 (Unknown), 2-3 (Anti-Replay), 4 (SVN Migration) and 5 (Quota Storage)
+        # At AFSP (CSTXE > AFS), MFS/AFS Low Level Files 6 & 7 are not Intel & OEM Configurations (Unknown)
+        elif mfs_file[1] and ((mfs_file[0] in (1,2,3,4,5)) or (mfs_is_afs and mfs_file[0] in (6,7))) :
             mfs_file_name = 'Unknown' if mfs_is_afs and mfs_file[0] in (6,7) else mfs_dict[mfs_file[0]]
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
             file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
-            file_data = mfs_file[1][:-sec_hdr_size] # MFS Low Level File Contents without Integrity
-            file_sec = mfs_file[1][-sec_hdr_size:] # MFS Low Level File Integrity without Contents
-            file_sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Low Level File Integrity Structure
-            if param.cse_verbose :
-                file_sec_ptv = file_sec_hdr.mfs_print() # MFS Low Level File Integrity Structure Info
-                file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_file_name) # Adjust Integrity Structure Verbose Info Title
-                print('\n%s' % file_sec_ptv) # Print Integrity Structure Info during Verbose CSE Unpacking
             file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Contents Path
-            file_sec_path = os.path.join(file_folder, 'Integrity.bin') # MFS Low Level File Integrity Path
-            mfs_write(file_folder, file_data_path, file_data) # Store MFS Low Level File Contents
-            mfs_write(file_folder, file_sec_path, file_sec) # Store MFS Low Level File Integrity
-            mfs_txt(file_sec_hdr.mfs_print(), file_folder, file_sec_path, 'w', False) # Store/Print MFS Low Level File Integrity Info
-        
-        # Parse MFS Low Level File 5 (Quota Storage)
-        elif mfs_file[1] and mfs_file[0] == 5 :
-            if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
-            mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 5 as Parsed
-            file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
-            file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File 5 Contents Path
-            file_sec_path = os.path.join(file_folder, 'Integrity.bin') # MFS Low Level File 5 Integrity Path
             
-            # Detect MFS Low Level File 5 (Quota Storage) Integrity
-            if variant == 'CSME' and major >= 12 :
-                file_data = mfs_file[1][:-sec_hdr_size] # MFS Low Level File 5 Contents without Integrity
-                file_sec = mfs_file[1][-sec_hdr_size:] # MFS Low Level File 5 Integrity without Contents
-                mfs_write(file_folder, file_sec_path, file_sec) # Store MFS Low Level File 5 Integrity
-                file_sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Low Level File 5 Integrity Structure
-                mfs_txt(file_sec_hdr.mfs_print(), file_folder, file_sec_path, 'w', False) # Store/Print MFS Low Level File 5 Integrity Info
-                if param.cse_verbose :
-                    file_sec_ptv = file_sec_hdr.mfs_print() # MFS Low Level File 5 Integrity Structure Info
-                    file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_dict[mfs_file[0]]) # Adjust Integrity Structure Verbose Info Title
-                    print('\n%s' % file_sec_ptv) # Print Integrity Structure Info during Verbose CSE Unpacking
+            # MFS Low Level File 5 Integrity is present only at CSME >= 12
+            # MFS Low Level File 4 Integrity is present only at non-CSTXE
+            if (mfs_file[0] == 5 and not (variant == 'CSME' and major >= 12)) or (mfs_file[0] == 4 and mfs_is_afs) :
+                file_data = mfs_file[1][:] # MFS Low Level File Contents
             else :
-                file_data = mfs_file[1][:] # MFS Low Level File 5 Contents
+                file_data = mfs_file[1][:-sec_hdr_size] # MFS Low Level File Contents without Integrity
+                file_sec = mfs_file[1][-sec_hdr_size:] # MFS Low Level File Integrity without Contents
+                file_sec_hdr = get_struct(file_sec, 0, sec_hdr_struct[sec_hdr_size]) # MFS Low Level File Integrity Structure
+                if param.cse_verbose :
+                    file_sec_ptv = file_sec_hdr.mfs_print() # MFS Low Level File Integrity Structure Info
+                    file_sec_ptv.title = 'MFS %0.3d %s Integrity' % (mfs_file[0], mfs_file_name) # Adjust Integrity Structure Verbose Info Title
+                    print('\n%s' % file_sec_ptv) # Print Integrity Structure Info during Verbose CSE Unpacking
+                file_sec_path = os.path.join(file_folder, 'Integrity.bin') # MFS Low Level File Integrity Path
+                mfs_write(file_folder, file_sec_path, file_sec) # Store MFS Low Level File Integrity
+                mfs_txt(file_sec_hdr.mfs_print(), file_folder, file_sec_path, 'w', False) # Store/Print MFS Low Level File Integrity Info
             
-            mfs_write(file_folder, file_data_path, file_data) # Store MFS Low Level File 5 Contents
+            mfs_write(file_folder, file_data_path, file_data) # Store MFS Low Level File Contents
         
         # Parse MFS Low Level File 6 (Intel Configuration) and 7 (OEM Configuration)
         elif mfs_file[1] and mfs_file[0] in (6,7) :
@@ -8666,7 +8653,7 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
     # Parse FTBL/EFST DB and extract EFS Files
     if 'EFST' in ftbl_dict[ftbl_plat_id][ftbl_dict_id] :
         if efst_dict_rev in ftbl_dict[ftbl_plat_id][ftbl_dict_id]['EFST'] :
-            sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix) # Get CSE File System Integrity Table Structure Size
+            sec_hdr_size = get_sec_hdr_size(variant,major,minor,hotfix,vol_ftbl_pl) # Get CSE File System Integrity Table Structure Size
             
             # Initialize EFS File Records Log
             if sec_hdr_size == 0x28 :
@@ -9062,8 +9049,8 @@ def pmc_anl(mn2_info) :
         pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 SoC, 1 LP, 2 H, 3 N, 4 M
     
     # Check PMC Latest status
-    if pmc_variant == 'PMCWTL' :
-        # WTL PMC version is weird/useless so use Latest Date instead
+    if pmc_variant in ('PMCWTL','PMCIDV') :
+        # WTL & IDV PMC version is weird/useless so use Latest Date instead
         db_year,db_month,db_day,_ = check_upd(('Latest_PMC%s_H_%s' % (pmc_platform[:3], pmc_pch_rev)))
         if pmc_year < db_year or (pmc_year == db_year and (pmc_month < db_month or (pmc_month == db_month and pmc_day < db_day))) : pmcp_upd_found = True
     else :
@@ -9082,7 +9069,7 @@ def pmc_anl(mn2_info) :
         pmc_fw_ver = '%s.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
         pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
         pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
-    elif pmc_platform.startswith(('CNP','WTL')) and mn2_info[0] not in [300,30] :
+    elif pmc_platform.startswith(('CNP','WTL','IDV')) and mn2_info[0] not in [300,30] :
         pmc_fw_ver = '%0.2d.%s.%s.%s' % (mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3])
         pmc_meu_ver = '%d.%d.%d.%0.4d' % (mn2_info[10], mn2_info[11], mn2_info[12], mn2_info[13])
         pmc_name_db = '%s_%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_sku, pmc_pch_rev_p, mn2_info[7], pmc_mn2_signed_db, mn2_info[6])
@@ -9112,25 +9099,6 @@ def pmc_anl(mn2_info) :
     
     return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmcp_upd_found, pmc_platform, \
            mn2_info[7], mn2_info[8], mn2_info[9], pmc_meu_ver
-           
-# Verify CSE FTPR/OPR & stitched PMC compatibility
-def pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform) :
-    if variant == 'CSSPS' : sku_result = 'H' # Manually adjust some fields at CSSPS
-    elif variant == 'GSC' : pmc_pch_sku,sku_stp = ['Unknown'] * 2 # Manually adjust some fields at GSC
-    elif variant == 'CSTXE' : pmc_pch_gen,pmc_pch_sku,sku_result = [-1,'N/A','N/A'] # Manually adjust some fields at CSTXE
-    
-    if (variant,major,minor) in pmc_dict :
-        if (variant,major,minor,pmc_platform) == ('CSME',12,0,'CNP') and pmc_pch_gen != 300 : return # Ignore CSME 12.0 Alpha CNP PMC
-        if (variant,major,minor,pmc_platform) == ('CSME',13,0,'ICP') and pmc_pch_gen != 130 : return # Ignore CSME 13.0 Alpha ICP PMC
-        if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'H','B','A') : sku_stp = 'Unknown' # Skip CSME 15.0 H A w/ PMC B
-        if (variant,major,minor,sku_result,pmc_pch_rev[0],sku_stp) == ('CSME',15,0,'LP','C','B') : sku_stp = 'Unknown' # Skip CSME 15.0 LP B w/ PMC C
-        if (variant,major,minor,sku_result,pmc_pch_sku) in pmc_soc_dict : pmc_pch_sku = sku_result # Adjust known compatible PMC "SoC" SKU to CSE SKU
-        
-        if pmc_mn2_signed != release or pmc_pch_gen not in pmc_dict[(variant,major,minor)] or pmc_pch_sku != sku_result \
-        or (sku_stp != 'Unknown' and pmc_pch_rev[0] not in sku_stp) :
-            warn_stor.append([col_m + 'Warning: Incompatible PMC %s firmware detected!' % pmc_platform + col_e, False])
-    else :
-        err_stor.append([col_r + 'Error: Could not verify %s %d.%d & PMC %s firmware compatibility!' % (variant, major, minor, pmc_platform) + col_e, True])
 
 # Parse CSE PMC firmware after analysis
 def pmc_parse(pmc_all_init, pmc_all_anl) :
@@ -9139,8 +9107,6 @@ def pmc_parse(pmc_all_init, pmc_all_anl) :
         
         pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform, \
         pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver = pmc_anl(pmc_mn2_ver)
-        
-        pmc_chk(pmc_mn2_signed, release, pmc_pch_gen, pmc_pch_sku, sku_result, sku_stp, pmc_pch_rev, pmc_platform)
         
         pmc_all_anl.append([pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,
                             pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size])
@@ -9197,14 +9163,6 @@ def pchc_anl(mn2_info) :
     
     return pchc_fw_ver, mn2_info[0], mn2_info[1], mn2_info[3], pchc_mn2_signed, pchc_mn2_signed_db, pchc_upd_found, pchc_platform, mn2_info[7], \
            mn2_info[8], mn2_info[9], pchc_meu_ver
-           
-# Verify CSE FTPR/OPR & stitched PCHC compatibility
-def pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_platform) :
-    if (variant,major,minor) in pchc_dict :
-        if pchc_mn2_signed != release or (pchc_fw_major,pchc_fw_minor) not in pchc_dict[(variant,major,minor)] :
-            warn_stor.append([col_m + 'Warning: Incompatible PCHC %s firmware detected!' % pchc_platform + col_e, False])
-    else :
-        err_stor.append([col_r + 'Error: Could not verify %s %d.%d & PCHC %s firmware compatibility!' % (variant, major, minor, pchc_platform) + col_e, True])
 
 # Parse CSE PCHC firmware after analysis
 def pchc_parse(pchc_all_init, pchc_all_anl) :
@@ -9213,8 +9171,6 @@ def pchc_parse(pchc_all_init, pchc_all_anl) :
         
         pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_upd_found,pchc_platform,pchc_date,pchc_svn, \
         pchc_pvbit,pchc_meu_ver = pchc_anl(pchc_mn2_ver)
-        
-        pchc_chk(pchc_mn2_signed, release, pchc_fw_major, pchc_fw_minor, pchc_platform)
         
         pchc_all_anl.append([pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_upd_found,pchc_platform,
                              pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_ext15_info,pchc_size])
@@ -9276,14 +9232,6 @@ def phy_anl(mn2_info) :
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PHY firmware
     
     return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_upd_found, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], phy_meu_ver, mn2_info[3]
-    
-# Verify CSE FTPR/OPR & stitched PHY compatibility
-def phy_chk(phy_mn2_signed, release, phy_platform, phy_sku) :
-    if (variant,major,minor) in phy_dict :
-        if phy_mn2_signed != release or phy_sku not in phy_dict[(variant,major,minor)] :
-            warn_stor.append([col_m + 'Warning: Incompatible PHY %s (%s) firmware detected!' % (phy_sku, phy_platform) + col_e, False])
-    else :
-        err_stor.append([col_r + 'Error: Could not verify %s %d.%d & PHY %s (%s) firmware compatibility!' % (variant, major, minor, phy_sku, phy_platform) + col_e, True])
 
 # Parse CSE PHY firmware after analysis
 def phy_parse(phy_all_init, phy_all_anl) :
@@ -9291,8 +9239,6 @@ def phy_parse(phy_all_init, phy_all_anl) :
         phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size = phy
         
         phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_upd_found,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,phy_fw_rel = phy_anl(phy_mn2_ver)
-        
-        phy_chk(phy_mn2_signed, release, phy_platform, phy_sku)
         
         phy_all_anl.append([phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_upd_found,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,
                             phy_fw_rel,phy_vcn,phy_ext15_info,phy_size])
@@ -9843,8 +9789,13 @@ def copy_on_msg(msg_all) :
 
 # Store/Show new firmware Note
 def note_new_fw(variant_p) :
-    note_stor.append([col_g + 'Note: This %s firmware is not in the database! You can help this project by\
-    \n      quickly uploading it to https://mega.nz/megadrop/kgyWLLA10WY/. Thank you!' % variant_p + col_e, True])
+    msg_1 = col_g + 'Note: This '  + col_e
+    msg_2 = col_y + variant_p + col_e
+    msg_3 = col_g + ' firmware is not in the database!' + col_e
+    msg_4 = col_g + ' You can help this\n      project by sharing it at ' + col_e
+    msg_5 = col_c + 'https://win-raid.com' + col_e
+    msg_6 = col_g + ' forum. Thank you!' + col_e
+    note_stor.append([msg_1 + msg_2 + msg_3 + msg_4 + msg_5 + msg_6, True])
 
 # Check DB for latest version
 def check_upd(key) :
@@ -9997,7 +9948,7 @@ def get_fw_ver(variant, major, minor, hotfix, build) :
         version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), '{0:02d}'.format(minor), '{0:02d}'.format(hotfix), '{0:03d}'.format(build)) # xx.xx.xx.xxx
     elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PMCDG')) :
         version = '%s.%s.%s.%s' % (major, minor, hotfix, build)
-    elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 30 or major == 3232) :
+    elif variant.startswith(('PMCCNP','PMCWTL','PMCIDV')) and (major < 30 or major == 3232) :
         version = '%s.%s.%s.%s' % ('{0:02d}'.format(major), minor, hotfix, build)
     elif variant.startswith('PMC') :
         version = '%s.%s.%s.%s' % (major, minor, '{0:02d}'.format(hotfix), build)
@@ -10281,6 +10232,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'PMCC000' and major == 154 : variant = 'PMCMCC' # 0 MCC
                 elif mod == 'PMCC000' and major == 160 : variant = 'PMCADP' # 0 ADP
                 elif mod == 'PMCC000' and major == 1 : variant = 'PMCWTL' # 0 WTL
+                elif mod == 'PMCC000' and major == 14 : variant = 'PMCIDV' # 0 IDV
                 elif mod == 'PMCC002' : variant = 'PMCAPLA' # 2 APL A
                 elif mod == 'PMCC003' : variant = 'PMCAPLB' # 3 APL B
                 elif mod == 'PMCC004' : variant = 'PMCGLKA' # 4 GLK A
@@ -10745,62 +10697,6 @@ mfs_dict = {
             6 : 'Intel Configuration',
             7 : 'OEM Configuration',
             9 : 'Manifest Backup',
-            }
-            
-# CSE & PMC Compatibility
-pmc_dict = {
-            ('CSME',12,0) : [300],
-            ('CSME',13,0) : [130],
-            ('CSME',13,30) : [133],
-            ('CSME',13,50) : [135,130],
-            ('CSME',14,0) : [140],
-            ('CSME',14,1) : [140],
-            ('CSME',14,5) : [140],
-            ('CSME',15,0) : [150],
-            ('CSME',15,40) : [154],
-            ('CSME',16,0) : [160],
-            ('CSTXE',3,0) : [-1],
-            ('CSTXE',3,1) : [-1],
-            ('CSTXE',3,2) : [-1],
-            ('CSTXE',4,0) : [-1],
-            ('CSSPS',4,4) : [1],
-            ('CSSPS',5,0) : [300],
-            ('CSSPS',5,1) : [300],
-            ('CSSPS',6,0) : [150],
-            ('GSC',100,0) : [0,10],
-            ('GSC',101,0) : [0,4],
-            }
-
-# CSE & PMC SoC SKU Compatibility
-pmc_soc_dict = {
-            ('CSME',16,0,'H','SoC'),
-            ('CSME',13,30,'LP','SoC'),
-            }
-            
-# CSE & PCHC Compatibility
-pchc_dict = {
-            ('CSME',13,0) : [(13,0)],
-            ('CSME',13,30) : [(13,30)],
-            ('CSME',13,50) : [(13,5)],
-            ('CSME',14,0) : [(14,0)],
-            ('CSME',14,1) : [(14,0)],
-            ('CSME',14,5) : [(14,5)],
-            ('CSME',15,0) : [(15,0)],
-            ('CSME',15,40) : [(15,40),(15,0)],
-            ('CSME',16,0) : [(16,0)],
-            }
-            
-# CSE & PHY Compatibility
-phy_dict = {
-            ('CSME',16,0) : ['S','N'],
-            ('CSME',15,0) : ['P','N'],
-            ('CSME',14,1) : ['P'],
-            ('CSME',14,0) : ['P'],
-            ('CSME',13,30) : ['S'],
-            ('CSME',13,0) : ['N'],
-            ('CSSPS',6,0) : ['P'],
-            ('GSC',101,0) : ['G'],
-            ('GSC',100,0) : ['G'],
             }
             
 # FD Component Sizes
@@ -13152,6 +13048,7 @@ for file_in in source :
         elif major == 16 :
             
             if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
+            elif minor == 1 and not pch_init_final : platform = 'RPP' # Raptor Point (?)
             
         # Get CSME 12+ DB SKU and check for Latest status
         sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, sku_db, upd_found, False, True)
@@ -13557,7 +13454,7 @@ for file_in in source :
         name_fw = '%s_%s_%s' % (fw_ver, rel_db, type_db)
     elif variant.startswith(('PMCAPL','PMCBXT','PMCGLK')) : # PMC APL A/B, BXT C, GLK A/B
         name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_stp[0], date, rel_db)
-    elif variant.startswith(('PMCCNP','PMCWTL')) and (major < 30 or major == 3232) : # PMC CNP A, WTL
+    elif variant.startswith(('PMCCNP','PMCWTL','PMCIDV')) and (major < 30 or major == 3232) : # PMC CNP A, WTL
         name_fw = '%s_%s_%s_%s_%s' % (platform[:3], fw_ver, sku_db, date, rel_db)
     elif variant.startswith('PMCDG') : # PMC DG
         name_fw = '%s_%s_%s_%s' % (platform[:4], fw_ver, date, rel_db)
@@ -13810,9 +13707,9 @@ for file_in in source :
     if variant == 'CSME' and major >= 16 and fwu_iup_result == 'Impossible' and file_has_align :
         warn_stor.append([col_m + 'Warning: Remove 0x%X padding from image end for FWUpdate Support!' % file_has_align + col_e, False])
     
-    if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Partition Tables detected!' % fpt_count + col_e, True])
+    if fpt_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Partition Tables detected!' % fpt_count + col_e, False])
     
-    if fd_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Descriptors detected!' % fd_count + col_e, True])
+    if fd_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Descriptors detected!' % fd_count + col_e, False])
     
     msg_all = err_stor + warn_stor + note_stor
     for msg_idx in range(len(msg_all)) :
