@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.278.0'
+title = 'ME Analyzer v1.279.0'
 
 import sys
 
@@ -9001,7 +9001,6 @@ def info_anl(mod_f_path, part_start, part_end) :
 # Analyze CSE PMC firmware before parsing
 def pmc_anl(mn2_info) :
     pmc_pch_sku = 'Unknown'
-    pmcp_upd_found = False
     pch_sku_val = {0:'SoC', 1:'LP', 2:'H', 3:'N', 4:'M'}
     pch_sku_old = {0:'H', 2:'LP'}
     pch_rev_val = {0:'A', 1:'B', 2:'C', 3:'D', 4:'E', 5:'F', 6:'G', 7:'H', 8:'I', 9:'J', 10:'K', 11:'L', 12:'M', 13:'N', 14:'O', 15:'P'}
@@ -9048,15 +9047,6 @@ def pmc_anl(mn2_info) :
         # 130.1.10.1003 = ICP + LP + PCH Compatibility B + PMC Maintenance 0 + PMC Revision 1003
         pmc_pch_sku = pch_sku_val[mn2_info[1]] # 0 SoC, 1 LP, 2 H, 3 N, 4 M
     
-    # Check PMC Latest status
-    if pmc_variant in ('PMCWTL','PMCIDV') :
-        # WTL & IDV PMC version is weird/useless so use Latest Date instead
-        db_year,db_month,db_day,_ = check_upd(('Latest_PMC%s_H_%s' % (pmc_platform[:3], pmc_pch_rev)))
-        if pmc_year < db_year or (pmc_year == db_year and (pmc_month < db_month or (pmc_month == db_month and pmc_day < db_day))) : pmcp_upd_found = True
-    else :
-        _,_,db_rev,db_rel = check_upd(('Latest_PMC%s_%s_%s' % (pmc_platform[:3], pmc_pch_sku, pch_rev_val[mn2_info[2] // 10])))
-        if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pmcp_upd_found = True
-    
     pmc_pch_rev_p = pmc_pch_rev[0] if pmc_pch_rev != 'Unknown' else pmc_pch_rev
     
     pmc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
@@ -9097,7 +9087,7 @@ def pmc_anl(mn2_info) :
         err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (pmc_variant, mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PMC firmware
     
-    return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmcp_upd_found, pmc_platform, \
+    return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmc_platform, \
            mn2_info[7], mn2_info[8], mn2_info[9], pmc_meu_ver
 
 # Parse CSE PMC firmware after analysis
@@ -9105,10 +9095,10 @@ def pmc_parse(pmc_all_init, pmc_all_anl) :
     for pmc in pmc_all_init :
         pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size = pmc
         
-        pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform, \
+        pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmc_platform, \
         pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver = pmc_anl(pmc_mn2_ver)
         
-        pmc_all_anl.append([pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,
+        pmc_all_anl.append([pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,
                             pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size])
     
     return pmc_all_anl
@@ -9116,7 +9106,6 @@ def pmc_parse(pmc_all_init, pmc_all_anl) :
 # Analyze CSE PCHC firmware before parsing
 def pchc_anl(mn2_info) :
     pchc_platform = 'Unknown'
-    pchc_upd_found = False
     
     # mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
     #               MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
@@ -9132,9 +9121,6 @@ def pchc_anl(mn2_info) :
     if not pchc_variant.startswith('PCHC') : pchc_variant = 'Unknown'
     
     if pchc_variant != 'Unknown' : pchc_platform = 'CMP-V' if pchc_variant == 'PCHCCMPV' else pchc_variant[-3:]
-    
-    _,_,db_rev,db_rel = check_upd(('Latest_PCHC%s_%d%d' % (pchc_platform[:3], mn2_info[0], mn2_info[1])))
-    if mn2_info[2] < db_rev or (mn2_info[2] == db_rev and mn2_info[3] < db_rel) : pchc_upd_found = True
     
     pchc_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
     pchc_mn2_signed_db = 'PRD' if pchc_mn2_signed == 'Production' else 'PRE'
@@ -9161,7 +9147,7 @@ def pchc_anl(mn2_info) :
         err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (pchc_variant, mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PCHC firmware
     
-    return pchc_fw_ver, mn2_info[0], mn2_info[1], mn2_info[3], pchc_mn2_signed, pchc_mn2_signed_db, pchc_upd_found, pchc_platform, mn2_info[7], \
+    return pchc_fw_ver, mn2_info[0], mn2_info[1], mn2_info[3], pchc_mn2_signed, pchc_mn2_signed_db, pchc_platform, mn2_info[7], \
            mn2_info[8], mn2_info[9], pchc_meu_ver
 
 # Parse CSE PCHC firmware after analysis
@@ -9169,10 +9155,10 @@ def pchc_parse(pchc_all_init, pchc_all_anl) :
     for pchc in pchc_all_init :
         pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size = pchc
         
-        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_upd_found,pchc_platform,pchc_date,pchc_svn, \
+        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform,pchc_date,pchc_svn, \
         pchc_pvbit,pchc_meu_ver = pchc_anl(pchc_mn2_ver)
         
-        pchc_all_anl.append([pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_upd_found,pchc_platform,
+        pchc_all_anl.append([pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform,
                              pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_ext15_info,pchc_size])
     
     return pchc_all_anl
@@ -9181,7 +9167,6 @@ def pchc_parse(pchc_all_init, pchc_all_anl) :
 def phy_anl(mn2_info) :
     phy_platform = 'Unknown'
     phy_sku = 'Unknown'
-    phy_upd_found = False
     
     # mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
     #               MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
@@ -9199,9 +9184,6 @@ def phy_anl(mn2_info) :
     if phy_variant != 'Unknown' :
         phy_platform = phy_variant[-3:]
         phy_sku = 'G' if phy_variant.startswith('PHYDG') else phy_variant[3] # Set "G" for GSC/GFX to match regular PHY SKU naming
-    
-    db_year,db_month,db_day,_ = check_upd(('Latest_%s_%d' % (phy_variant, mn2_info[0])))
-    if phy_year < db_year or (phy_year == db_year and (phy_month < db_month or (phy_month == db_month and phy_day < db_day))) : phy_upd_found = True
     
     phy_mn2_signed = 'Pre-Production' if mn2_info[4] == 'Debug' else 'Production'
     phy_mn2_signed_db = 'PRD' if phy_mn2_signed == 'Production' else 'PRE'
@@ -9231,16 +9213,16 @@ def phy_anl(mn2_info) :
         err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (phy_variant, mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PHY firmware
     
-    return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_upd_found, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], phy_meu_ver, mn2_info[3]
+    return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], phy_meu_ver, mn2_info[3]
 
 # Parse CSE PHY firmware after analysis
 def phy_parse(phy_all_init, phy_all_anl) :
     for phy in phy_all_init :
         phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size = phy
         
-        phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_upd_found,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,phy_fw_rel = phy_anl(phy_mn2_ver)
+        phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,phy_fw_rel = phy_anl(phy_mn2_ver)
         
-        phy_all_anl.append([phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_upd_found,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,
+        phy_all_anl.append([phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,
                             phy_fw_rel,phy_vcn,phy_ext15_info,phy_size])
             
     return phy_all_anl
@@ -10240,7 +10222,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'PMCC006' : variant = 'PMCGLKB' # 6 GLK B
                 elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
                 elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PMCDG1' # DG1
-                elif mod.startswith('PCOD') and is_meu and (major == 4 or mn2_struct.MEU_Major == 101) : variant = 'PMCDG2' # DG2
+                elif mod.startswith('PCOD') and is_meu and (major in (4,2) or mn2_struct.MEU_Major == 101) : variant = 'PMCDG2' # DG2
                 elif mod == 'VBT' and major == 19 : variant = 'OROMDG1' # DG1
                 elif mod == 'VBT' and major == 20 : variant = 'OROMDG2' # DG2
                 elif mod == 'VBT' : variant = 'OROM' # Unknown
@@ -10855,7 +10837,7 @@ pr_man_08_pat = re.compile(br'FTPR\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}
 pr_man_09_pat = re.compile(br'OROM\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_10_pat = re.compile(br'grtos\.met\x00{3}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 
-pr_cpd_parts    = ['LOCL', 'PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY', 'WCOD']
+pr_cpd_parts = ['LOCL', 'PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY', 'WCOD']
 pr_man_cpd_pats = {part: re.compile(cpd_pat.pattern + b'.' + part.encode(), re.DOTALL) for part in pr_cpd_parts}
 
 for file_in in source :
@@ -10949,9 +10931,6 @@ for file_in in source :
     pmcp_fwu_found = False
     pchc_fwu_found = False
     phy_fwu_found = False
-    pmcp_upd_found = False
-    phy_upd_found = False
-    pchc_upd_found = False
     fw_in_db_found = False
     fd_me_rgn_exist = False
     cse_lt_chk_fail = False
@@ -13324,14 +13303,6 @@ for file_in in source :
         elif major == 101 :
             
             if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG02'] * 3 # Dedicated Xe Graphics 2
-            
-        # Check for Latest GSC status
-        if gsc_info :
-            db_bld,_,_,_ = check_upd(('Latest_%s_%s_%d_%s' % (variant, gsc_info[0], gsc_info[1], sku_stp)))
-            if gsc_info[2] < db_bld : upd_found = True
-        else :
-            _,_,db_hot,db_bld = check_upd(('Latest_%s_%s' % (variant, sku)))
-            if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
     
     elif variant.startswith('OROM') : # Graphics System Controller Option ROM
         
@@ -13367,7 +13338,7 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
         
-        pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,upd_found,platform,date,svn,pvbit,mn2_meu_ver = pmc_anl(cpd_mn2_info)
+        pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver = pmc_anl(cpd_mn2_info)
         
         if sku_stp != 'Unknown' : sku_stp = sku_stp[0]
         sku_db = '%s_%s' % (sku, sku_stp)
@@ -13389,7 +13360,7 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
         
-        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,upd_found,platform,date,svn,pvbit,mn2_meu_ver = pchc_anl(cpd_mn2_info)
+        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver = pchc_anl(cpd_mn2_info)
         
         eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PCHC firmware size
         
@@ -13408,7 +13379,7 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
         
-        phy_fw_ver,sku,release,rel_db,upd_found,platform,date,svn,pvbit,mn2_meu_ver,phy_fw_rel = phy_anl(cpd_mn2_info)
+        phy_fw_ver,sku,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,phy_fw_rel = phy_anl(cpd_mn2_info)
         
         eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PHY firmware size
         
@@ -13510,7 +13481,7 @@ for file_in in source :
     
     # Check if firmware is updated, Production only
     if release == 'Production' and not is_pfu_img : # Does not display if firmware is non-Production or Partial Update
-        if not variant.startswith(('SPS','CSSPS','PMCAPL','PMCBXT','PMCGLK')) : # (CS)SPS and old PMC excluded
+        if not variant.startswith(('SPS','CSSPS','GSC','PMC','PCHC','PHY')) : # (CS)SPS, GSC and IUP excluded
             upd_rslt = col_r + 'No' + col_e if upd_found else col_g + 'Yes' + col_e
     
     # Rename input file based on the DB structured name
@@ -13607,7 +13578,7 @@ for file_in in source :
         msg_pmc_pt = ext_table(['Field', 'Value'], False, 1)
         msg_pmc_pt.title = 'Power Management Controller'
         
-        pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmcp_upd_found,pmc_platform, \
+        pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmc_platform, \
         pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size = pmc
         
         msg_pmc_pt.add_row(['Family', 'PMC'])
@@ -13625,8 +13596,6 @@ for file_in in source :
         msg_pmc_pt.add_row(['Size', '0x%X' % pmc_size])
         if pmc_meu_ver != '0.0.0.0000' : msg_pmc_pt.add_row(['Manifest Extension Utility', pmc_meu_ver])
         msg_pmc_pt.add_row(['Chipset Support', pmc_platform])
-        if pmc_mn2_signed == 'Production' and ((variant == 'CSME' and major >= 12) or variant == 'GSC') :
-            msg_pmc_pt.add_row(['Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pmcp_upd_found]])
         
         print(msg_pmc_pt)
         
@@ -13640,7 +13609,7 @@ for file_in in source :
         msg_pchc_pt = ext_table(['Field', 'Value'], False, 1)
         msg_pchc_pt.title = 'Platform Controller Hub Configuration'
         
-        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_upd_found,pchc_platform, \
+        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform, \
         pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_ext15_info,pchc_size = pchc
         
         msg_pchc_pt.add_row(['Family', 'PCHC'])
@@ -13655,8 +13624,6 @@ for file_in in source :
         msg_pchc_pt.add_row(['Size', '0x%X' % pchc_size])
         if pchc_meu_ver != '0.0.0.0000' : msg_pchc_pt.add_row(['Manifest Extension Utility', pchc_meu_ver])
         msg_pchc_pt.add_row(['Chipset Support', pchc_platform])
-        if pchc_mn2_signed == 'Production' and (variant == 'CSME' and major >= 13) :
-            msg_pchc_pt.add_row(['Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][pchc_upd_found]])
         
         print(msg_pchc_pt)
         
@@ -13670,7 +13637,7 @@ for file_in in source :
         msg_phy_pt = ext_table(['Field', 'Value'], False, 1)
         msg_phy_pt.title = 'USB Type C Physical'
         
-        phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_upd_found,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver, \
+        phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver, \
         phy_fw_rel,phy_vcn,phy_ext15_info,phy_size = phy
         
         msg_phy_pt.add_row(['Family', 'PHY'])
@@ -13686,8 +13653,6 @@ for file_in in source :
         msg_phy_pt.add_row(['Size', '0x%X' % phy_size])
         if phy_meu_ver != '0.0.0.0000' : msg_phy_pt.add_row(['Manifest Extension Utility', phy_meu_ver])
         msg_phy_pt.add_row(['Chipset Support', phy_platform])
-        if phy_mn2_signed == 'Production' and ((variant == 'CSME' and major >= 13) or variant == 'GSC') :
-            msg_phy_pt.add_row(['Latest', [col_g + 'Yes' + col_e, col_r + 'No' + col_e][phy_upd_found]])
         
         print(msg_phy_pt)
         
