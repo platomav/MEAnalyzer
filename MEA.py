@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.279.0'
+title = 'ME Analyzer v1.280.0'
 
 import sys
 
@@ -9779,25 +9779,6 @@ def note_new_fw(variant_p) :
     msg_6 = col_g + ' forum. Thank you!' + col_e
     note_stor.append([msg_1 + msg_2 + msg_3 + msg_4 + msg_5 + msg_6, True])
 
-# Check DB for latest version
-def check_upd(key) :
-    upd_key_found = False
-    vlp = [0]*4
-    
-    for line in mea_db_lines :
-        if key in line :
-            upd_key_found = True
-            wlp = line.strip().split('__') # whole line parts
-            vlp = wlp[1].strip().split('.') # version line parts
-            for i in range(len(vlp)) :
-                # noinspection PyTypeChecker
-                vlp[i] = int(vlp[i])
-            break
-    
-    if upd_key_found : return vlp[0],vlp[1],vlp[2],vlp[3]
-    
-    return 0,0,0,0
-
 # Get JSON Structure from DB
 def get_db_json_obj(obj_name) :
     obj_bgn = mea_db_read.find(obj_name + '*BGN')
@@ -10143,17 +10124,14 @@ def get_csme12_sku(sku_init, fw_0C_sku0, fw_0C_sku2, sku, sku_result, sku_stp, d
     
     return sku, sku_result, sku_stp
 
-# Get CSE DB SKU and check for Latest status
-def sku_db_upd_cse(sku_type, sku_plat, sku_stp, sku_db, upd_found, stp_only, skip_csme11) :
-    if (variant,major,skip_csme11) == ('CSME',11,True) : return sku_db, upd_found
+# Get CSE DB SKU
+def sku_db_cse(sku_type, sku_plat, sku_stp, sku_db, stp_only, skip_csme11) :
+    if (variant,major,skip_csme11) == ('CSME',11,True) : return sku_db
     
     if sku_stp == 'Unknown' : sku_db = '%s%sX' % (sku_type if stp_only else sku_type + '_', sku_plat if stp_only else sku_plat + '_')
     else : sku_db = '%s%s' % (sku_type if stp_only else sku_type + '_', sku_plat if stp_only else sku_plat + '_') + sku_stp
     
-    _,_,db_hot,db_bld = check_upd(('Latest_%s_%s%s_%s%s' % (variant, major, minor, sku_type, sku_plat)))
-    if hotfix < db_hot or (hotfix == db_hot and build < db_bld) : upd_found = True
-    
-    return sku_db, upd_found
+    return sku_db
 
 # Detect Variant/Family
 def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash, mn2_date, mn2_ver) :
@@ -10845,7 +10823,6 @@ for file_in in source :
     # Variable Initialization
     nvm_db = ''
     fw_type = ''
-    upd_rslt = ''
     reading_msg = ''
     me2_type_fix = ''
     me2_type_exp = ''
@@ -10909,7 +10886,6 @@ for file_in in source :
     mfs_found = False
     mfsb_found = False
     mfs_is_afs = False
-    upd_found = False
     rgn_exist = False
     rbep_found = False
     fitc_found = False
@@ -11373,7 +11349,7 @@ for file_in in source :
         cse_lt_dp_size = cse_lt_struct.DataSize
         
         # Calculate CSE LT Boot, Temp & ELog Partitions Total Size (w/o Data)
-        cse_lt_bp_size = sum([info[2] for info in cse_lt_hdr_info[1:]])
+        cse_lt_bp_size = sum(info[2] for info in cse_lt_hdr_info[1:])
         
         # Store CSE LT partition details
         for entry in cse_lt_hdr_info :
@@ -12480,19 +12456,12 @@ for file_in in source :
             if sku_me == 0x00000000 : # AMT + ASF + QST
                 sku = 'AMT'
                 sku_db = 'AMT'
-                if minor <= 2 : sku_db_check = 'AMTD'
-                else : sku_db_check = 'AMTM'
             elif sku_me == 0x02000000 : # QST
                 sku = 'QST'
                 sku_db = 'QST'
-                sku_db_check = 'QST'
             else :
                 sku = col_r + 'Unknown' + col_e
-                sku_db_check = 'UNK'
                 err_stor.append([col_r + 'Error: Unknown %s %d.%d SKU!' % (variant, major, minor) + col_e, True])
-            
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_2_%s' % sku_db_check)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
             
             # ME2-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME2
             if fw_type_fix :
@@ -12571,9 +12540,6 @@ for file_in in source :
             else :
                 sku = col_r + 'Unknown' + col_e
                 err_stor.append([col_r + 'Error: Unknown %s %d.%d SKU!' % (variant, major, minor) + col_e, True])
-                
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_3_%s' % sku_db)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
 
             # ME3-Only Fix 1 : The usual method to detect EXTR vs RGN does not work for ME3
             if fw_type_fix :
@@ -12685,10 +12651,6 @@ for file_in in source :
                     if len(me4_type_fix1) > 5 or me4_type_fix2 is not None or me4_type_fix3 is not None : fw_type = "Extracted"
                     else : fw_type = 'Stock'
             
-            # Placed here in order to comply with Fix 2 above in case it is triggered
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_4_%s' % sku_db)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
-            
             platform = 'ICH9M'
             
         elif major == 5 : # ICH10D or ICH10DO
@@ -12706,9 +12668,6 @@ for file_in in source :
             else :
                 sku = col_r + 'Unknown' + col_e
                 err_stor.append([col_r + 'Error: Unknown %s %d.%d SKU!' % (variant, major, minor) + col_e, True])
-                
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_5_%s' % sku_db)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
             
             # ME5-Only Fix : Detect ROMB UPD image correctly
             if fw_type == 'Update' :
@@ -12746,9 +12705,6 @@ for file_in in source :
             else :
                 sku = col_r + 'Unknown' + col_e
                 err_stor.append([col_r + 'Error: Unknown %s %d.%d SKU!' % (variant, major, minor) + col_e, True])
-                
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_6_%s' % sku_db)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
             
             # ME6-Only Fix 1 : ME6 Ignition does not work with KRND
             if 'Ignition' in sku and rgn_exist :
@@ -12771,9 +12727,6 @@ for file_in in source :
             elif sku_size * 0.5 == 5 or (build,hotfix,minor,sku_size) == (1041,0,0,1) :
                 sku = '5MB'
                 sku_db = '5MB'
-            
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_7_%s' % sku_db)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
             
             # ME7-Only Fix: ROMB UPD detection
             if fw_type == 'Update' :
@@ -12807,9 +12760,6 @@ for file_in in source :
                 sku = '5MB'
                 sku_db = '5MB'
             
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_8_%s' % sku_db)
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
-            
             # ME8-Only Fix: SVN location
             svn = mn2_ftpr_hdr.SVN_8
             
@@ -12827,9 +12777,6 @@ for file_in in source :
             elif sku_type == 2 :
                 sku = 'Slim'
                 sku_db = 'SLM'
-            
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_9%d_%s' % (minor, sku_db))
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
             
             if minor == 0 : platform = 'LPT'
             elif minor == 1 : platform = 'LPT/WPT'
@@ -12849,9 +12796,6 @@ for file_in in source :
             elif sku_type == 2 :
                 sku = 'Slim'
                 sku_db = 'SLM'
-            
-            _,db_min,db_hot,db_bld = check_upd('Latest_ME_10%d_%s' % (minor, sku_db))
-            if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
             
             if minor == 0 : platform = 'WPT-LP'
     
@@ -12969,10 +12913,8 @@ for file_in in source :
             elif minor in [10,11,12] and not pch_init_final : platform = 'BSF/GCF' # Basin Falls, Glacier Falls
             elif minor in [20,21,22] and not pch_init_final : platform = 'LBG' # Lewisburg
             
-            # Get CSME 11 DB SKU and check for Latest status (must be before sku_pdm)
-            sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, sku_db, upd_found, False, False)
-            
-            if minor in [0,5,6,7,10,11,20,21] : upd_found = True # Superseded minor versions
+            # Get CSME 11 DB SKU (must be before sku_pdm)
+            sku_db = sku_db_cse(sku_init_db, sku_result, sku_stp, sku_db, False, False)
             
             # Power Down Mitigation (PDM) is a SPT-LP C erratum, first fixed at ~11.0.0.1183
             # Hardcoded in FTPR > BUP, Huffman decompression required to detect NPDM or YPDM
@@ -13000,7 +12942,7 @@ for file_in in source :
                 elif sku_pdm == 'UPDM2' : pdm_status = 'Unknown 2'
                 else : pdm_status = 'Unknown'
                 
-                sku_db += '_%s' % sku_pdm # Must be after sku_db_upd_cse
+                sku_db += '_%s' % sku_pdm # Must be after sku_db_cse
         
         elif major == 12 :
             
@@ -13013,8 +12955,6 @@ for file_in in source :
             elif minor == 50 and not pch_init_final : platform = 'JSP' # Jasper Point
             
         elif major == 14 :
-            
-            if minor == 0 : upd_found = True # Superseded minor version
             
             if minor in [0,1] and not pch_init_final : platform = 'CMP-H/LP' # Comet Point H/LP
             elif minor == 5 and not pch_init_final : platform = 'CMP-V' # Comet Point V
@@ -13029,8 +12969,8 @@ for file_in in source :
             if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
             elif minor == 1 and not pch_init_final : platform = 'RPP' # Raptor Point (?)
             
-        # Get CSME 12+ DB SKU and check for Latest status
-        sku_db,upd_found = sku_db_upd_cse(sku_init_db, sku_result, sku_stp, sku_db, upd_found, False, True)
+        # Get CSME 12+ DB SKU
+        sku_db = sku_db_cse(sku_init_db, sku_result, sku_stp, sku_db, False, True)
     
     elif variant == 'TXE' : # Trusted Execution Engine
         
@@ -13074,9 +13014,6 @@ for file_in in source :
                 sku = col_r + 'Unknown' + col_e
             
             platform = 'BSW/CHT'
-            
-        _,db_min,db_hot,db_bld = check_upd('Latest_TXE_%d%d_%s' % (major, minor, sku_db))
-        if minor < db_min or (minor == db_min and (hotfix < db_hot or (hotfix == db_hot and build < db_bld))) : upd_found = True
     
     elif variant == 'CSTXE' : # Converged Security Trusted Execution Engine
         
@@ -13123,8 +13060,6 @@ for file_in in source :
                     else : sku_stp = 'A' # PRE, BYP
                     
                 platform = 'BXT' # Broxton (Joule)
-                
-            if minor == 0 : upd_found = True # Superseded minor version
             
         elif major == 4 :
             
@@ -13140,8 +13075,8 @@ for file_in in source :
         # Parse all detected stitched PMC firmware (must be at the end due to SKU Stepping adjustments)
         pmc_all_anl = pmc_parse(pmc_all_init, pmc_all_anl)
         
-        # Get DB SKU and check for Latest status (must be at the end due to superseded minor versions)
-        sku_db,upd_found = sku_db_upd_cse('', '', sku_stp, sku_db, upd_found, True, True)
+        # Get DB SKU (must be at the end due to superseded minor versions)
+        sku_db = sku_db_cse('', '', sku_stp, sku_db, True, True)
         
     elif variant == 'SPS' : # Server Platform Services
         
@@ -13479,11 +13414,6 @@ for file_in in source :
     
     if can_search_db and not rgn_over_extr_found and not fw_in_db_found and not sps_extr_ignore : note_new_fw(variant_p)
     
-    # Check if firmware is updated, Production only
-    if release == 'Production' and not is_pfu_img : # Does not display if firmware is non-Production or Partial Update
-        if not variant.startswith(('SPS','CSSPS','GSC','PMC','PCHC','PHY')) : # (CS)SPS, GSC and IUP excluded
-            upd_rslt = col_r + 'No' + col_e if upd_found else col_g + 'Yes' + col_e
-    
     # Rename input file based on the DB structured name
     if param.give_db_name :
         old_file_name = file_in
@@ -13559,8 +13489,6 @@ for file_in in source :
         msg_pt.add_row(['Downgrade Blacklist 7.1', me7_blist_2])
     
     if platform != 'NaN' : msg_pt.add_row(['Chipset Support', platform])
-    
-    if not variant.startswith(('SPS','CSSPS','OROM')) and upd_rslt != '' : msg_pt.add_row(['Latest', upd_rslt])
     
     print('\n%s' % msg_pt)
     
