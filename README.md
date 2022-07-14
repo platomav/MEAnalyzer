@@ -37,19 +37,18 @@ Moreover, with the help of its extensive databases, ME Analyzer is capable of un
 
 #### **A1. ME Analyzer Features**
 
-- Supports all Engine firmware Families (CSE/ME: ME, TXE, SPS etc)
-- Supports all Graphics firmware Families (GSC: DG1, DG2, ATS etc)
-- Supports CSE/GSC Independent (IUP) firmware Families (PMC, OROM etc)
+- Supports Engine firmware Families ME 2-16, TXE 0-4 and SPS 1-6
+- Supports Graphics firmware Families GSC DG1 and DG2
+- Supports CSE/GSC Independent (IUP) firmware Families PMC, PCHC, PHY and OROM
 - Detection of Firmware Details (Family, Version, SKU, Date, Platform etc)
 - Detection of Firmware Release (Production, Pre-Production, ROM-Bypass etc)
-- Detection of Firmware Type (Region, Extracted, Recovery, Update etc)
+- Detection of Firmware Type (Region, Extracted, Update etc)
 - Detection of Firmware Security/Update Version Numbers (SVN, VCN etc)
 - Detection of Power Management Controller (PMC) Independent firmware info
 - Detection of PCH Configuration (PCHC) Independent firmware info
 - Detection of USB Type C Physical (PHY) Independent firmware info
 - Detection of Graphics Option ROM (OROM) Independent firmware info
-- Detection of unusual Engine/Graphics firmware (Corrupted, Compressed etc)
-- Ability to fully unpack all supported CSE, GSC and/or IUP/OROM firmware
+- Ability to fully unpack all supported CSE, GSC and/or IUP firmware
 - Ability to validate Engine/Graphics/IUP RSA Signature and Checksums
 - Advanced detection & validation of Engine/Graphics/IUP firmware Size
 - Ability to detect & analyze Integrated Firmware Images (IFWI/BPDT)

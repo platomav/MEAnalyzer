@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.280.0'
+title = 'ME Analyzer v1.281.0'
 
 import sys
 
@@ -10162,7 +10162,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
             is_meu = hasattr(mn2_struct, 'MEU_Minor') # Check if $MN2 has MEU fields
             
             for mod in cpd_mod_names :
-                if mod == 'fwupdate' or is_pfu_img : variant = 'CSME' # CSME
+                if mod == 'fwupdate' : variant = 'CSME' # CSME
                 elif mod in ['bup_rcv', 'sku_mgr', 'manuf'] : variant = 'CSSPS' # REC, OPR, IGN
                 elif mod.startswith('dkl') and major == 10 and is_meu and mn2_struct.MEU_Major == 13 : variant = 'PHYSLKF' # SPHY (LKF)
                 elif mod.startswith('dkl') and major in (11,0) and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PHYDG1' # PHYP (DG1)
@@ -10815,7 +10815,7 @@ pr_man_08_pat = re.compile(br'FTPR\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}
 pr_man_09_pat = re.compile(br'OROM\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_10_pat = re.compile(br'grtos\.met\x00{3}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 
-pr_cpd_parts = ['LOCL', 'PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY', 'WCOD']
+pr_cpd_parts = ['PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY']
 pr_man_cpd_pats = {part: re.compile(cpd_pat.pattern + b'.' + part.encode(), re.DOTALL) for part in pr_cpd_parts}
 
 for file_in in source :
@@ -10893,7 +10893,6 @@ for file_in in source :
     ifwi_exist = False
     utok_found = False
     oemp_found = False
-    is_pfu_img = False
     is_orom_img = False
     fw_type_fix = False
     is_patsburg = False
@@ -11204,7 +11203,6 @@ for file_in in source :
         pr_man_04 = reading[end_man_match + 0x2DC:end_man_match + 0x2E7] # EpsRecovery,EpsFirmware (SPS 1)
         pr_man_05 = reading[end_man_match + 0x270:end_man_match + 0x277] # $MMEBUP (ME 6 BYP Part 1, SPS 2 - 3 Part 2)
         pr_man_06 = reading[end_man_match + 0x33C:end_man_match + 0x340] # $MMX (ME 6 BYP Part 2)
-        pr_man_07 = reading[0x290:0x299] == b'$MMEWCOD_' # $MMEWCOD_ (ME 8+ PFU)
         pr_man_08 = pr_man_08_pat.search(reading_4K) # FTPR.man (CSME 15.0.35 +)
         pr_man_09 = pr_man_09_pat.search(reading_4K) # OROM.man (GSC)
         pr_man_10 = pr_man_10_pat.search(reading_4K) # grtos.met (Ignore CSSPS IE)
@@ -11220,9 +11218,8 @@ for file_in in source :
         or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') \
         or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
         or pr_man_08 and not pr_man_10 \
-        or pr_man_07 or pr_man_09 \
+        or pr_man_09 \
         or any(pr_man_cpd.values()):
-            if pr_man_07 or pr_man_cpd['LOCL'] or pr_man_cpd['WCOD'] : is_pfu_img = True # FWUpdate Partial Firmware Update (PFU)
             if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
             break
         
@@ -12359,8 +12356,6 @@ for file_in in source :
                 fitc_minor = fpt_hdr.FitMinor
                 fitc_hotfix = fpt_hdr.FitHotfix
                 fitc_build = fpt_hdr.FitBuild
-    elif is_pfu_img :
-        fw_type = 'Partial Update' # FWUpdate LOCL/WCOD
     else :
         fw_type = 'Update' # No Region detected, Update
     
@@ -12890,11 +12885,11 @@ for file_in in source :
             
             if pos_sku_ext in ['Unknown','Invalid'] : # SKU not retrieved from Extension 12
                 if pos_sku_ker == 'Invalid' : # SKU not retrieved from Kernel
-                    if sku == 'NaN' and not is_pfu_img : # SKU not retrieved from manual MEA DB entry
+                    if sku == 'NaN' : # SKU not retrieved from manual MEA DB entry
                         sku = col_r + 'Unknown' + col_e
                         err_stor.append([col_r + 'Error: Unknown %s %d.%d SKU!' % (variant, major, minor) + col_e, True])
                     else :
-                        pass # SKU retrieved from manual MEA DB entry or PFU image
+                        pass # SKU retrieved from manual MEA DB entry
                 else :
                     sku = sku_init + ' ' + pos_sku_ker # SKU retrieved from Kernel
             else :
@@ -13328,7 +13323,6 @@ for file_in in source :
     elif fw_type == 'Update' : type_db = 'UPD'
     elif fw_type == 'Operational' : type_db = 'OPR'
     elif fw_type == 'Recovery' : type_db = 'REC'
-    elif fw_type == 'Partial Update' : type_db = 'PFU'
     elif fw_type == 'Independent' and variant.startswith('PMC') : type_db = 'PMC'
     elif fw_type == 'Independent' and variant.startswith('PHY') : type_db = 'PHY'
     elif fw_type == 'Independent' and variant.startswith('PCHC') : type_db = 'PCHC'
@@ -13336,9 +13330,9 @@ for file_in in source :
     elif fw_type == 'Unknown' : type_db = 'UNK'
     
     # Check for CSME 12+ FWUpdate Support/Compatibility
-    fwu_iup_check = (variant,major >= 12,type_db,sku_db[:3],is_pfu_img) == ('CSME',True,'EXTR','COR',False)
+    fwu_iup_check = (variant,major >= 12,type_db,sku_db[:3]) == ('CSME',True,'EXTR','COR')
     if fwu_iup_check and (uncharted_match or not fwu_iup_exist) : fwu_iup_result = 'Impossible'
-    if variant == 'CSME' and major >= 16 and not is_pfu_img and file_has_align > 0x0 and fpt_start == 0x0 : fwu_iup_result = 'Impossible'
+    if variant == 'CSME' and major >= 16 and file_has_align > 0x0 and fpt_start == 0x0 : fwu_iup_result = 'Impossible'
     if fwu_iup_result != 'Impossible' :
         if major == 12 :
             fwu_iup_result = ['No','Yes'][int(pmcp_fwu_found)]
@@ -13374,8 +13368,6 @@ for file_in in source :
         name_fw = '%s_%s_%s_%s' % (platform[:3], sku, fw_ver, rel_db)
     elif variant.startswith('OROM') : # OROM
         name_fw = '%s_%s_%s' % (platform, fw_ver, rel_db)
-    elif fw_type == 'Partial Update' : # PFU/LMS
-        name_fw = '%s_%s_%s' % (fw_ver, rel_db, type_db)
     else : # (CS)ME, (CS)TXE, (CS)SPS, GSC
         name_fw = '%s_%s%s_%s_%s' % (fw_ver, sku_db, nvm_db, rel_db, type_db)
     
@@ -13396,7 +13388,7 @@ for file_in in source :
         continue # Next input file
     
     # Search Database for Firmware
-    if not variant.startswith(('PMC','PCHC','PHY')) and not is_pfu_img : # Not PMC, PCHC, PHY or Partial Update
+    if not variant.startswith(('PMC','PCHC','PHY')) : # Not PMC, PCHC and PHY
         for line in mea_db_lines :
             # Search the re-created file name without extension at the database
             if name_db in line : fw_in_db_found = True # Known firmware, nothing new
@@ -13410,7 +13402,7 @@ for file_in in source :
             if rsa_sig_hash in line and (variant,type_db,sku_stp) == ('CSSPS','REC','Unknown') :
                 fw_in_db_found = True # REC w/o $FPT are not POR for CSSPS, notify only if REC w/ $FPT does not exist
     else :
-        can_search_db = False # Do not search DB for PMC, PCHC, PHY or Partial Update
+        can_search_db = False # Do not search DB for PMC, PCHC and PHY
     
     if can_search_db and not rgn_over_extr_found and not fw_in_db_found and not sps_extr_ignore : note_new_fw(variant_p)
     
@@ -13434,44 +13426,44 @@ for file_in in source :
     msg_pt.add_row(['Release', release + ', Engineering ' if build >= 7000 else release])
     msg_pt.add_row(['Type', fw_type])
     
-    if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') or is_pfu_img \
+    if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') \
     or variant.startswith(('PMCAPL','PMCBXT','PMCGLK','PCHC','PMCDG','OROM')) :
         pass
     else :
         msg_pt.add_row(['SKU', sku])
     
-    if variant.startswith(('CS','PMC','GSC')) and not variant.startswith('PMCDG') and not is_pfu_img :
+    if variant.startswith(('CS','PMC','GSC')) and not variant.startswith('PMCDG') :
         if pch_init_final : msg_pt.add_row(['Chipset', pch_init_final[-1][0]])
         elif sku_stp == 'Unknown' : msg_pt.add_row(['Chipset', 'Unknown'])
         else : msg_pt.add_row(['Chipset Stepping', ', '.join(map(str, list(sku_stp)))])
     
     if nvm_db : msg_pt.add_row(['NVM Compatibility', ext15_info[3]])
     
-    if ((variant == 'ME' and major >= 8) or variant.startswith(('TXE','CS','GSC','PMC','PCHC','PHY','OROM'))) and not is_pfu_img :
+    if (variant == 'ME' and major >= 8) or variant.startswith(('TXE', 'CS', 'GSC', 'PMC', 'PCHC', 'PHY', 'OROM')):
         msg_pt.add_row(['TCB Security Version Number', svn])
         
-    if ((variant == 'CSME' and major >= 12) or variant.startswith(('CSTXE','CSSPS','GSC','PMC','PCHC','PHY','OROM'))) and not is_pfu_img :
+    if (variant == 'CSME' and major >= 12) or variant.startswith(('CSTXE', 'CSSPS', 'GSC', 'PMC', 'PCHC', 'PHY', 'OROM')):
         msg_pt.add_row(['ARB Security Version Number', ext15_info[0]])
     
-    if ((variant == 'ME' and major >= 8) or variant.startswith(('TXE','CS','GSC','PMC','PCHC','PHY','OROM'))) and not is_pfu_img :
+    if (variant == 'ME' and major >= 8) or variant.startswith(('TXE', 'CS', 'GSC', 'PMC', 'PCHC', 'PHY', 'OROM')):
         msg_pt.add_row(['Version Control Number', vcn])
     
-    if pvbit is not None and not is_pfu_img : msg_pt.add_row(['Production Ready', ['No','Yes'][pvbit]]) # Always check against None
+    if pvbit is not None : msg_pt.add_row(['Production Ready', ['No','Yes'][pvbit]]) # Always check against None
     
-    if [variant,major,is_pfu_img] == ['CSME',11,False] :
+    if [variant,major] == ['CSME',11] :
         if pdm_status != 'NaN' : msg_pt.add_row(['Power Down Mitigation', pdm_status])
         msg_pt.add_row(['Workstation Support', ['No','Yes'][fw_0C_lbg]])
         
     if variant == 'ME' and major == 7 : msg_pt.add_row(['Patsburg Support', ['No','Yes'][is_patsburg]])
     
-    if variant in ('CSME','CSTXE','CSSPS','TXE','GSC') and not is_pfu_img :
+    if variant in ('CSME','CSTXE','CSSPS','TXE','GSC') :
         msg_pt.add_row(['OEM Configuration', ['No','Yes'][int(oem_signed or oemp_found or utok_found)]])
     
-    if variant == 'CSME' and major >= 12 and not is_pfu_img : msg_pt.add_row(['FWUpdate Support', fwu_iup_result])
+    if variant == 'CSME' and major >= 12 : msg_pt.add_row(['FWUpdate Support', fwu_iup_result])
     
     msg_pt.add_row(['Date', date])
 
-    if variant in ('CSME','CSTXE','CSSPS','GSC') and not is_pfu_img : msg_pt.add_row(['File System State', mfs_state])
+    if variant in ('CSME','CSTXE','CSSPS','GSC') : msg_pt.add_row(['File System State', mfs_state])
     
     if rgn_exist or cse_lt_struct or variant.startswith(('PMC','PCHC','PHY','OROM')) :
         if (variant,major,release) == ('ME',6,'ROM-Bypass') : msg_pt.add_row(['Size', 'Unknown'])
