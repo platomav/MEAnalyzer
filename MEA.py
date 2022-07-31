@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.281.0'
+title = 'ME Analyzer v1.282.0'
 
 import sys
 
@@ -5046,6 +5046,27 @@ class CSE_Ext_23_Mod(ctypes.LittleEndianStructure) : # R1 - (SIGNED_PACKAGE_INFO
         
         return pt
         
+class CSE_Ext_25(ctypes.LittleEndianStructure) : # R1 - GSC DG2 OROM Unknown (not in XML, Reverse Engineered)
+    _pack_ = 1
+    _fields_ = [
+        ('Tag',             uint32_t),      # 0x00
+        ('Size',            uint32_t),      # 0x04
+        ('Unknown',         uint32_t),      # 0x08
+        # 0xC
+    ]
+    
+    # Suspiciously, there is also an identical (but older) CSE_Ext_37 and 37 = 0x25.
+    
+    def ext_print(self) :
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        pt.title = col_y + 'Extension 37, GSC DG2 OROM Unknown' + col_e
+        pt.add_row(['Tag', f'0x{self.Tag:02X}'])
+        pt.add_row(['Size', f'0x{self.Size:X}'])
+        pt.add_row(['Unknown', f'0x{self.Unknown:X}'])
+        
+        return pt
+        
 class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - SPS Platform ID (MFT_EXT_MANIFEST_PLATFORM_ID)
     _pack_ = 1
     _fields_ = [
@@ -5069,6 +5090,27 @@ class CSE_Ext_32(ctypes.LittleEndianStructure) : # R1 - SPS Platform ID (MFT_EXT
         pt.add_row(['Type', 'Unknown' if type_str not in cssps_type_fw else cssps_type_fw[type_str]])
         pt.add_row(['Platform', 'Unknown (%s)' % platform_str if platform_str not in cssps_platform else cssps_platform[platform_str]])
         pt.add_row(['Reserved', '0x0' if self.Reserved == 0 else '0x%X' % self.Reserved])
+        
+        return pt
+
+class CSE_Ext_37(ctypes.LittleEndianStructure) : # R1 - GSC DG2 OROM Unknown (not in XML, Reverse Engineered)
+    _pack_ = 1
+    _fields_ = [
+        ('Tag',             uint32_t),      # 0x00
+        ('Size',            uint32_t),      # 0x04
+        ('Unknown',         uint32_t),      # 0x08
+        # 0xC
+    ]
+    
+    # Suspiciously, there is also an identical (but newer) CSE_Ext_25 and 0x25 = 37.
+    
+    def ext_print(self) :
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        pt.title = col_y + 'Extension 55, GSC DG2 OROM Unknown' + col_e
+        pt.add_row(['Tag', f'0x{self.Tag:02X}'])
+        pt.add_row(['Size', f'0x{self.Size:X}'])
+        pt.add_row(['Unknown', f'0x{self.Unknown:X}'])
         
         return pt
 
@@ -10278,7 +10320,7 @@ def mass_scan(f_path) :
 ansi_escape = re.compile(r'\x1b[^m]*m')
 
 # CSE Extensions 0x00-0x1B, 0x1E-0x1F, 0x22, 0x23, 0x32, 0x544F4F46
-ext_tag_all = list(range(0x1C)) + list(range(0x1E,0x20)) + [0x22,0x23,0x32,0x544F4F46]
+ext_tag_all = list(range(0x1C)) + list(range(0x1E,0x20)) + [0x22,0x23,0x25,0x32,0x37,0x544F4F46]
 
 # CSME 12-14 Revised Extensions
 ext_tag_rev_hdr_csme12 = {0xF:'_R2', 0x14:'_R2'}
@@ -10443,7 +10485,9 @@ ext_dict = {
             'CSE_Ext_1F' : CSE_Ext_1F,
             'CSE_Ext_22' : CSE_Ext_22,
             'CSE_Ext_23' : CSE_Ext_23,
+            'CSE_Ext_25' : CSE_Ext_25,
             'CSE_Ext_32' : CSE_Ext_32,
+            'CSE_Ext_37' : CSE_Ext_37,
             'CSE_Ext_544F4F46' : CSE_Ext_544F4F46,
             'CSE_Ext_00_Mod' : CSE_Ext_00_Mod,
             'CSE_Ext_00_Mod_R2' : CSE_Ext_00_Mod_R2,
