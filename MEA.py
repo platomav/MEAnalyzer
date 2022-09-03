@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.282.0'
+title = 'ME Analyzer v1.283.0'
 
 import sys
 
@@ -10764,9 +10764,6 @@ rsa_pre_keys = get_db_json_obj('rsa_pre_keys')
 # Get CSE Known Bad Partition/Module Hashes from DB
 cse_known_bad_hashes = get_db_json_obj('cse_known_bad_hashes')
 
-# Get Known Duplicate File Name Hashes from DB
-known_dup_name_hahes = get_db_json_obj('known_dup_name_hahes')
-
 # Get Database Revision
 mea_db_rev, mea_db_rev_p = mea_hdr_init()
 
@@ -10957,6 +10954,7 @@ for file_in in source :
     fd_bios_rgn_exist = False
     fd_devexp_rgn_exist = False
     rgn_over_extr_found = False
+    is_unsupported = False
     phy_all_anl = []
     phy_all_init = []
     pmc_all_anl = []
@@ -13006,7 +13004,11 @@ for file_in in source :
         elif major == 16 :
             
             if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
-            elif minor == 1 and not pch_init_final : platform = 'RPP' # Raptor Point (?)
+            elif minor == 1 and not pch_init_final : platform = 'ADP/RPP' # Raptor Point
+        
+        else :
+            
+            is_unsupported = True
             
         # Get CSME 12+ DB SKU
         sku_db = sku_db_cse(sku_init_db, sku_result, sku_stp, sku_db, False, True)
@@ -13110,6 +13112,10 @@ for file_in in source :
                     else : sku_stp = 'A' # PRE, BYP
             
                 platform = 'GLK'
+        
+        else :
+            
+            is_unsupported = True
         
         # Parse all detected stitched PMC firmware (must be at the end due to SKU Stepping adjustments)
         pmc_all_anl = pmc_parse(pmc_all_init, pmc_all_anl)
@@ -13225,6 +13231,10 @@ for file_in in source :
         elif major == 6 :
             
             if platform == 'Unknown' : platform = 'TGP-H' # Tiger Point
+        
+        else :
+            
+            is_unsupported = True
     
     elif variant == 'GSC' : # Graphics System Controller
         
@@ -13277,6 +13287,10 @@ for file_in in source :
         elif major == 101 :
             
             if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG02'] * 3 # Dedicated Xe Graphics 2
+        
+        else :
+            
+            is_unsupported = True
     
     elif variant.startswith('OROM') : # Graphics System Controller Option ROM
         
@@ -13421,10 +13435,8 @@ for file_in in source :
     # Create Firmware Database Name/Entry
     name_db = name_fw + '_' + rsa_sig_hash
     
-    # Append part of RSA Signature Hash to known Firmware with duplicate Names
-    # All CSME 15.0 LP must have RSA Signature appended due to Bx & Cx Stepping
-    if rsa_sig_hash in known_dup_name_hahes or (variant,major,minor,sku_result) == ('CSME',15,0,'LP') :
-        name_fw += '_%s' % rsa_sig_hash[:8]
+    # Append part of RSA Signature Hash to avoid duplicate Names
+    name_fw += '_%s' % rsa_sig_hash[:8]
     
     # Store Firmware DB entry to file
     if param.db_print_new :
@@ -13627,6 +13639,8 @@ for file_in in source :
             with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_phy_pt))
     
     # Print Messages which must be at the end of analysis
+    if is_unsupported : err_stor.append([col_r + 'Error: Unsupported Intel Engine/Graphics Firmware input!' + col_e, False])
+    
     if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
     
     if fwu_iup_result == 'Impossible' and uncharted_match :
