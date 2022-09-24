@@ -20,7 +20,7 @@ ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Indepe
 - (Converged Security) Trusted Execution Engine - (CS)TXE
     - (CS)TXE 0-4
 - (Converged Security) Server Platform Services - (CS)SPS
-    - (CS)SPS 1-6
+    - (CS)SPS 1-5
 - Graphics System Controller - GSC
     - GSC 100-101
 - Power Management Controller - PMC
@@ -45,7 +45,7 @@ Moreover, with the help of its extensive databases, ME Analyzer is capable of un
 
 #### **A1. ME Analyzer Features**
 
-- Supports Engine firmware Families ME 2-16, TXE 0-4 and SPS 1-6
+- Supports Engine firmware Families ME 2-16, TXE 0-4 and SPS 1-5
 - Supports Graphics firmware Families GSC DG1 (100) and DG2 (101)
 - Supports CSE/GSC Independent (IUP) firmware Families PMC, PCHC, PHY and OROM
 - Detection of Firmware Details (Family, Version, SKU, Date, Platform etc)
@@ -116,17 +116,17 @@ ME Analyzer should work at all Windows, Linux or macOS operating systems which h
 
 To run ME Analyzer's python script, you need to have the following 3rd party Python modules installed:
 
-* [Colorama](https://pypi.org/project/colorama/)
+* [colorama](https://pypi.org/project/colorama/)
 
 > pip3 install colorama
 
-* [CRCCheck](https://pypi.org/project/crccheck/)
+* [crccheck](https://pypi.org/project/crccheck/)
 
 > pip3 install crccheck
 
-* [PLTable](https://github.com/platomav/PLTable/)
+* [PLTable](https://pypi.org/project/PLTable/)
 
-> pip3 install pltable
+> pip3 install PLTable
 
 #### **C3. Build/Freeze/Compile with PyInstaller**
 
@@ -150,7 +150,7 @@ PyInstaller can build/freeze/compile ME Analyzer at all three supported platform
 
 5. Use pip to install PLTable:
 
-> pip3 install pltable
+> pip3 install PLTable
 
 6. Build/Freeze/Compile ME Analyzer:
 
