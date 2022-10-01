@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.283.0'
+title = 'ME Analyzer v1.283.1'
 
 import sys
 
@@ -5310,9 +5310,9 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     
     if reading_msg : print('%s\n' % reading_msg)
     
-    # CSSPS 4.2 & 4.4 (WTL) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
-    if (variant,major) == ('CSSPS',4) and minor in [4,2] :
-        input_col(col_m + 'Warning: CSE SPS 4.%d (Whitley) is partially supported only, errors are expected!\n' % minor + col_e)
+    # CSSPS 4.4 (WTL) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
+    if (variant,major,minor) == ('CSSPS',4,4) :
+        input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only, errors are expected!\n' + col_e)
     
     # Show & Validate Flash Descriptor RSA Signature & Hash
     if fdv_status[0] :
@@ -13005,6 +13005,8 @@ for file_in in source :
             
             if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
             elif minor == 1 and not pch_init_final : platform = 'ADP/RPP' # Raptor Point
+            
+            if minor not in [0,1] : is_unsupported = True
         
         else :
             
@@ -13218,19 +13220,23 @@ for file_in in source :
         # Parse all detected stitched PHY firmware
         phy_all_anl = phy_parse(phy_all_init, phy_all_anl)
         
-        if major == 4 :
-            
-            if minor in [4,2] : warn_stor.append([col_m + 'Warning: CSE SPS 4.%d (Whitley %s) is partially supported only, errors are expected!' % (minor,sku) + col_e, False])
+        if major in [4,1] :
             
             if platform == 'Unknown' : platform = 'SPT-H' # Sunrise Point
+            
+            if sku_plat not in ['XX','BA','HA','PU'] : is_unsupported = True
         
         elif major == 5 :
             
             if platform == 'Unknown' : platform = 'CNP-H' # Cannon Point
+            
+            if sku_plat not in ['XX','ME'] : is_unsupported = True
         
         elif major == 6 :
             
             if platform == 'Unknown' : platform = 'TGP-H' # Tiger Point
+            
+            if sku_plat not in ['XX','TA'] : is_unsupported = True
         
         else :
             
@@ -13639,7 +13645,7 @@ for file_in in source :
             with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_phy_pt))
     
     # Print Messages which must be at the end of analysis
-    if is_unsupported : err_stor.append([col_r + 'Error: Unsupported Intel Engine/Graphics Firmware input!' + col_e, False])
+    if is_unsupported : err_stor.append([col_r + 'Error: Detected unsupported input Intel Engine/Graphics firmware!' + col_e, True])
     
     if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
     

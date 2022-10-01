@@ -16,11 +16,14 @@
 ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Independent firmware from the following families:
 
 - (Converged Security) Management Engine - CS(ME)
-    - CS(ME) 2-16
+    - ME 2-10
+    - CSME 11-16.1
 - (Converged Security) Trusted Execution Engine - (CS)TXE
-    - (CS)TXE 0-4
+    - TXE 0-2
+    - CSTXE 3-4
 - (Converged Security) Server Platform Services - (CS)SPS
-    - (CS)SPS 1-5
+    - SPS 1-3
+    - CSSPS 4-6 (BA, HA, ME, PU, TA)
 - Graphics System Controller - GSC
     - GSC 100-101
 - Power Management Controller - PMC
@@ -45,7 +48,7 @@ Moreover, with the help of its extensive databases, ME Analyzer is capable of un
 
 #### **A1. ME Analyzer Features**
 
-- Supports Engine firmware Families ME 2-16, TXE 0-4 and SPS 1-5
+- Supports Engine firmware Families ME 2-16.1, TXE 0-4 and SPS 1-6
 - Supports Graphics firmware Families GSC DG1 (100) and DG2 (101)
 - Supports CSE/GSC Independent (IUP) firmware Families PMC, PCHC, PHY and OROM
 - Detection of Firmware Details (Family, Version, SKU, Date, Platform etc)

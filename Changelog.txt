@@ -1,3 +1,13 @@
+v1.283.1
+
+Improved error messages for unsupported new firmware
+
+r302
+
+CSME 14.1.67.2046_COR_LP_BA_PRD_EXTR-Y
+CSME 11.8.93.4323_CON_LP_C_NPDM_PRD_RGN
+CSME 11.8.93.4323_COR_LP_C_NPDM_PRD_RGN
+
 r301
 
 CSME 16.0.15.1810_CON_H_A_PRD_EXTR
