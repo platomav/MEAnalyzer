@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2022 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.283.1'
+title = 'ME Analyzer v1.283.2'
 
 import sys
 
@@ -8851,7 +8851,7 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
 def mphytbl(mfs_file, rec_data, pch_init_info) :
     pch_stp_val = {0:'A',1:'B',2:'C',3:'D',4:'E',5:'F',6:'G',7:'H',8:'I',9:'J',10:'K',11:'L',12:'M',13:'N',14:'O',15:'P'}
     
-    if rec_data[0x2:0x6] == b'\xFF' * 4 :
+    if rec_data[0x4:0x6] == b'\xFF' * 2 :
         pch_init_plt = pch_dict[rec_data[7]] if rec_data[7] in pch_dict else 'Unknown' # Actual Chipset SKU Platform (ICP-LP, TGP-H etc)
         pch_init_stp = rec_data[8] >> 4 # Raw Chipset Stepping(s), Absolute or Bitfield depending on firmware
         pch_init_rev = rec_data[6] # Chipset Initialization Table Revision
@@ -8894,7 +8894,7 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
     
     # Detect Actual Chipset Stepping(s) for CSME 13, CSME 15 & CSSPS 6
     elif (variant,major) in [('CSME',13),('CSME',15),('CSME',16),('CSSPS',6)] :
-        if rec_data[0x2:0x6] == b'\xFF' * 4 :
+        if rec_data[0x4:0x6] == b'\xFF' * 2 :
             # Absolute for CSME 13 >=~ 13.0.0.1061 (0 = A, 1 = B, 2 = C, 3 = D etc)
             pch_true_stp = pch_stp_val[pch_init_stp]
         else :

@@ -1,3 +1,14 @@
+v1.283.2
+
+Fixed CSSPS 6 TA Chipset & Stepping detection
+
+r303
+
+CSME 15.40.27.2664_SVR_LP_B_SPI_PRD_EXTR
+CSME 15.0.40.2088_COR_LP_B_PRD_EXTR-N
+CSSPS 06.00.03.100_TA_SVR_B_PRD_EXTR
+PMC MCC_154.1.10.1026_LP_B_PRD
+
 v1.283.1
 
 Improved error messages for unsupported new firmware
