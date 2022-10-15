@@ -8892,7 +8892,7 @@ def mphytbl(mfs_file, rec_data, pch_init_info) :
         if 7000 > build >= 1000 : pch_true_stp = pch_stp_val[(build // 1000) - 1] # Build Number Yxxx
         else : pch_true_stp = pch_stp_val[pch_init_stp] # Fallback to Absolute value
     
-    # Detect Actual Chipset Stepping(s) for CSME 13, CSME 15 & CSSPS 6
+    # Detect Actual Chipset Stepping(s) for CSME 13, CSME 15, CSME 16 & CSSPS 6
     elif (variant,major) in [('CSME',13),('CSME',15),('CSME',16),('CSSPS',6)] :
         if rec_data[0x4:0x6] == b'\xFF' * 2 :
             # Absolute for CSME 13 >=~ 13.0.0.1061 (0 = A, 1 = B, 2 = C, 3 = D etc)
