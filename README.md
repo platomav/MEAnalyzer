@@ -27,7 +27,7 @@ ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Indepe
 - Graphics System Controller - GSC
     - GSC 100-101
 - Power Management Controller - PMC
-    - PMC BXT-ADP
+    - PMC APL-ADP
 - Platform Controller Hub Configuration - PCHC
     - PCHC ICP-ADP
 - USB Type C Physical - PHY
@@ -75,15 +75,37 @@ Moreover, with the help of its extensive databases, ME Analyzer is capable of un
 
 #### **A2. Engine Firmware Repository Database**
 
-ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine/Graphics/Independent Firmware Repositories](https://winraid.level1techs.com/t/intel-cs-me-cs-txe-cs-sps-gsc-pmc-pchc-phy-orom-firmware-repositories/30869) is a collection of every (CS)ME, (CS)TXE, (CS)SPS, GSC, PMC, PCHC, PHY & OROM firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine / Graphics / Independent firmware that are available to us. This accommodates primarily two actions: a) Detect each firmware's Family via unique identifier keys and b) Help find new Engine firmware sooner by reporting them at the [Intel (Converged Security) Management Engine: Drivers, Firmware and Tools](https://winraid.level1techs.com/t/intel-converged-security-management-engine-drivers-firmware-and-tools/30719) or [Intel (Converged Security) Trusted Execution Engine: Drivers, Firmware and Tools](https://winraid.level1techs.com/t/intel-converged-security-trusted-execution-engine-drivers-firmware-and-tools/30730) threads respectively.
+ME Analyzer allows end-users and/or researchers to quickly analyze and/or report new firmware versions without the use of special Intel tools (FIT/FITC, FWUpdate) or Hex Editors. To do that effectively, a database had to be built. The [Intel Engine/Graphics/Independent Firmware Repositories](https://winraid.level1techs.com/t/intel-cs-me-cs-txe-cs-sps-gsc-pmc-pchc-phy-orom-firmware-repositories/30869) is a collection of every (CS)ME, (CS)TXE, (CS)SPS, GSC, PMC, PCHC, PHY & OROM firmware we have found. Its existence is very important for ME Analyzer as it allows us to continue doing research, find new types of firmware, compare same major version releases for similarities etc. Bundled with ME Analyzer is a file called MEA.dat which is required for the program to run. It includes entries for all Engine / Graphics / Independent firmware that are available to us. This accommodates primarily two actions: a) Detect each firmware's Family via unique identifier keys and b) Help find new Engine firmware sooner by reporting them at the [Intel Engine/Graphics/Independent Firmware Repositories](https://winraid.level1techs.com/t/intel-cs-me-cs-txe-cs-sps-gsc-pmc-pchc-phy-orom-firmware-repositories/30869) thread.
+
+#### **A3. Supported Engine Firmware Families/Versions**
+
+| **(CS)ME** | **(CS)TXE** |   **(CS)SPS**  | **GSC** | **PMC** | **PCHC** | **PHY** | **OROM** |
+|:----------:|:-----------:|:--------------:|:-------:|:-------:|:--------:|:-------:|:--------:|
+|      2     |      0      |        1       |   100   |   APL   |    ICP   |   ICP   |    19    |
+|      3     |      1      |        2       |   101   |   BXT   |    LKF   |   LKF   |    20    |
+|      4     |      2      |        3       |    -    |   GLK   |    JSP   |   CMP   |     -    |
+|      5     |      3      | 4 (BA, HA, PU) |    -    |   CNP   |    CMP   |   TGP   |     -    |
+|      6     |      4      |     5 (ME)     |    -    |   ICP   |    TGP   |   ADP   |     -    |
+|      7     |      -      |     6 (TA)     |    -    |   LKF   |    MCC   |   DG1   |     -    |
+|      8     |      -      |        -       |    -    |   JSP   |    ADP   |   DG2   |     -    |
+|      9     |      -      |        -       |    -    |   CMP   |     -    |    -    |     -    |
+|     10     |      -      |        -       |    -    |   TGP   |     -    |    -    |     -    |
+|     11     |      -      |        -       |    -    |   MCC   |     -    |    -    |     -    |
+|     12     |      -      |        -       |    -    |   ADP   |     -    |    -    |     -    |
+|     13     |      -      |        -       |    -    |   DG1   |     -    |    -    |     -    |
+|     14     |      -      |        -       |    -    |   DG2   |     -    |    -    |     -    |
+|     15     |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
+|   16.0-1   |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
+
+**Any Intel Engine family and/or version which is not listed above, is not supported. There are no plans to add support for other Intel Engine firmware at this point.**
 
 ## **B. How to use ME Analyzer**
 
-There are two ways to use ME Analyzer, MEA executable/script & Command Prompt. The MEA executable allows you to drag & drop one or more firmware and analyze them one by one or recursively scan entire directories. To manually call ME Analyzer, a Command Prompt can be used with -skip as parameter.
+There are two ways to use ME Analyzer, MEA script & command prompt. The MEA script allows you to input or drag & drop one or more firmware and analyze them one by one or recursively scan entire directories. To manually use ME Analyzer, a command prompt can be used with -skip as parameter.
 
-#### **B1. ME Analyzer Executable**
+#### **B1. ME Analyzer Script**
 
-To use ME Analyzer, select one or multiple files and Drag & Drop them to its executable/script. You can also input certain optional parameters either by running MEA directly or by first dropping one or more files to it. Keep in mind that, due to operating system limitations, there is a limit on how many files can be dropped at once. If the latter is a problem, you can always use the -mass parameter to recursively scan entire directories as explained below.
+To use ME Analyzer, select one or multiple files and input or Drag & Drop them to its script. You can also input certain optional parameters either by running MEA directly or by first dropping one or more files to it. Keep in mind that, due to operating system limitations, there is a limit on how many files can be dropped at once. If the latter is a problem, you can always use the -mass parameter to recursively scan entire directories, as explained below.
 
 #### **B2. ME Analyzer Parameters**
 
@@ -103,67 +125,27 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -html  : Writes parsable HTML info files during MEA operation
 * -json  : Writes parsable JSON info files during MEA operation
 
-#### **B3. ME Analyzer Error Control**
+#### **B3. ME Analyzer Flow Control**
 
 During operation, ME Analyzer may encounter issues that can trigger Notes, Warnings and/or Errors. Notes (yellow/green color) provide useful information about a characteristic of this particular firmware. Warnings (purple color) notify the user of possible problems that can cause system instability. Errors (red color) are shown when something unexpected or problematic is encountered.
 
 ## **C. Download ME Analyzer**
 
-ME Analyzer consists of four files, the executable/script (MEA.exe, MEA.py or MEA) and the databases (MEA.dat, Huffman.dat & FileTable.dat). An already built/frozen/compiled binary is provided by me for Windows only (icon designed by [Those Icons](https://thoseicons.com/) under CC BY 3.0 license). Thus, **you don't need to manually build/freeze/compile ME Analyzer under Windows**. Instead, download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should start with "ME Analyzer v1.X.X". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bundled with the latest executable release, title should start with "DB rXX". To extract the already built/frozen/compiled archive, you need to use programs which support RAR5 compression.
+ME Analyzer consists of four files: the script (MEA.py) and its databases (MEA.dat, Huffman.dat & FileTable.dat). Download the latest version from the [Releases](https://github.com/platomav/MEAnalyzer/releases) tab, title should start with "ME Analyzer vX.Y.Z". You may need to scroll down a bit if there are DB releases at the top. The latter can be used to update the outdated DB which was bundled with the latest "ME Analyzer vX.Y.Z" release, title should start with "DB rXY".
 
 #### **C1. Compatibility**
 
-ME Analyzer should work at all Windows, Linux or macOS operating systems which have Python >= 3.7 support. Windows users who plan to use the already built/frozen/compiled binary must make sure that they have the latest Windows Updates installed which include all required "Universal C Runtime (CRT)" libraries.
+ME Analyzer should work at all Windows, Linux or macOS operating systems which have [Python >= 3.7](https://www.python.org/downloads/) support.
 
-#### **C2. Code Prerequisites**
+#### **C2. Prerequisites**
 
-To run ME Analyzer's python script, you need to have the following 3rd party Python modules installed:
+To run ME Analyzer, you need to install [Python >= 3.7](https://www.python.org/downloads/), followed by these 3rd party Python modules:
 
 * [colorama](https://pypi.org/project/colorama/)
-
-> pip3 install colorama
-
 * [crccheck](https://pypi.org/project/crccheck/)
+* [pltable](https://pypi.org/project/PLTable/)
 
-> pip3 install crccheck
-
-* [PLTable](https://pypi.org/project/PLTable/)
-
-> pip3 install PLTable
-
-#### **C3. Build/Freeze/Compile with PyInstaller**
-
-PyInstaller can build/freeze/compile ME Analyzer at all three supported platforms, it is simple to run and gets updated often.
-
-1. Make sure Python 3.7.0 or newer is installed:
-
-> python --version
-
-2. Use pip to install PyInstaller:
-
-> pip3 install pyinstaller
-
-3. Use pip to install colorama:
-
-> pip3 install colorama
-
-4. Use pip to install crccheck:
-
-> pip3 install crccheck
-
-5. Use pip to install PLTable:
-
-> pip3 install PLTable
-
-6. Build/Freeze/Compile ME Analyzer:
-
-> pyinstaller --noupx --onefile MEA.py
-
-At dist folder you should find the final MEA executable
-
-#### **C4. Anti-Virus False Positives**
-
-Some Anti-Virus software may claim that the built/frozen/compiled MEA executable contains viruses. Any such detections are false positives, usually of PyInstaller. You can switch to a better Anti-Virus software, report the false positive to their support, add the MEA executable to the exclusions, build/freeze/compile MEA yourself or use the Python script directly.
+> pip3 install colorama crccheck pltable
 
 ## **D. Pictures**
 
@@ -208,7 +190,5 @@ Some Anti-Virus software may claim that the built/frozen/compiled MEA executable
 ![](https://i.imgur.com/lmvcleJ.png)
 
 ![](https://i.imgur.com/ZYprlQE.png)
-
-![](https://i.imgur.com/d5nzMSE.png)
 
 ![](https://i.imgur.com/UlMy3u6.png)
