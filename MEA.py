@@ -4,10 +4,10 @@
 """
 ME Analyzer
 Intel Engine & Graphics Firmware Analysis Tool
-Copyright (C) 2014-2022 Plato Mavropoulos
+Copyright (C) 2014-2023 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.283.2'
+title = 'ME Analyzer v1.283.3'
 
 import sys
 
@@ -93,9 +93,9 @@ def mea_help() :
           '-json  : Writes parsable JSON info files during MEA operation'
           )
     
-    print(col_g + '\nCopyright (C) 2014-2022 Plato Mavropoulos' + col_e)
+    print(col_g + '\nCopyright (C) 2014-2023 Plato Mavropoulos' + col_e)
     
-    if getattr(sys, 'frozen', False) : print(col_c + '\nIcon by Those Icons (thoseicons.com, CC BY 3.0)' + col_e)
+    if getattr(sys, 'frozen', False) : print(col_c + '\nRunning in frozen state!' + col_e)
     
     mea_exit(0)
 
