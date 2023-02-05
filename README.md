@@ -79,23 +79,23 @@ ME Analyzer allows end-users and/or researchers to quickly analyze and/or report
 
 #### **A3. Supported Engine Firmware Families/Versions**
 
-| **(CS)ME** | **(CS)TXE** |   **(CS)SPS**  | **GSC** | **PMC** | **PCHC** | **PHY** | **OROM** |
-|:----------:|:-----------:|:--------------:|:-------:|:-------:|:--------:|:-------:|:--------:|
-|      2     |      0      |        1       |   100   |   APL   |    ICP   |   ICP   |    19    |
-|      3     |      1      |        2       |   101   |   BXT   |    LKF   |   LKF   |    20    |
-|      4     |      2      |        3       |    -    |   GLK   |    JSP   |   CMP   |     -    |
-|      5     |      3      | 4 (BA, HA, PU) |    -    |   CNP   |    CMP   |   TGP   |     -    |
-|      6     |      4      |     5 (ME)     |    -    |   ICP   |    TGP   |   ADP   |     -    |
-|      7     |      -      |     6 (TA)     |    -    |   LKF   |    MCC   |   DG1   |     -    |
-|      8     |      -      |        -       |    -    |   JSP   |    ADP   |   DG2   |     -    |
-|      9     |      -      |        -       |    -    |   CMP   |     -    |    -    |     -    |
-|     10     |      -      |        -       |    -    |   TGP   |     -    |    -    |     -    |
-|     11     |      -      |        -       |    -    |   MCC   |     -    |    -    |     -    |
-|     12     |      -      |        -       |    -    |   ADP   |     -    |    -    |     -    |
-|     13     |      -      |        -       |    -    |   DG1   |     -    |    -    |     -    |
-|     14     |      -      |        -       |    -    |   DG2   |     -    |    -    |     -    |
-|     15     |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
-|   16.0-1   |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
+|   **(CS)ME**   | **(CS)TXE** |   **(CS)SPS**  | **GSC** | **PMC** | **PCHC** | **PHY** | **OROM** |
+|:--------------:|:-----------:|:--------------:|:-------:|:-------:|:--------:|:-------:|:--------:|
+|        2       |      0      |        1       |   100   |   APL   |    ICP   |   ICP   |    19    |
+|        3       |      1      |        2       |   101   |   BXT   |    LKF   |   LKF   |    20    |
+|        4       |      2      |        3       |    -    |   GLK   |    JSP   |   CMP   |     -    |
+|        5       |      3      | 4 (BA, HA, PU) |    -    |   CNP   |    CMP   |   TGP   |     -    |
+|        6       |      4      |     5 (ME)     |    -    |   ICP   |    TGP   |   ADP   |     -    |
+|        7       |      -      |     6 (TA)     |    -    |   LKF   |    MCC   |   DG1   |     -    |
+|        8       |      -      |        -       |    -    |   JSP   |    ADP   |   DG2   |     -    |
+|        9       |      -      |        -       |    -    |   CMP   |     -    |    -    |     -    |
+|       10       |      -      |        -       |    -    |   TGP   |     -    |    -    |     -    |
+|       11       |      -      |        -       |    -    |   MCC   |     -    |    -    |     -    |
+|       12       |      -      |        -       |    -    |   ADP   |     -    |    -    |     -    |
+| 13 (0, 30, 50) |      -      |        -       |    -    |   DG1   |     -    |    -    |     -    |
+|  14 (0, 1, 5)  |      -      |        -       |    -    |   DG2   |     -    |    -    |     -    |
+|   15 (0, 40)   |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
+|    16 (0, 1)   |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
 
 **Any Intel Engine family and/or version which is not listed above, is not supported. There are no plans to add support for other Intel Engine firmware at this point.**
 
