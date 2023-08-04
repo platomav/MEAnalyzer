@@ -10296,7 +10296,7 @@ def mea_upd_check(db_path) :
         db_print = '(r%s --> r%s)' % (cur_db_ver, git_db_ver)
         db_is_upd = cur_db_ver >= git_db_ver
         
-        git_link = '\n         Download the latest from https://github.com/platomav/MEAnalyzer/'
+        git_link = '\n         Download the latest from https://github.com/platomav/MEAnalyzer/releases/tag/r{}'.format(git_db_ver)
         if not py_is_upd and not db_is_upd : result = col_m + '\nWarning: Outdated ME Analyzer %s & Database %s!' % (py_print,db_print) + git_link + col_e
         elif not py_is_upd : result = col_m + '\nWarning: Outdated ME Analyzer %s!' % py_print + git_link + col_e
         elif not db_is_upd : result = col_m + '\nWarning: Outdated Database %s!' % db_print + git_link + col_e
