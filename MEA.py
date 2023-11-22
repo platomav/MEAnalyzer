@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2023 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.283.3'
+title = 'ME Analyzer v1.300.0'
 
 import sys
 
@@ -85,6 +85,8 @@ def mea_help() :
           '-pdb   : Writes unique input file DB name to file\n'
           '-dbn   : Renames input file based on unique DB name\n'
           '-duc   : Disables automatic check for MEA & DB updates\n'
+          '-dcm   : Disables automatic input file copy on messages\n'
+          '-out   : Defines output directory for all MEA operations\n'
           '-dfpt  : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info\n'
           '-unp86 : Unpacks all supported CSE, GSC and/or IUP firmware\n'
           '-bug86 : Enables pause on error during CSE/GSC/IUP unpacking\n'
@@ -100,12 +102,10 @@ def mea_help() :
     mea_exit(0)
 
 # Process MEA Parameters
-class MEA_Param :
-
-    def __init__(self, source) :
-    
+class MEA_Param:
+    def __init__(self, source):
         self.val = ['-?','-skip','-unp86','-ver86','-bug86','-html','-json','-pdb','-dbn',
-                    '-mass','-dfpt','-exit','-ftbl','-rcfg','-chk','-byp','-duc']
+                    '-mass','-dfpt','-exit','-ftbl','-rcfg','-chk','-byp','-duc','-dcm','-out']
         
         self.help_scr = False
         self.skip_intro = False
@@ -124,6 +124,8 @@ class MEA_Param :
         self.check = False
         self.bypass = False
         self.upd_dis = False
+        self.copy_dis = False
+        self.out_dir = None
         
         if '-?' in source : self.help_scr = True
         if '-skip' in source : self.skip_intro = True
@@ -142,8 +144,16 @@ class MEA_Param :
         if '-chk' in source : self.check = True # Hidden
         if '-byp' in source : self.bypass = True # Hidden
         if '-duc' in source : self.upd_dis = True
+        if '-dcm' in source : self.copy_dis = True
+        
+        if '-out' in source:
+            out_dir_idx = source.index('-out') + 1
             
-        if self.mass_scan or self.db_print_new : self.skip_intro = True
+            if len(source) > out_dir_idx:
+                self.out_dir = source.pop(out_dir_idx).strip('"').strip("'")
+        
+        if self.mass_scan or self.db_print_new or self.out_dir:
+            self.skip_intro = True
 
 # https://stackoverflow.com/a/65447493 by Shail-Shouryya
 class Thread_With_Result(threading.Thread) :
@@ -5292,6 +5302,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     rbe_man_hashes = []
     rbe_pm_met_valid = []
     rbe_pm_met_hashes = []
+    cse_unpack_jsons = {}
     len_fpt_part_all = len(fpt_part_all)
     len_bpdt_part_all = len(bpdt_part_all)
     len_orom_hdr_all = len(orom_hdr_all)
@@ -5300,8 +5311,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     
     # Create main Firmware Extraction Directory
     fw_name = 'Unpacked_' + os.path.basename(file_in)
-    if os.path.isdir(os.path.join(mea_dir, fw_name, '')) : shutil.rmtree(os.path.join(mea_dir, fw_name, ''))
-    os.mkdir(os.path.join(mea_dir, fw_name, ''))
+    if os.path.isdir(os.path.join(out_dir, fw_name, '')) : shutil.rmtree(os.path.join(out_dir, fw_name, ''))
+    os.mkdir(os.path.join(out_dir, fw_name, ''))
     
     # Print Input File Name
     file_pt = ext_table([], False, 1)
@@ -5320,7 +5331,12 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
         fdv_rsa_crash = fdv_status[2] # RSA Signature crashed
         fdv_hash_valid = fdv_status[3] # Hash validity
         fdv_print = fdv_status[4] # FDV Manifest/Extension Info
-        fdv_path = os.path.join(mea_dir, fw_name, 'CSE Flash Descriptor') # FDV Info File
+        fdv_path = os.path.join(out_dir, fw_name, 'CSE Flash Descriptor') # FDV Info File
+        
+        fdv_json_path = fdv_path + '.json'
+        
+        if fdv_json_path not in cse_unpack_jsons:
+            cse_unpack_jsons[fdv_json_path] = []
         
         # Print Flash Descriptor Manifest/Extension Info
         for index in range(0, len(fdv_print), 2) : # Only Name (index), skip Info (index + 1)
@@ -5330,10 +5346,12 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
                     
                     with open(fdv_path + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
                     
-                    if param.write_html :
-                        with open(fdv_path + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
-                    if param.write_json :
-                        with open(fdv_path + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
+                    if param.write_html:
+                        with open(fdv_path + '.html', 'a', encoding = 'utf-8') as text_file:
+                            text_file.write('\n<br/>\n%s' % pt_html(ext))
+                    
+                    if param.write_json:
+                        cse_unpack_jsons[fdv_json_path].append(pt_json(ext))
                     
                     print(ext) # Print Flash Descriptor Manifest/Extension Info
                     
@@ -5365,7 +5383,12 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     # Show & Store CSE Layout Table info
     if cse_lt_struct :
         cse_lt_info = cse_lt_struct.hdr_print()
-        cse_lt_fname = os.path.join(mea_dir, fw_name, 'CSE LT [0x%0.6X]' % cse_lt_off)
+        cse_lt_fname = os.path.join(out_dir, fw_name, 'CSE LT [0x%0.6X]' % cse_lt_off)
+        
+        cse_lt_json_path = cse_lt_fname + '.json'
+        
+        if cse_lt_json_path not in cse_unpack_jsons:
+            cse_unpack_jsons[cse_lt_json_path] = []
         
         print('%s' % cse_lt_info)
         
@@ -5387,20 +5410,26 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
         
         with open(cse_lt_fname + '.bin', 'w+b') as cse_lt_file : cse_lt_file.write(reading[cse_lt_off:cse_lt_off + cse_lt_size])
         with open(cse_lt_fname + '.txt', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write(ansi_escape.sub('', '\n%s' % cse_lt_info))
-        if param.write_html :
-            with open(cse_lt_fname + '.html', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n<br/>\n%s' % pt_html(cse_lt_info))
-        if param.write_json :
-            with open(cse_lt_fname + '.json', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % pt_json(cse_lt_info))
+        
+        if param.write_html:
+            with open(cse_lt_fname + '.html', 'a', encoding = 'utf-8') as cse_lt_file:
+                cse_lt_file.write('\n<br/>\n%s' % pt_html(cse_lt_info))
+        
+        if param.write_json:
+            cse_unpack_jsons[cse_lt_json_path].append(pt_json(cse_lt_info))
         
         pt_dcselt.title = col_y + 'Detected %d Partition(s) at CSE LT [0x%0.6X]' % (len(cse_lt_part_all), cse_lt_off) + col_e
         print('%s\n' % pt_dcselt) # Local copy with different title for cse_unpack function
         
         cse_lt_hdr = ansi_escape.sub('', str(pt_dcselt))
         with open(cse_lt_fname + '.txt', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % cse_lt_hdr)
-        if param.write_html :
-            with open(cse_lt_fname + '.html', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n<br/>\n%s' % pt_html(pt_dcselt))
-        if param.write_json :
-            with open(cse_lt_fname + '.json', 'a', encoding = 'utf-8') as cse_lt_file : cse_lt_file.write('\n%s' % pt_json(pt_dcselt))
+        
+        if param.write_html:
+            with open(cse_lt_fname + '.html', 'a', encoding = 'utf-8') as cse_lt_file:
+                cse_lt_file.write('\n<br/>\n%s' % pt_html(pt_dcselt))
+        
+        if param.write_json:
+            cse_unpack_jsons[cse_lt_json_path].append(pt_json(pt_dcselt))
         
         print(col_y + '--> Stored CSE Layout Table [0x%0.6X - 0x%0.6X]\n' % (cse_lt_off, cse_lt_off + cse_lt_size) + col_e)
         
@@ -5412,7 +5441,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
             
             if not part_empty : # Skip Empty Partitions
                 file_name = os.path.join(fw_name, 'CSE LT ' + part_name + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (CSE_Layout_Table_17)
-                mod_fname = os.path.join(mea_dir, file_name)
+                mod_fname = os.path.join(out_dir, file_name)
                 
                 with open(mod_fname, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
             
@@ -5460,8 +5489,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
         
         print(pt) # Show Partition details
         
-        if cse_lt_struct : fpt_fname = os.path.join(mea_dir, fw_name, 'CSE LT Data [0x%0.6X]' % fpt_start)
-        else : fpt_fname = os.path.join(mea_dir, fw_name, 'FPT [0x%0.6X]' % fpt_start)
+        if cse_lt_struct : fpt_fname = os.path.join(out_dir, fw_name, 'CSE LT Data [0x%0.6X]' % fpt_start)
+        else : fpt_fname = os.path.join(out_dir, fw_name, 'FPT [0x%0.6X]' % fpt_start)
         
         # Store Flash Partition Table ($FPT) Data
         if not cse_lt_struct : # Stored at CSE LT section too
@@ -5469,23 +5498,34 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
             
             print(col_y + '\n--> Stored Flash Partition Table [0x%0.6X - 0x%0.6X]' % (fpt_start, fpt_start + 0x1000) + col_e)
         
+        fpt_hdr_json_path = fpt_fname + '.json'
+        
+        if fpt_hdr_json_path not in cse_unpack_jsons:
+            cse_unpack_jsons[fpt_hdr_json_path] = []
+        
         # Store Flash Partition Table ($FPT) Info
         # Ignore Colorama ANSI Escape Character Sequences
         if fpt_romb_exist :
             fpt_hdr_romb = ansi_escape.sub('', str(fpt_hdr_0_print))
             with open(fpt_fname + '.txt', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s' % fpt_hdr_romb)
-            if param.write_html :
-                with open(fpt_fname + '.html', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n<br/>\n%s' % pt_html(fpt_hdr_0_print))
-            if param.write_json :
-                with open(fpt_fname + '.json', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s' % pt_json(fpt_hdr_0_print))
+            
+            if param.write_html:
+                with open(fpt_fname + '.html', 'a', encoding = 'utf-8') as fpt_file:
+                    fpt_file.write('\n<br/>\n%s' % pt_html(fpt_hdr_0_print))
+            
+            if param.write_json:
+                cse_unpack_jsons[fpt_hdr_json_path].append(pt_json(fpt_hdr_0_print))
         
         fpt_hdr_main = ansi_escape.sub('', str(fpt_hdr_1_print))
         fpt_hdr_part = ansi_escape.sub('', str(pt))
         with open(fpt_fname + '.txt', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s\n%s' % (fpt_hdr_main, fpt_hdr_part))
-        if param.write_html :
-            with open(fpt_fname + '.html', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n<br/>\n%s\n<br/>\n%s' % (pt_html(fpt_hdr_1_print), pt_html(pt)))
-        if param.write_json :
-            with open(fpt_fname + '.json', 'a', encoding = 'utf-8') as fpt_file : fpt_file.write('\n%s\n%s' % (pt_json(fpt_hdr_1_print), pt_json(pt)))
+        
+        if param.write_html:
+            with open(fpt_fname + '.html', 'a', encoding = 'utf-8') as fpt_file:
+                fpt_file.write('\n<br/>\n%s\n<br/>\n%s' % (pt_html(fpt_hdr_1_print), pt_html(pt)))
+        
+        if param.write_json:
+            cse_unpack_jsons[fpt_hdr_json_path].append(pt_json(fpt_hdr_1_print))
         
         # Place MFS first to validate FTPR > FTPR.man > 0x00 > Intel Configuration Hash
         # and get MFS FTBL ID & Record Size for FTPR/FITC Partition intl.cfg/fitc.cfg
@@ -5506,7 +5546,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
             if not part_empty : # Skip Empty Partitions
                 part_name_p = '%s %0.4X' % (part_name, part_inid) # Partition Name with Instance ID
                 
-                mod_f_path = os.path.join(mea_dir, fw_name, part_name_p + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
+                mod_f_path = os.path.join(out_dir, fw_name, part_name_p + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries (Joule_C0-X64-Release)
                 
                 with open(mod_f_path, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
             
@@ -5546,10 +5586,18 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
                             for ext in ext_print[index + 1] :
                                 ext_str = ansi_escape.sub('', str(ext))
                                 with open(mod_f_path[:-4] + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
-                                if param.write_html :
-                                    with open(mod_f_path[:-4] + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
-                                if param.write_json :
-                                    with open(mod_f_path[:-4] + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
+                                
+                                if param.write_html:
+                                    with open(mod_f_path[:-4] + '.html', 'a', encoding = 'utf-8') as text_file:
+                                        text_file.write('\n<br/>\n%s' % pt_html(ext))
+                                
+                                if param.write_json:
+                                    ext_json_path = mod_f_path[:-4] + '.json'
+                                    
+                                    if ext_json_path not in cse_unpack_jsons:
+                                        cse_unpack_jsons[ext_json_path] = []
+                                    
+                                    cse_unpack_jsons[ext_json_path].append(pt_json(ext))
                                 if param.cse_verbose : print(ext) # Print Manifest/Metadata/Key Extension Info
                             break
                             
@@ -5595,8 +5643,8 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
         
         print('%s' % pt) # Show Entry details
         
-        if cse_lt_struct : bpdt_fname = os.path.join(mea_dir, fw_name, 'CSE LT Boot x [%d]' % len(bpdt_hdr_all))
-        else : bpdt_fname = os.path.join(mea_dir, fw_name, 'BPDT [%d]' % len(bpdt_hdr_all))
+        if cse_lt_struct : bpdt_fname = os.path.join(out_dir, fw_name, 'CSE LT Boot x [%d]' % len(bpdt_hdr_all))
+        else : bpdt_fname = os.path.join(out_dir, fw_name, 'BPDT [%d]' % len(bpdt_hdr_all))
         
         # Store Boot Partition Description Table (BPDT/IFWI) Info in TXT
         with open(bpdt_fname + '.txt', 'a', encoding = 'utf-8') as bpdt_file :
@@ -5604,16 +5652,24 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
             bpdt_file.write('\n%s' % ansi_escape.sub('', str(pt)))
             
         # Store Boot Partition Description Table (BPDT/IFWI) Info in HTML
-        if param.write_html :
-            with open(bpdt_fname + '.html', 'a', encoding = 'utf-8') as bpdt_file :
-                for hdr in bpdt_hdr_all : bpdt_file.write('\n<br/>\n%s' % pt_html(hdr))
+        if param.write_html:
+            with open(bpdt_fname + '.html', 'a', encoding = 'utf-8') as bpdt_file:
+                for hdr in bpdt_hdr_all:
+                    bpdt_file.write('\n<br/>\n%s' % pt_html(hdr))
+                
                 bpdt_file.write('\n<br/>\n%s' % pt_html(pt))
                 
         # Store Boot Partition Description Table (BPDT/IFWI) Info in JSON
-        if param.write_json :
-            with open(bpdt_fname + '.json', 'a', encoding = 'utf-8') as bpdt_file :
-                for hdr in bpdt_hdr_all : bpdt_file.write('\n%s' % pt_json(hdr))
-                bpdt_file.write('\n%s' % pt_json(pt))
+        if param.write_json:
+            bpdt_json_path = bpdt_fname + '.json'
+            
+            if bpdt_json_path not in cse_unpack_jsons:
+                cse_unpack_jsons[bpdt_json_path] = []
+            
+            for hdr in bpdt_hdr_all:
+                cse_unpack_jsons[bpdt_json_path].append(pt_json(hdr))
+            
+            cse_unpack_jsons[bpdt_json_path].append(pt_json(pt))
         
         # Store Boot Partition Descriptor Table (BPDT/IFWI) Data
         if not cse_lt_struct : # Stored at CSE LT section too
@@ -5640,7 +5696,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
             if not part_empty : # Skip Empty Partitions
                 part_name_p = '%s %0.4X' % (part_name, part_inid) # Partition Name with Instance ID
                 
-                mod_f_path = os.path.join(mea_dir, fw_name, part_name_p + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries ("Unknown" etc)
+                mod_f_path = os.path.join(out_dir, fw_name, part_name_p + ' [0x%0.6X].bin' % part_start) # Start offset covers any cases with duplicate name entries ("Unknown" etc)
                 
                 with open(mod_f_path, 'w+b') as part_file : part_file.write(reading[part_start:part_end])
                 
@@ -5680,10 +5736,19 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
                             for ext in ext_print[index + 1] :
                                 ext_str = ansi_escape.sub('', str(ext))
                                 with open(mod_f_path[:-4] + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
-                                if param.write_html :
-                                    with open(mod_f_path[:-4] + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
-                                if param.write_json :
-                                    with open(mod_f_path[:-4] + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
+                                
+                                if param.write_html:
+                                    with open(mod_f_path[:-4] + '.html', 'a', encoding = 'utf-8') as text_file:
+                                        text_file.write('\n<br/>\n%s' % pt_html(ext))
+                                
+                                if param.write_json:
+                                    ext_json_path = mod_f_path[:-4] + '.json'
+                                    
+                                    if ext_json_path not in cse_unpack_jsons:
+                                        cse_unpack_jsons[ext_json_path] = []
+                                    
+                                    cse_unpack_jsons[ext_json_path].append(pt_json(ext))
+                                
                                 if param.cse_verbose : print(ext) # Print Manifest/Metadata/Key Extension Info
                             break
                             
@@ -5719,7 +5784,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     # Print all Graphics System Controller Option ROM (OROM) entries
     if len_orom_hdr_all :
         if len_fpt_part_all or len_bpdt_part_all : print()
-        orom_fname = os.path.join(mea_dir, fw_name, 'OROM-PCIR Images [%d].txt' % (len_orom_hdr_all // 2))
+        orom_fname = os.path.join(out_dir, fw_name, 'OROM-PCIR Images [%d].txt' % (len_orom_hdr_all // 2))
         for hdr in orom_hdr_all :
             print('%s\n' % hdr)
             with open(orom_fname, 'a', encoding = 'utf-8') as orom_file : orom_file.write('%s\n' % ansi_escape.sub('', str(hdr)))
@@ -5728,7 +5793,7 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     for cpdrange in list(cpd_pat.finditer(reading)) :
         # Store any Platform Data (PDR) Flash Descriptor Regions with Code Partition Directory ($CPD) structure (not in $FPT or BPDT)
         if fd_pdr_rgn_exist and reading[cpdrange.start() + 0xC:cpdrange.start() + 0x10] == b'PDRP' :
-            mod_f_path = os.path.join(mea_dir, fw_name, 'PDRP 0000 [0x%0.6X].bin' % cpdrange.start()) # Start offset covers any cases with multiple PDR (not POR, just in case)
+            mod_f_path = os.path.join(out_dir, fw_name, 'PDRP 0000 [0x%0.6X].bin' % cpdrange.start()) # Start offset covers any cases with multiple PDR (not POR, just in case)
             with open(mod_f_path, 'w+b') as part_file : part_file.write(reading[cpdrange.start():cpdrange.start() + pdr_fd_size])
             
             print(col_y + '\n--> Stored Flash Descriptor Region "PDRP 0000" [0x%0.6X - 0x%0.6X]' % (cpdrange.start(), cpdrange.start() + pdr_fd_size) + col_e)
@@ -5747,6 +5812,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     if param.bypass :
         for l_hash in [l_hash for l_hash in rbe_pm_met_hashes if l_hash not in rbe_pm_met_valid] : print(l_hash) # Debug/Research
     
+    for cse_unpack_json_path, cse_unpack_json_lists in cse_unpack_jsons.items():
+        with open(cse_unpack_json_path, 'w', encoding='utf-8') as jo:
+            json.dump(cse_unpack_json_lists, jo, indent=4)
+
 # Analyze CSE Extensions
 # noinspection PyUnusedLocal
 def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man_name, mfs_idx_cfg, pch_init_input) :
@@ -5930,7 +5999,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
                 # instead of the one from MFS, when possible (i.e. MFS & FTPR) or necessary (i.e. FTPR only, MFS empty).
                 if not param.cse_unpack :
                     try :
-                        intel_cfg_folder = os.path.join(mea_dir, 'intl.cfg_placeholder', '') # Not used here, placeholder value for mfs_cfg_anl to work
+                        intel_cfg_folder = os.path.join(out_dir, 'intl.cfg_placeholder', '') # Not used here, placeholder value for mfs_cfg_anl to work
                         pch_init_info = mfs_cfg_anl(6, intel_cfg_data, intel_cfg_folder, intel_cfg_folder, config_rec_size, [], vol_ftbl_id, vol_ftbl_pl) # Parse MFS Configuration Records
                         pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
                     except :
@@ -6756,6 +6825,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
     mea_hash_c = 0
     mea_hash_u = 0
     mod_hash_u_ok = False
+    mod_anl_jsons = {}
     comp = ['Uncompressed','Huffman','LZMA']
     encr_type = ['None','AES-ECB','AES-CTR']
     is_empty = ['No','Yes']
@@ -6780,8 +6850,8 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
         ext_inid = cpd_all_attr[0][9] # Partition Instance ID
         
         pt.title = col_y + 'Detected %s Module(s) at %s %0.4X [0x%0.6X]' % (len(cpd_all_attr), cpd_pname, ext_inid, cpd_poffset) + col_e
-        folder_name = os.path.join(mea_dir, fw_name, '%s %0.4X [0x%0.6X]' % (cpd_pname, ext_inid, cpd_poffset), '')
-        info_fname = os.path.join(mea_dir, fw_name, '%s %0.4X [0x%0.6X].txt' % (cpd_pname, ext_inid, cpd_poffset))
+        folder_name = os.path.join(out_dir, fw_name, '%s %0.4X [0x%0.6X]' % (cpd_pname, ext_inid, cpd_poffset), '')
+        info_fname = os.path.join(out_dir, fw_name, '%s %0.4X [0x%0.6X].txt' % (cpd_pname, ext_inid, cpd_poffset))
         
         cpd_hdr_struct, _ = get_cpd(reading, cpd_poffset)
         cpd_phdr = get_struct(reading, cpd_poffset, cpd_hdr_struct)
@@ -6806,14 +6876,18 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
             info_file.write('\n%s\n%s' % (ansi_escape.sub('', str(cpd_phdr.hdr_print())), ansi_escape.sub('', str(pt))))
         
         # Store Partition $CPD Header & Entry details in HTML
-        if param.write_html :
-            with open(info_fname[:-4] + '.html', 'a', encoding = 'utf-8') as info_file :
+        if param.write_html:
+            with open(info_fname[:-4] + '.html', 'a', encoding = 'utf-8') as info_file:
                 info_file.write('\n<br/>\n%s\n<br/>\n%s' % (pt_html(cpd_phdr.hdr_print()), pt_html(pt)))
         
         # Store Partition $CPD Header & Entry details in JSON
-        if param.write_json :
-            with open(info_fname[:-4] + '.json', 'a', encoding = 'utf-8') as info_file :
-                info_file.write('\n%s\n%s' % (pt_json(cpd_phdr.hdr_print()), pt_json(pt)))
+        if param.write_json:
+            info_json_path = info_fname[:-4] + '.json'
+            
+            if info_json_path not in mod_anl_jsons:
+                mod_anl_jsons[info_json_path] = []
+            
+            mod_anl_jsons[info_json_path].extend([pt_json(cpd_phdr.hdr_print()), pt_json(pt)])
         
         # Load Huffman Dictionaries for Decompression
         huff_shape, huff_sym, huff_unk = cse_huffman_dictionary_load(variant, major, minor, 'error')
@@ -6938,10 +7012,10 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
                     # Store Golden Measurements File (GMF) Blobs from RBEP.man > CSE_Ext_1E & CSE_Ext_1F
                     if gmf_blob_info and (gmf_blob_info[0],gmf_blob_info[1],gmf_blob_info[2]) == (cpd_pname,ext_inid,cpd_poffset) :
                         if gmf_blob_info[3][0] :
-                            gmf_cert_path = os.path.join(mea_dir, folder_name, 'GMF_Certificate.crt')
+                            gmf_cert_path = os.path.join(out_dir, folder_name, 'GMF_Certificate.crt')
                             with open(gmf_cert_path, 'wb') as gmf_cert : gmf_cert.write(gmf_blob_info[3][0])
                         if gmf_blob_info[3][1] :
-                            gmf_body_path = os.path.join(mea_dir, folder_name, 'GMF_Body.bin')
+                            gmf_body_path = os.path.join(out_dir, folder_name, 'GMF_Body.bin')
                             with open(gmf_body_path, 'wb') as gmf_body : gmf_body.write(gmf_blob_info[3][1])
                 
                 # Metadata
@@ -6988,7 +7062,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
                 elif mod_name in ('intl.cfg','fitc.cfg') :
                     mfs_file_no = 6 if mod_name == 'intl.cfg' else 7
                     if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file_no, mfs_dict[mfs_file_no]) + col_e)
-                    rec_folder = os.path.join(mea_dir, folder_name, mfs_dict[mfs_file_no], '')
+                    rec_folder = os.path.join(out_dir, folder_name, mfs_dict[mfs_file_no], '')
                     try :
                         pch_init_info = mfs_cfg_anl(mfs_file_no, mod_data, rec_folder, rec_folder, config_rec_size, [], vol_ftbl_id, vol_ftbl_pl) # Parse MFS Configuration Records
                         # noinspection PyUnusedLocal
@@ -7276,13 +7350,26 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
                         for ext in ext_print[index + 1] :
                             ext_str = ansi_escape.sub('', str(ext)) # Ignore Colorama ANSI Escape Character Sequences
                             with open(mod_fname + '.txt', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % ext_str)
-                            if param.write_html :
-                                with open(mod_fname + '.html', 'a', encoding = 'utf-8') as text_file : text_file.write('\n<br/>\n%s' % pt_html(ext))
-                            if param.write_json :
-                                with open(mod_fname + '.json', 'a', encoding = 'utf-8') as text_file : text_file.write('\n%s' % pt_json(ext))
+                            
+                            if param.write_html:
+                                with open(mod_fname + '.html', 'a', encoding = 'utf-8') as text_file:
+                                    text_file.write('\n<br/>\n%s' % pt_html(ext))
+                            
+                            if param.write_json:
+                                ext_json_path = mod_fname + '.json'
+                                
+                                if ext_json_path not in mod_anl_jsons:
+                                    mod_anl_jsons[ext_json_path] = []
+                                
+                                mod_anl_jsons[ext_json_path].append(pt_json(ext))
+                            
                             if param.cse_verbose : print(ext) # Print Manifest/Metadata/Key Extension Info
                         break
-                        
+    
+    for mod_anl_json_path, mod_anl_json_lists in mod_anl_jsons.items():
+        with open(mod_anl_json_path, 'w', encoding='utf-8') as jo:
+            json.dump(mod_anl_json_lists, jo, indent=4)
+    
     return rbe_pm_met_valid
 
 # Get CSE Key Hash Usages
@@ -7524,7 +7611,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (entry_file, mfs_dict[entry_file]) + col_e)
             
             if entry_file in (6,7) :
-                rec_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
+                rec_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
                 root_folder = rec_folder # Store File Root Folder for Local Path printing
                 mfs_parsed_idx.append(entry_file) # Set MFS Backup Low Level File as Parsed
                 
@@ -7534,7 +7621,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
                 if entry_file == 6 : intel_cfg_hash_mfs = [get_hash(file_data, 0x20), get_hash(file_data, 0x30)] # Store MFSB Intel Configuration Hashes
                 
             elif entry_file == 9 and man_pat.search(file_data[:0x20]) :
-                file_9_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
+                file_9_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
                 file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
                 mfs_write(file_9_folder, file_9_data_path, file_data) # Store MFS Manifest Backup Contents
                 mfs_parsed_idx.append(entry_file) # Set MFS Backup Low Level File as Parsed
@@ -7799,7 +7886,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         if mfs_file[1] and mfs_file[0] == 0 :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-            file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+            file_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
             file_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Path
             mfs_write(file_folder, file_path, mfs_file[1]) # Store MFS Low Level File
         
@@ -7809,7 +7896,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             mfs_file_name = 'Unknown' if mfs_is_afs and mfs_file[0] in (6,7) else mfs_dict[mfs_file[0]]
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-            file_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
+            file_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
             file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Contents Path
             
             # MFS Low Level File 5 Integrity is present only at CSME >= 12
@@ -7897,7 +7984,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
                         with open(clean_mfs_path, 'rb') as mfs_new : clean_mfs = mfs_new.read()
                         if len(clean_mfs) != mfs_size : input_col(col_r + '\nError: MFS size mismatch!' + col_e)
                         output_data = reading[:mfs_start] + clean_mfs + reading[mfs_end:]
-                        output_path = os.path.join(mea_dir, '__RCFG__%s' % os.path.basename(file_in))
+                        output_path = os.path.join(out_dir, '__RCFG__%s' % os.path.basename(file_in))
                         with open(output_path, 'wb') as o : o.write(output_data)
                     
                     shutil.rmtree(temp_dir)
@@ -7910,7 +7997,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             if mfs_file[0] == 6 : intel_cfg_hash_mfs = [get_hash(mfs_file[1], 0x20), get_hash(mfs_file[1], 0x30)] # Store MFS Intel Configuration Hashes
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level Files 6,7 as Parsed
-            rec_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+            rec_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
             root_folder = rec_folder # Store File Root Folder for Local Path printing
             
             pch_init_info = mfs_cfg_anl(mfs_file[0], mfs_file[1], rec_folder, root_folder, config_rec_size, pch_init_info, vol_ftbl_id, vol_ftbl_pl) # Parse MFS Config Records
@@ -7920,8 +8007,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         elif mfs_file[1] and mfs_file[0] == 8 :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File 8 (Home Directory) ...' + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 8 as Parsed
-            root_folder = os.path.join(mea_dir, mfs_folder, '008 Home Directory', 'home', '') # MFS Home Directory Root/Start folder is called "home"
-            init_folder = os.path.join(mea_dir, mfs_folder, '008 Home Directory', '') # MFS Home Directory Parent folder for printing
+            root_folder = os.path.join(out_dir, mfs_folder, '008 Home Directory', 'home', '') # MFS Home Directory Root/Start folder is called "home"
+            init_folder = os.path.join(out_dir, mfs_folder, '008 Home Directory', '') # MFS Home Directory Parent folder for printing
             
             # Detect MFS Home Directory Record Size
             home_rec_patt = list(re.compile(br'\x2E[\x00\xAA]{10}').finditer(mfs_file[1][:])) # Find the first Current (.) & Parent (..) directory markers
@@ -7958,7 +8045,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         elif mfs_file[1] and mfs_file[0] == 9 and man_pat.search(mfs_file[1][:0x20]) :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
-            file_9_folder = os.path.join(mea_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '') # MFS Manifest Backup root folder
+            file_9_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '') # MFS Manifest Backup root folder
             file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
             mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
             # noinspection PyTypeChecker
@@ -8022,8 +8109,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         else :
             mfs_pt = None
         
-        if vfs_starts_at_0 : mfs_home13_dir = os.path.join(mea_dir, mfs_folder, '')
-        else : mfs_home13_dir = os.path.join(mea_dir, mfs_folder, 'VFS Home Directory', '')
+        if vfs_starts_at_0 : mfs_home13_dir = os.path.join(out_dir, mfs_folder, '')
+        else : mfs_home13_dir = os.path.join(out_dir, mfs_folder, 'VFS Home Directory', '')
         
         for mfs_file in mfs_files :
             if mfs_file[1] and mfs_file[0] not in mfs_parsed_idx : # Check if MFS Low Level File has Contents but it has not been Parsed
@@ -8503,7 +8590,7 @@ def fitc_anl(mod_f_path, part_start, part_end, config_rec_size, vol_ftbl_id, vol
                 print(col_r + '\n    Error: Data at FITC padding, possibly unknown Header revision %d!' % fitc_rev + col_e)
     
     try :
-        rec_folder = os.path.join(mea_dir, os.path.join(mod_f_path[:-4]), 'OEM Configuration', '')
+        rec_folder = os.path.join(out_dir, os.path.join(mod_f_path[:-4]), 'OEM Configuration', '')
         # noinspection PyUnusedLocal
         _ = mfs_cfg_anl(7, fitc_cfg_data, rec_folder, rec_folder, config_rec_size, [], vol_ftbl_id, vol_ftbl_pl) # Parse MFS Configuration Records
     except :
@@ -8532,7 +8619,7 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
     page_hdr_size = ctypes.sizeof(EFS_Page_Header)
     page_ftr_size = ctypes.sizeof(EFS_Page_Footer)
     ftbl_json = os.path.join(mea_dir, 'FileTable.dat')
-    efs_folder = os.path.join(mea_dir, os.path.join(mod_f_path[:-4]), '')
+    efs_folder = os.path.join(out_dir, os.path.join(mod_f_path[:-4]), '')
     
     # Verify that EFS Partition can be parsed by efs_anl
     if not re.compile(br'\x00.\x00.\x00{3}.{8}\x00\x01\x02\x03\x04\x05', re.DOTALL).search(efs_part[0x1:0x16]) :
@@ -8937,13 +9024,28 @@ def mfs_txt(struct_print, folder_path, file_path_wo_ext, mode, is_log) :
         
         os.makedirs(folder_path, exist_ok=True) # Create the Text File's parent Folder, if needed
         
-        if param.cse_verbose and is_log : print('\n%s' % struct_txt) # Print Structure Info
+        if param.cse_verbose and is_log:
+            print('\n%s' % struct_txt) # Print Structure Info
         
-        with open(file_path_wo_ext + '.txt', mode, encoding = 'utf-8') as txt : txt.write('\n%s' % struct_txt) # Store Structure Info Text File
-        if param.write_html :
-            with open(file_path_wo_ext + '.html', mode, encoding = 'utf-8') as html : html.write('\n<br/>\n%s' % pt_html(struct_print)) # Store Structure Info HTML File
-        if param.write_json :
-            with open(file_path_wo_ext + '.json', mode, encoding = 'utf-8') as html : html.write('\n%s' % pt_json(struct_print)) # Store Structure Info JSON File
+        with open(file_path_wo_ext + '.txt', mode, encoding = 'utf-8') as txt:
+            txt.write('\n%s' % struct_txt) # Store Structure Info Text File
+        
+        if param.write_html:
+            with open(file_path_wo_ext + '.html', mode, encoding = 'utf-8') as html:
+                html.write('\n<br/>\n%s' % pt_html(struct_print)) # Store Structure Info HTML File
+        
+        if param.write_json:
+            mfs_txt_json_path = file_path_wo_ext + '.json'
+            
+            if not os.path.isfile(mfs_txt_json_path):
+                with open(mfs_txt_json_path, 'w', encoding='utf-8') as jo:
+                    json.dump([], jo, indent=4)
+            
+            with open(mfs_txt_json_path, 'r', encoding='utf-8') as ji:
+                mfs_txt_json_lists = json.load(ji)
+            
+            with open(mfs_txt_json_path, 'w', encoding='utf-8') as jo:
+                json.dump(mfs_txt_json_lists + [pt_json(struct_print)], jo, indent=4)
     
 # Write MFS File Contents
 def mfs_write(folder_path, file_path, data) :
@@ -9048,15 +9150,15 @@ def pmc_anl(mn2_info) :
     pch_rev_val = {0:'A', 1:'B', 2:'C', 3:'D', 4:'E', 5:'F', 6:'G', 7:'H', 8:'I', 9:'J', 10:'K', 11:'L', 12:'M', 13:'N', 14:'O', 15:'P'}
     
     # mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
-    #               MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
+    #             MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
     
     # $MN2 Manifest SVN = CSE_Ext_0F ARBSVN. The value is used for Anti-Rollback (ARB) and not Trusted Computing Base (TCB) purposes.
     
     pmc_year,pmc_month,pmc_day = list(map(int, mn2_info[7].split('-')))
     
     # Detect PMC Variant
-    pmc_variant, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [pmc_year, pmc_month, pmc_day],
-                                 [mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3]])
+    pmc_variant, _, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [pmc_year, pmc_month, pmc_day],
+                                       [mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3]])
     
     if not pmc_variant.startswith('PMC') : pmc_variant = 'Unknown'
     
@@ -9130,7 +9232,7 @@ def pmc_anl(mn2_info) :
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PMC firmware
     
     return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmc_platform, \
-           mn2_info[7], mn2_info[8], mn2_info[9], pmc_meu_ver
+           mn2_info[7], mn2_info[8], mn2_info[9], pmc_meu_ver, pmc_name_db
 
 # Parse CSE PMC firmware after analysis
 def pmc_parse(pmc_all_init, pmc_all_anl) :
@@ -9138,10 +9240,10 @@ def pmc_parse(pmc_all_init, pmc_all_anl) :
         pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size = pmc
         
         pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmc_platform, \
-        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver = pmc_anl(pmc_mn2_ver)
+        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_name_db = pmc_anl(pmc_mn2_ver)
         
         pmc_all_anl.append([pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,
-                            pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size])
+                            pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size,pmc_name_db])
     
     return pmc_all_anl
     
@@ -9157,8 +9259,8 @@ def pchc_anl(mn2_info) :
     pchc_year,pchc_month,pchc_day = list(map(int, mn2_info[7].split('-')))
     
     # Detect PCHC Variant
-    pchc_variant, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [pchc_year, pchc_month, pchc_day],
-                                 [mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3]])
+    pchc_variant, _, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [pchc_year, pchc_month, pchc_day],
+                                        [mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3]])
     
     if not pchc_variant.startswith('PCHC') : pchc_variant = 'Unknown'
     
@@ -9190,7 +9292,7 @@ def pchc_anl(mn2_info) :
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PCHC firmware
     
     return pchc_fw_ver, mn2_info[0], mn2_info[1], mn2_info[3], pchc_mn2_signed, pchc_mn2_signed_db, pchc_platform, mn2_info[7], \
-           mn2_info[8], mn2_info[9], pchc_meu_ver
+           mn2_info[8], mn2_info[9], pchc_meu_ver, pchc_name_db
 
 # Parse CSE PCHC firmware after analysis
 def pchc_parse(pchc_all_init, pchc_all_anl) :
@@ -9198,10 +9300,10 @@ def pchc_parse(pchc_all_init, pchc_all_anl) :
         pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size = pchc
         
         pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform,pchc_date,pchc_svn, \
-        pchc_pvbit,pchc_meu_ver = pchc_anl(pchc_mn2_ver)
+        pchc_pvbit,pchc_meu_ver,pchc_name_db = pchc_anl(pchc_mn2_ver)
         
         pchc_all_anl.append([pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform,
-                             pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_ext15_info,pchc_size])
+                             pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size,pchc_name_db])
     
     return pchc_all_anl
 
@@ -9218,8 +9320,8 @@ def phy_anl(mn2_info) :
     phy_year,phy_month,phy_day = list(map(int, mn2_info[7].split('-')))
     
     # Detect PHY Variant
-    phy_variant, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [phy_year, phy_month, phy_day],
-                                 [mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3]])
+    phy_variant, _, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [phy_year, phy_month, phy_day],
+                                       [mn2_info[0], mn2_info[1], mn2_info[2], mn2_info[3]])
 
     if not phy_variant.startswith('PHY') : phy_variant = 'Unknown'
     
@@ -9255,17 +9357,19 @@ def phy_anl(mn2_info) :
         err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (phy_variant, mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PHY firmware
     
-    return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], phy_meu_ver, mn2_info[3]
+    return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], \
+           phy_meu_ver, mn2_info[3], phy_name_db
 
 # Parse CSE PHY firmware after analysis
 def phy_parse(phy_all_init, phy_all_anl) :
     for phy in phy_all_init :
         phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size = phy
         
-        phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,phy_fw_rel = phy_anl(phy_mn2_ver)
+        phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver, \
+        phy_fw_rel,phy_name_db = phy_anl(phy_mn2_ver)
         
         phy_all_anl.append([phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,
-                            phy_fw_rel,phy_vcn,phy_ext15_info,phy_size])
+                            phy_fw_rel,phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size,phy_name_db])
             
     return phy_all_anl
 
@@ -9680,7 +9784,8 @@ def pt_html(pt_obj) :
     
 # Convert PLTable Object to JSON Dictionary
 def pt_json(pt_obj) :
-    return json.dumps(pt_obj.get_json_dict(re_pattern=ansi_escape), indent=4)
+    # When PLTable Object Header is hidden in MEA, we can assume it is a "Field: Value" table
+    return pt_obj.get_json_dict(re_pattern=ansi_escape, is_field_value=not pt_obj.header)
     
 # Detect DB Revision
 def mea_hdr_init() :
@@ -9785,6 +9890,9 @@ def mc_chk32(data) :
 # Copy input file if there are worthy Notes, Warnings or Errors
 # Must be called at the end of analysis to gather any generated messages
 def copy_on_msg(msg_all) :
+    if param.copy_dis:
+        return
+    
     copy = False
     
     # Detect if any copy-worthy generated message exists
@@ -9796,7 +9904,7 @@ def copy_on_msg(msg_all) :
     # At least one message needs a file copy
     if copy :
         file_name = os.path.basename(file_in)
-        check_dir = os.path.join(mea_dir, '__CHECK__', '')
+        check_dir = os.path.join(out_dir, '__CHECK__', '')
         check_name = os.path.join(check_dir, file_name)
         
         if not os.path.isdir(check_dir) : os.mkdir(check_dir)
@@ -10179,6 +10287,7 @@ def sku_db_cse(sku_type, sku_plat, sku_stp, sku_db, stp_only, skip_csme11) :
 def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash, mn2_date, mn2_ver) :
     variant = 'Unknown'
     variant_p = 'Unknown'
+    variant_p_fw = 'Unknown'
     var_rsa_db = True
     year,month,_ = mn2_date
     major,minor,hotfix,build = mn2_ver
@@ -10261,17 +10370,41 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
             variant = 'ME' # Default fallback, no CSE/TXE/SPS/GSC/PMC/PCHC/PHY/OROM detected
     
     # Create Variant display-friendly text
-    if variant == 'CSME' : variant_p = 'CSE ME'
-    elif variant == 'CSTXE' : variant_p = 'CSE TXE'
-    elif variant == 'CSSPS' : variant_p = 'CSE SPS'
-    elif variant == 'GSC' : variant_p = 'GSC'
-    elif variant.startswith('PHY') : variant_p = 'PHY'
-    elif variant.startswith('PMC') : variant_p = 'PMC'
-    elif variant.startswith('PCHC') : variant_p = 'PCHC'
-    elif variant.startswith('OROM') : variant_p = 'OROM'
-    elif variant in ['ME','TXE','SPS'] : variant_p = variant
+    if variant == 'CSME':
+        variant_p = 'CSE ME'
+        variant_p_fw = 'Management Engine'
+    elif variant == 'CSTXE':
+        variant_p = 'CSE TXE'
+        variant_p_fw = 'Trusted Execution Engine'
+    elif variant == 'CSSPS':
+        variant_p = 'CSE SPS'
+        variant_p_fw = 'Server Platform Services'
+    elif variant == 'GSC':
+        variant_p = 'GSC'
+        variant_p_fw = 'Graphics System Controller'
+    elif variant.startswith('PHY'):
+        variant_p = 'PHY'
+        variant_p_fw = 'USB Type C Physical'
+    elif variant.startswith('PMC'):
+        variant_p = 'PMC'
+        variant_p_fw = 'Power Management Controller'
+    elif variant.startswith('PCHC'):
+        variant_p = 'PCHC'
+        variant_p_fw = 'Platform Controller Hub'
+    elif variant.startswith('OROM'):
+        variant_p = 'OROM'
+        variant_p_fw = 'Option ROM'
+    elif variant == 'ME':
+        variant_p = variant
+        variant_p_fw = 'Management Engine'
+    elif variant == 'TXE':
+        variant_p = variant
+        variant_p_fw = 'Trusted Execution Engine'
+    elif variant == 'SPS':
+        variant_p = variant
+        variant_p_fw = 'Server Platform Services'
     
-    return variant, variant_p, var_rsa_db
+    return variant, variant_p, variant_p_fw, var_rsa_db
 
 # Check online for MEA & DB Updates
 def mea_upd_check(db_path) :
@@ -10738,6 +10871,13 @@ param = MEA_Param(sys.argv)
 # Get script location
 mea_dir = get_script_dir()
 
+# Set output location
+out_dir = param.out_dir or mea_dir
+
+# Make sure output location exists
+if not os.path.isdir(out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+
 # Enumerate parameter input
 arg_num = len(sys.argv)
 
@@ -10877,6 +11017,7 @@ for file_in in source :
     pdm_status = 'NaN'
     variant = 'Unknown'
     variant_p = 'Unknown'
+    variant_p_fw = 'Unknown'
     sku_result = 'Unknown'
     sku_stp = 'Unknown'
     phy_sku = 'Unknown'
@@ -10987,10 +11128,10 @@ for file_in in source :
     pchc_ext15_info = [0, '', ('',''), '']
     fdv_status = [False, False, False, False, []]
     msg_set = set()
-    msg_dict = {}
-    msg_entries = {}
+    msg_entries = []
     ftbl_blob_dict = {}
     ftbl_entry_dict = {}
+    mea_json = {file_in: {}}
     vcn = -1
     svn = -1
     sku_me = -1
@@ -11155,11 +11296,16 @@ for file_in in source :
                 ftbl_blob_dict['%0.2X' % tbl.Dictionary] = {}
                 ftbl_blob_dict['%0.2X' % tbl.Dictionary]['FTBL'] = ftbl_entry_dict # Create File Table Blob Dictionary
                 
-                with open('%s_FTBL_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(ftbl_pt))
-                if param.write_html :
-                    with open('%s_FTBL_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(ftbl_pt))
-                if param.write_json :
-                    with open('%s_FTBL_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(ftbl_pt))
+                with open('%s_FTBL_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as to:
+                    to.write(str(ftbl_pt))
+                
+                if param.write_html:
+                    with open('%s_FTBL_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as ho:
+                        ho.write(pt_html(ftbl_pt))
+                
+                if param.write_json:
+                    with open('%s_FTBL_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as jo:
+                        json.dump(pt_json(ftbl_pt), jo, indent=4)
         
         if reading[ftbl.HeaderSize:ftbl.HeaderSize + 0x4] == b'EFST' :
             efst = get_struct(reading, ftbl.HeaderSize, EFST_Header)
@@ -11221,14 +11367,19 @@ for file_in in source :
                 if 'EFST' not in ftbl_blob_dict['%0.2X' % tbl.Dictionary] : ftbl_blob_dict['%0.2X' % tbl.Dictionary]['EFST'] = {}
                 ftbl_blob_dict['%0.2X' % tbl.Dictionary]['EFST']['%0.2X' % tbl.Revision] = efst_entry_dict
                 
-                with open('%s_EFST_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(str(efst_pt))
-                if param.write_html :
-                    with open('%s_EFST_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_html(efst_pt))
-                if param.write_json :
-                    with open('%s_EFST_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as o : o.write(pt_json(efst_pt))
+                with open('%s_EFST_%0.2X.txt' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as to:
+                    to.write(str(efst_pt))
                 
-        o_dict = json.dumps(ftbl_blob_dict, indent=4, sort_keys=True)
-        with open('%s_FileTable.dat' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write(o_dict)
+                if param.write_html:
+                    with open('%s_EFST_%0.2X.html' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as ho:
+                        ho.write(pt_html(efst_pt))
+                
+                if param.write_json:
+                    with open('%s_EFST_%0.2X.json' % (os.path.basename(file_in), tbl.Dictionary), 'w', encoding='utf-8') as jo:
+                        json.dump(pt_json(efst_pt), jo, indent=4)
+        
+        with open('%s_FileTable.dat' % os.path.basename(file_in), 'w', encoding='utf-8') as jo:
+            json.dump(ftbl_blob_dict, jo, sort_keys=True, indent=4)
         
         continue # Next input file
     
@@ -12016,8 +12167,8 @@ for file_in in source :
     rsa_sig_hash = get_hash(rsa_sig, 0x20) # SHA-256 of RSA Signature
     
     # Detect Variant/Family
-    variant, variant_p, var_rsa_db = get_variant(reading, mn2_ftpr_hdr, start_man_match, end_man_match, rsa_key_hash,
-                                                 [year, month, day], [major, minor, hotfix, build])
+    variant, variant_p, variant_p_fw, var_rsa_db = get_variant(reading, mn2_ftpr_hdr, start_man_match, end_man_match, rsa_key_hash,
+                                                               [year, month, day], [major, minor, hotfix, build])
     
     # Get the Proper + Initial Manifest Info for (CS)SPS EXTR (FTPR + OPR1)
     if variant in ('SPS','CSSPS') and sps_opr_found :
@@ -12849,7 +13000,7 @@ for file_in in source :
         = get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
         
         # Get CSE EFS File System Attributes & Configuration State (must be after mfs_anl)
-        if efs_found : efs_init = efs_anl(mea_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
+        if efs_found : efs_init = efs_anl(out_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
         
         # Get CSE Firmware Attributes (must be after mfs_anl)
         cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
@@ -13162,7 +13313,7 @@ for file_in in source :
         mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final,vol_ftbl_id,config_rec_size,vol_ftbl_pl = get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
         
         # Get CSE EFS File System Attributes & Configuration State (must be after mfs_anl)
-        if efs_found : efs_init = efs_anl(mea_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
+        if efs_found : efs_init = efs_anl(out_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
         
         # Detect CSE Firmware Attributes (must be after mfs_anl)
         cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
@@ -13255,7 +13406,7 @@ for file_in in source :
         = get_mfs_anl(mfs_state,mfs_parsed_idx,intel_cfg_hash_mfs,mfs_info,pch_init_final)
         
         # Get GSC EFS File System Attributes & Configuration State (must be after mfs_anl)
-        if efs_found : efs_init = efs_anl(mea_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
+        if efs_found : efs_init = efs_anl(out_dir, efs_start, efs_start + efs_size, vol_ftbl_id, vol_ftbl_pl)
         
         # Get GSC Firmware Attributes (must be after mfs_anl)
         cpd_offset,cpd_mod_attr,cpd_ext_attr,vcn,ext12_info,ext_print,ext_pname,ext50_info,ext_phval,ext_dnx_val,oem_config,oem_signed,cpd_mn2_info, \
@@ -13332,7 +13483,7 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
         
-        pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver = pmc_anl(cpd_mn2_info)
+        pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,pmc_name_db = pmc_anl(cpd_mn2_info)
         
         if sku_stp != 'Unknown' : sku_stp = sku_stp[0]
         sku_db = '%s_%s' % (sku, sku_stp)
@@ -13354,7 +13505,7 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
         
-        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver = pchc_anl(cpd_mn2_info)
+        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,pchc_name_db = pchc_anl(cpd_mn2_info)
         
         eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PCHC firmware size
         
@@ -13373,7 +13524,7 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
         
-        phy_fw_ver,sku,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,phy_fw_rel = phy_anl(cpd_mn2_info)
+        phy_fw_ver,sku,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,phy_fw_rel,phy_name_db = phy_anl(cpd_mn2_info)
         
         eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PHY firmware size
         
@@ -13446,7 +13597,7 @@ for file_in in source :
     
     # Store Firmware DB entry to file
     if param.db_print_new :
-        with open(os.path.join(mea_dir, 'MEA_PDB.txt'), 'a', encoding = 'utf-8') as db_file : db_file.write(name_db + '\n')
+        with open(os.path.join(out_dir, 'MEA_PDB.txt'), 'a', encoding = 'utf-8') as db_file : db_file.write(name_db + '\n')
         continue # Next input file
     
     # Search Database for Firmware
@@ -13463,6 +13614,8 @@ for file_in in source :
                 rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
             if rsa_sig_hash in line and (variant,type_db,sku_stp) == ('CSSPS','REC','Unknown') :
                 fw_in_db_found = True # REC w/o $FPT are not POR for CSSPS, notify only if REC w/ $FPT does not exist
+            if rsa_sig_hash in line and variant == 'CSSPS' and (major, minor) in [(6, 0), (4, 4)]:
+                fw_in_db_found = True # For CSSPS 4.4 (WH) and 6.0 (TA), search for RSA Signature only
     else :
         can_search_db = False # Do not search DB for PMC, PCHC and PHY
     
@@ -13485,7 +13638,7 @@ for file_in in source :
     
     msg_pt.add_row(['Family', variant_p])
     msg_pt.add_row(['Version', fw_ver])
-    msg_pt.add_row(['Release', release + ', Engineering ' if build >= 7000 else release])
+    msg_pt.add_row(['Release', release + ', Engineering' if build >= 7000 else release])
     msg_pt.add_row(['Type', fw_type])
     
     if (variant == 'CSTXE' and 'Unknown' not in sku) or (variant,sku) == ('SPS','NaN') \
@@ -13546,26 +13699,31 @@ for file_in in source :
     
     print('\n%s' % msg_pt)
     
+    msg_pt.title = variant_p_fw
+    msg_pt.add_row(['MEA Database Name', name_db.rsplit('_', 1)[0]])
+    msg_pt.add_row(['RSA Signature Hash', rsa_sig_hash])
+    
     if param.check : # Debug/Research
         if mfs_state != 'Unconfigured' or oem_signed or oemp_found or utok_found or fitc_size or cdmd_size : input('\nCFG_PRESENT!\n')
         if pmc_all_init or pchc_all_init or phy_all_init : input('\nIUP_PRESENT!\n')
     
-    if param.write_html :
-        with open('%s.html' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_pt))
+    if param.write_html:
+        with open(os.path.join(out_dir, f'{os.path.basename(file_in)}.html'), 'w', encoding='utf-8') as ho:
+            ho.write('\n<br/>\n%s' % pt_html(msg_pt))
     
-    if param.write_json :
-        with open('%s.json' % os.path.basename(file_in), 'w', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_pt))
+    if param.write_json:
+        mea_json[file_in] = {**mea_json[file_in], **pt_json(msg_pt)}
     
-    for pmc in pmc_all_anl :
+    for pmc_idx, pmc_val in enumerate(pmc_all_anl, 1):
         msg_pmc_pt = ext_table(['Field', 'Value'], False, 1)
         msg_pmc_pt.title = 'Power Management Controller'
         
         pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmc_platform, \
-        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size = pmc
+        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size,pmc_name_db = pmc_val
         
         msg_pmc_pt.add_row(['Family', 'PMC'])
         msg_pmc_pt.add_row(['Version', pmc_fw_ver])
-        msg_pmc_pt.add_row(['Release', pmc_mn2_signed + ', Engineering ' if pmc_fw_rel >= 7000 else pmc_mn2_signed])
+        msg_pmc_pt.add_row(['Release', pmc_mn2_signed + ', Engineering' if pmc_fw_rel >= 7000 else pmc_mn2_signed])
         msg_pmc_pt.add_row(['Type', 'Independent'])
         if (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) or not pmc_platform.startswith(('APL','BXT','GLK','DG')) :
             msg_pmc_pt.add_row(['Chipset SKU', pmc_pch_sku])
@@ -13581,22 +13739,29 @@ for file_in in source :
         
         print(msg_pmc_pt)
         
-        if param.write_html :
-            with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_pmc_pt))
+        msg_pmc_pt.add_row(['MEA Database Name', pmc_name_db.rsplit('_', 1)[0]])
+        msg_pmc_pt.add_row(['RSA Signature Hash', pmc_mn2_ver[6]])
+        
+        if param.write_html:
+            with open(os.path.join(out_dir, f'{os.path.basename(file_in)}.html'), 'a', encoding='utf-8') as ho:
+                ho.write('\n<br/>\n%s' % pt_html(msg_pmc_pt))
+        
+        if param.write_json:
+            if msg_pmc_pt.title not in mea_json[file_in]:
+                mea_json[file_in][msg_pmc_pt.title] = []
             
-        if param.write_json :
-            with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_pmc_pt))
-            
-    for pchc in pchc_all_anl :
+            mea_json[file_in][msg_pmc_pt.title].extend(list(pt_json(msg_pmc_pt).values())[0])
+    
+    for pchc_idx, pchc_val in enumerate(pchc_all_anl, 1):
         msg_pchc_pt = ext_table(['Field', 'Value'], False, 1)
         msg_pchc_pt.title = 'Platform Controller Hub Configuration'
         
         pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform, \
-        pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_ext15_info,pchc_size = pchc
+        pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size,pchc_name_db = pchc_val
         
         msg_pchc_pt.add_row(['Family', 'PCHC'])
         msg_pchc_pt.add_row(['Version', pchc_fw_ver])
-        msg_pchc_pt.add_row(['Release', pchc_mn2_signed + ', Engineering ' if pchc_fw_rel >= 7000 else pchc_mn2_signed])
+        msg_pchc_pt.add_row(['Release', pchc_mn2_signed + ', Engineering' if pchc_fw_rel >= 7000 else pchc_mn2_signed])
         msg_pchc_pt.add_row(['Type', 'Independent'])
         msg_pchc_pt.add_row(['TCB Security Version Number', pchc_svn])
         msg_pchc_pt.add_row(['ARB Security Version Number', pchc_ext15_info[0]])
@@ -13609,22 +13774,29 @@ for file_in in source :
         
         print(msg_pchc_pt)
         
-        if param.write_html :
-            with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_pchc_pt))
+        msg_pchc_pt.add_row(['MEA Database Name', pchc_name_db.rsplit('_', 1)[0]])
+        msg_pchc_pt.add_row(['RSA Signature Hash', pchc_mn2_ver[6]])
+        
+        if param.write_html:
+            with open(os.path.join(out_dir, f'{os.path.basename(file_in)}.html'), 'a', encoding='utf-8') as ho:
+                ho.write('\n<br/>\n%s' % pt_html(msg_pchc_pt))
+        
+        if param.write_json:
+            if msg_pchc_pt.title not in mea_json[file_in]:
+                mea_json[file_in][msg_pchc_pt.title] = []
             
-        if param.write_json :
-            with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_pchc_pt))
-            
-    for phy in phy_all_anl :
+            mea_json[file_in][msg_pchc_pt.title].extend(list(pt_json(msg_pchc_pt).values())[0])
+    
+    for phy_idx, phy_val in enumerate(phy_all_anl, 1):
         msg_phy_pt = ext_table(['Field', 'Value'], False, 1)
         msg_phy_pt.title = 'USB Type C Physical'
         
         phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver, \
-        phy_fw_rel,phy_vcn,phy_ext15_info,phy_size = phy
+        phy_fw_rel,phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size,phy_name_db = phy_val
         
         msg_phy_pt.add_row(['Family', 'PHY'])
         msg_phy_pt.add_row(['Version', phy_fw_ver])
-        msg_phy_pt.add_row(['Release', phy_mn2_signed + ', Engineering ' if phy_fw_rel >= 7000 else phy_mn2_signed])
+        msg_phy_pt.add_row(['Release', phy_mn2_signed + ', Engineering' if phy_fw_rel >= 7000 else phy_mn2_signed])
         msg_phy_pt.add_row(['Type', 'Independent'])
         msg_phy_pt.add_row(['SKU', phy_sku])
         msg_phy_pt.add_row(['TCB Security Version Number', phy_svn])
@@ -13638,11 +13810,18 @@ for file_in in source :
         
         print(msg_phy_pt)
         
-        if param.write_html :
-            with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<br/>\n%s' % pt_html(msg_phy_pt))
+        msg_phy_pt.add_row(['MEA Database Name', phy_name_db.rsplit('_', 1)[0]])
+        msg_phy_pt.add_row(['RSA Signature Hash', phy_mn2_ver[6]])
         
-        if param.write_json :
-            with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % pt_json(msg_phy_pt))
+        if param.write_html:
+            with open(os.path.join(out_dir, f'{os.path.basename(file_in)}.html'), 'a', encoding='utf-8') as ho:
+                ho.write('\n<br/>\n%s' % pt_html(msg_phy_pt))
+        
+        if param.write_json:
+            if msg_phy_pt.title not in mea_json[file_in]:
+                mea_json[file_in][msg_phy_pt.title] = []
+            
+            mea_json[file_in][msg_phy_pt.title].extend(list(pt_json(msg_phy_pt).values())[0])
     
     # Print Messages which must be at the end of analysis
     if is_unsupported : err_stor.append([col_r + 'Error: Detected unsupported input Intel Engine/Graphics firmware!' + col_e, True])
@@ -13661,19 +13840,27 @@ for file_in in source :
     if fd_count > 1 : note_stor.append([col_y + 'Note: Multiple (%d) Intel Flash Descriptors detected!' % fd_count + col_e, False])
     
     msg_all = err_stor + warn_stor + note_stor
+    
     for msg_idx in range(len(msg_all)) :
         msg_tuple = tuple(msg_all[msg_idx])
+        
         if msg_tuple not in msg_set:
             msg_set.add(msg_tuple)
+            
             print('\n' + msg_all[msg_idx][0])
-            if param.write_html :
-                with open('%s.html' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_all[msg_idx][0])))
-            if param.write_json :
-                msg_entries['Entry %0.4d' % msg_idx] = ansi_escape.sub('', str(msg_all[msg_idx][0]))
+            
+            if param.write_html:
+                with open(os.path.join(out_dir, f'{os.path.basename(file_in)}.html'), 'a', encoding='utf-8') as ho:
+                    ho.write('\n<p>%s</p>' % ansi_escape.sub('', str(msg_all[msg_idx][0])))
+            
+            if param.write_json:
+                msg_entries.append(ansi_escape.sub('', str(msg_all[msg_idx][0])))
     
-    if param.write_json :
-        msg_dict['Messages'] = msg_entries
-        with open('%s.json' % os.path.basename(file_in), 'a', encoding='utf-8') as o : o.write('\n%s' % json.dumps(msg_dict, indent=4))
+    if param.write_json:
+        mea_json[file_in] = {**mea_json[file_in], **{'Messages': msg_entries}}
+        
+        with open(os.path.join(out_dir, f'{os.path.basename(file_in)}.json'), 'w', encoding='utf-8') as jo:
+            json.dump(mea_json, jo, indent=4)
     
     # Close input and copy it in case of messages
     copy_on_msg(msg_all)

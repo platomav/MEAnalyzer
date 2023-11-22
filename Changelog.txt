@@ -1,3 +1,20 @@
+v1.300.0
+
+Re-written parsable JSON output for all operations (-json)
+Added option to set output directory of operations (-out)
+Added option to disable automatic copy on messages (-dcm)
+Improved parsable HTML output for all operations (-html)
+Improved CSSPS 4.4 (WH) and 6.0 (TA) DB existence check
+ME Analyzer now requires PLTable dependency >= v1.1.0
+
+r337
+
+CSME 16.1.30.2307_CON_H_A_PRD_EXTR
+CSME 15.0.47.2473_CON_LP_B_PRD_EXTR
+CSME 15.0.47.2473_COR_LP_B_PRD_EXTR-Y
+CSME 11.22.94.2495_COR_H_BA_PRD_RGN
+PMC ADP_160.2.00.1043_H_A_PRD
+
 r336
 
 CSME 16.1.30.2264_COR_H_A_PRD_EXTR-Y

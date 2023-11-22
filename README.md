@@ -118,6 +118,8 @@ There are various parameters which enhance or modify the default behavior of ME 
 * -pdb   : Writes unique input file DB name to file
 * -dbn   : Renames input file based on unique DB name
 * -duc   : Disables automatic check for MEA & DB updates
+* -dcm   : Disables automatic input file copy on messages
+* -out   : Defines output directory for all MEA operations
 * -dfpt  : Shows FPT, BPDT, OROM & CSE/GSC Layout Table info
 * -unp86 : Unpacks all supported CSE, GSC and/or IUP firmware
 * -bug86 : Enables pause on error during CSE/GSC/IUP unpacking
