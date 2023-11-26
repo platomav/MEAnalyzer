@@ -1,3 +1,19 @@
+v1.304.4
+
+Added error messages for unsupported CSE/GSC IUP
+Adjusted CSME 16.x and CSSPS 6.x to unsupported
+Adjusted CSME 15.20 and GSC DG2 to unsupported
+Adjusted CSE, GSC and IUP fallbacks to "Unknown"
+Improved unsupported firmware detection/handling
+Fixed CSE IUP variant detection (CNP and WTL)
+Fixed CSE/GSC PMC IUP unknown platform text
+Fixed crash when parsing unknown MFS hashes
+
+r338
+
+CSME 15.0.47.2473_CON_H_B_PRD_EXTR
+Dropped unsupported CSE, GSC and IUP
+
 v1.300.0
 
 Re-written parsable JSON output for all operations (-json)

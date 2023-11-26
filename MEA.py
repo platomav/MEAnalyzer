@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2023 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.300.0'
+title = 'ME Analyzer v1.304.4'
 
 import sys
 
@@ -6169,7 +6169,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
                         [intel_cfg_hash_ext,intel_cfg_hash_ftpr])
                     
                     # Detect unexpected inability to validate Non-Initialized/Non-FWUpdated $FPT (Low Level File 6) or FTPR (intl.cfg) MFS/AFS Intel Configuration Hash
-                    if ((mfs_found and 6 in mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and not intel_cfg_hash_mfs) or (intel_cfg_ftpr and not intel_cfg_hash_ftpr)) and not param.cse_unpack :
+                    if ((mfs_found and mfs_parsed_idx and 6 in mfs_parsed_idx and not any(idx in mfs_parsed_idx for idx in [0,1,2,3,4,5,8]) and not intel_cfg_hash_mfs) or (intel_cfg_ftpr and not intel_cfg_hash_ftpr)) and not param.cse_unpack :
                         cse_anl_err(col_m + 'Warning: Could not validate CSE Extension 0x%0.2X MFS Intel Configuration Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, None)
                 
                 elif ext_tag == 0x3 :
@@ -9145,16 +9145,18 @@ def info_anl(mod_f_path, part_start, part_end) :
 # Analyze CSE PMC firmware before parsing
 def pmc_anl(mn2_info) :
     pmc_pch_sku = 'Unknown'
+    pmc_platform = 'Unknown'
     pch_sku_val = {0:'SoC', 1:'LP', 2:'H', 3:'N', 4:'M'}
     pch_sku_old = {0:'H', 2:'LP'}
     pch_rev_val = {0:'A', 1:'B', 2:'C', 3:'D', 4:'E', 5:'F', 6:'G', 7:'H', 8:'I', 9:'J', 10:'K', 11:'L', 12:'M', 13:'N', 14:'O', 15:'P'}
+    pmc_unsupported = False
     
     # mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
     #             MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
     
     # $MN2 Manifest SVN = CSE_Ext_0F ARBSVN. The value is used for Anti-Rollback (ARB) and not Trusted Computing Base (TCB) purposes.
     
-    pmc_year,pmc_month,pmc_day = list(map(int, mn2_info[7].split('-')))
+    pmc_year,pmc_month,pmc_day = [int(info, 16) for info in mn2_info[7].split('-')]
     
     # Detect PMC Variant
     pmc_variant, _, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [pmc_year, pmc_month, pmc_day],
@@ -9162,7 +9164,9 @@ def pmc_anl(mn2_info) :
     
     if not pmc_variant.startswith('PMC') : pmc_variant = 'Unknown'
     
-    pmc_platform = pmc_variant[-3:]
+    if pmc_variant != 'Unknown':
+        pmc_platform = pmc_variant[-3:]
+    
     pmc_pch_rev = '%s%d' % (pch_rev_val[min(mn2_info[2] // 10, 0xF)], mn2_info[2] % 10) # 21 = PCH C PMC 1
     
     # Get/Set special PMC Platform, SKU and/or Steppings
@@ -9217,22 +9221,25 @@ def pmc_anl(mn2_info) :
         pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_sku, pmc_pch_rev_p, pmc_mn2_signed_db, mn2_info[6])
     
     # Search DB for PMC firmware
-    for line in mea_db_lines :
-        if pmc_name_db in line :
-            break # Break loop at 1st name match
-    else :
-        note_new_fw('PMC %s' % pmc_platform)
+    if pmc_platform.startswith(('MCC','TGP','CMP','JSP','LKF','ICP','CNP','GLK','BXT','APL','DG1')):
+        for line in mea_db_lines :
+            if pmc_name_db in line :
+                break # Break loop at 1st name match
+        else :
+            note_new_fw('PMC %s' % pmc_platform)
+    else:
+        pmc_unsupported = True
     
     # Detect PMC RSA Public Key Recognition
     for line in mea_db_lines :
         if mn2_info[5] in line :
             break # Break loop at 1st hash match
     else :
-        err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (pmc_variant, mn2_info[0], mn2_info[1]) + col_e, True]
+        err_msg = [col_r + 'Error: Unknown PMC %d.%d RSA Public Key!' % (mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PMC firmware
     
     return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmc_platform, \
-           mn2_info[7], mn2_info[8], mn2_info[9], pmc_meu_ver, pmc_name_db
+           mn2_info[7], mn2_info[8], mn2_info[9], pmc_meu_ver, pmc_name_db, pmc_unsupported
 
 # Parse CSE PMC firmware after analysis
 def pmc_parse(pmc_all_init, pmc_all_anl) :
@@ -9240,23 +9247,25 @@ def pmc_parse(pmc_all_init, pmc_all_anl) :
         pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size = pmc
         
         pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmc_platform, \
-        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_name_db = pmc_anl(pmc_mn2_ver)
+        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_name_db,pmc_unsupported = pmc_anl(pmc_mn2_ver)
         
         pmc_all_anl.append([pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,
-                            pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size,pmc_name_db])
+                            pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size,
+                            pmc_name_db,pmc_unsupported])
     
     return pmc_all_anl
     
 # Analyze CSE PCHC firmware before parsing
 def pchc_anl(mn2_info) :
     pchc_platform = 'Unknown'
+    pchc_unsupported = False
     
     # mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
     #               MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
     
     # $MN2 Manifest SVN = CSE_Ext_0F ARBSVN. The value is used for Anti-Rollback (ARB) and not Trusted Computing Base (TCB) purposes.
     
-    pchc_year,pchc_month,pchc_day = list(map(int, mn2_info[7].split('-')))
+    pchc_year,pchc_month,pchc_day = [int(info, 16) for info in mn2_info[7].split('-')]
     
     # Detect PCHC Variant
     pchc_variant, _, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [pchc_year, pchc_month, pchc_day],
@@ -9277,22 +9286,25 @@ def pchc_anl(mn2_info) :
     pchc_name_db = '%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, pchc_mn2_signed_db, mn2_info[6])
     
     # Search DB for PCHC firmware
-    for line in mea_db_lines :
-        if pchc_name_db in line :
-            break # Break loop at 1st name match
-    else :
-        note_new_fw('PCHC %s' % pchc_platform)
+    if pchc_platform.startswith(('MCC','TGP','CMP','JSP','LKF','ICP')):
+        for line in mea_db_lines :
+            if pchc_name_db in line :
+                break # Break loop at 1st name match
+        else :
+            note_new_fw('PCHC %s' % pchc_platform)
+    else:
+        pchc_unsupported = True
     
     # Detect PCHC RSA Public Key Recognition
     for line in mea_db_lines :
         if mn2_info[5] in line :
             break # Break loop at 1st hash match
     else :
-        err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (pchc_variant, mn2_info[0], mn2_info[1]) + col_e, True]
+        err_msg = [col_r + 'Error: Unknown PCHC %d.%d RSA Public Key!' % (mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PCHC firmware
     
     return pchc_fw_ver, mn2_info[0], mn2_info[1], mn2_info[3], pchc_mn2_signed, pchc_mn2_signed_db, pchc_platform, mn2_info[7], \
-           mn2_info[8], mn2_info[9], pchc_meu_ver, pchc_name_db
+           mn2_info[8], mn2_info[9], pchc_meu_ver, pchc_name_db, pchc_unsupported
 
 # Parse CSE PCHC firmware after analysis
 def pchc_parse(pchc_all_init, pchc_all_anl) :
@@ -9300,10 +9312,11 @@ def pchc_parse(pchc_all_init, pchc_all_anl) :
         pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size = pchc
         
         pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform,pchc_date,pchc_svn, \
-        pchc_pvbit,pchc_meu_ver,pchc_name_db = pchc_anl(pchc_mn2_ver)
+        pchc_pvbit,pchc_meu_ver,pchc_name_db,pchc_unsupported = pchc_anl(pchc_mn2_ver)
         
-        pchc_all_anl.append([pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform,
-                             pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size,pchc_name_db])
+        pchc_all_anl.append([pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,
+                             pchc_platform, pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_mn2_ver,pchc_ext15_info,
+                             pchc_size,pchc_name_db,pchc_unsupported])
     
     return pchc_all_anl
 
@@ -9311,13 +9324,14 @@ def pchc_parse(pchc_all_init, pchc_all_anl) :
 def phy_anl(mn2_info) :
     phy_platform = 'Unknown'
     phy_sku = 'Unknown'
+    phy_unsupported = False
     
     # mn2_info = [Major, Minor, Hotfix, Build, Release, RSA Key Hash, RSA Sig Hash, Date, SVN, PV bit, MEU Major, MEU Minor, MEU Hotfix,
     #               MEU Build, MN2 w/o RSA Hashes, MN2 Struct, MN2 Match Start, MN2 Match End]
     
     # $MN2 Manifest SVN = CSE_Ext_0F ARBSVN. The value is used for Anti-Rollback (ARB) and not Trusted Computing Base (TCB) purposes.
     
-    phy_year,phy_month,phy_day = list(map(int, mn2_info[7].split('-')))
+    phy_year,phy_month,phy_day = [int(info, 16) for info in mn2_info[7].split('-')]
     
     # Detect PHY Variant
     phy_variant, _, _, _ = get_variant(reading, mn2_info[15], mn2_info[16], mn2_info[17], mn2_info[5], [phy_year, phy_month, phy_day],
@@ -9343,22 +9357,25 @@ def phy_anl(mn2_info) :
         phy_name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], phy_sku, phy_fw_ver, phy_mn2_signed_db, mn2_info[6])
     
     # Search DB for PHY firmware
-    for line in mea_db_lines :
-        if phy_name_db in line :
-            break # Break loop at 1st name match
-    else :
-        note_new_fw('PHY %s %s' % (phy_platform, phy_sku))
+    if phy_platform.startswith(('TGP','CMP','LKF','ICP','DG1')):
+        for line in mea_db_lines :
+            if phy_name_db in line :
+                break # Break loop at 1st name match
+        else :
+            note_new_fw('PHY %s %s' % (phy_platform, phy_sku))
+    else:
+        phy_unsupported = True
     
     # Detect PHY RSA Public Key Recognition
     for line in mea_db_lines :
         if mn2_info[5] in line :
             break # Break loop at 1st hash match
     else :
-        err_msg = [col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (phy_variant, mn2_info[0], mn2_info[1]) + col_e, True]
+        err_msg = [col_r + 'Error: Unknown PHY %d.%d RSA Public Key!' % (mn2_info[0], mn2_info[1]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PHY firmware
     
     return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], \
-           phy_meu_ver, mn2_info[3], phy_name_db
+           phy_meu_ver, mn2_info[3], phy_name_db, phy_unsupported
 
 # Parse CSE PHY firmware after analysis
 def phy_parse(phy_all_init, phy_all_anl) :
@@ -9366,10 +9383,10 @@ def phy_parse(phy_all_init, phy_all_anl) :
         phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size = phy
         
         phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver, \
-        phy_fw_rel,phy_name_db = phy_anl(phy_mn2_ver)
+        phy_fw_rel,phy_name_db, phy_unsupported = phy_anl(phy_mn2_ver)
         
         phy_all_anl.append([phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver,
-                            phy_fw_rel,phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size,phy_name_db])
+                            phy_fw_rel,phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size,phy_name_db,phy_unsupported])
             
     return phy_all_anl
 
@@ -9890,7 +9907,7 @@ def mc_chk32(data) :
 # Copy input file if there are worthy Notes, Warnings or Errors
 # Must be called at the end of analysis to gather any generated messages
 def copy_on_msg(msg_all) :
-    if param.copy_dis:
+    if param.copy_dis or is_unsupported:
         return
     
     copy = False
@@ -10342,7 +10359,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'PMCC000' and major == 150 : variant = 'PMCTGP' # 0 TGP
                 elif mod == 'PMCC000' and major == 154 : variant = 'PMCMCC' # 0 MCC
                 elif mod == 'PMCC000' and major == 160 : variant = 'PMCADP' # 0 ADP
-                elif mod == 'PMCC000' and major == 1 : variant = 'PMCWTL' # 0 WTL
+                elif mod == 'PMCC000' and major == 1 and not is_meu : variant = 'PMCWTL' # 0 WTL
                 elif mod == 'PMCC000' and major == 14 : variant = 'PMCIDV' # 0 IDV
                 elif mod == 'PMCC002' : variant = 'PMCAPLA' # 2 APL A
                 elif mod == 'PMCC003' : variant = 'PMCAPLB' # 3 APL B
@@ -10356,7 +10373,7 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'VBT' and major == 20 : variant = 'OROMDG2' # DG2
                 elif mod == 'VBT' : variant = 'OROM' # Unknown
             
-            if variant.startswith(('Unknown','TBD')) : variant = 'CSTXE' # CSE fallback, no CSME/CSSPS/GSC/PMC/PCHC/PHY/OROM detected
+            if variant.startswith(('Unknown','TBD')) and (major,minor) in [(4,0),(3,0)] : variant = 'CSTXE' # CSTXE
         
         elif buffer[mn2_match_end + 0x270 + 0x80:mn2_match_end + 0x270 + 0x84] == b'$MME' :
             # $MME: ME2-5/SPS1 = 0x50, ME6-10/SPS2-3 = 0x60, TXE1-2 = 0x80
@@ -10365,9 +10382,6 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
         elif re.compile(br'\$SKU\x03\x00\x00\x00\x2F\xE4\x01\x00').search(buffer) or \
         re.compile(br'\$SKU\x03\x00\x00\x00\x08\x00\x00\x00').search(buffer) :
             variant = 'SPS'
-        
-        else :
-            variant = 'ME' # Default fallback, no CSE/TXE/SPS/GSC/PMC/PCHC/PHY/OROM detected
     
     # Create Variant display-friendly text
     if variant == 'CSME':
@@ -11420,7 +11434,7 @@ for file_in in source :
         # Recovery Manifest not found (for > finish)
         msg_pt = ext_table([], False, 1)
         msg_pt.add_row([col_c + '%s (%d/%d)' % (os.path.basename(file_in)[:45], cur_count, in_count) + col_e])
-        print('\n%s\n\nFile does not contain Intel Engine/Graphics Firmware' % msg_pt)
+        print('\n%s\n\nFile does not contain Intel Engine/Graphics/Independent Firmware' % msg_pt)
         
         continue # Next input file
 
@@ -12712,7 +12726,7 @@ for file_in in source :
                     
             if minor >= 5 : platform = 'ICH8M'
             else : platform = 'ICH8'
-    
+        
         elif major == 3 : # ICH9 or ICH9DO
             sku_bits = {1: 'IDT', 2: 'TPM', 3: 'AMT Lite', 4: 'AMT', 5: 'ASF', 6: 'QST'}
             
@@ -12779,7 +12793,7 @@ for file_in in source :
                     eng_size_text = ['', False]
             
             platform = 'ICH9'
-    
+        
         elif major == 4 : # ICH9M or ICH9M-E (AMT or TPM+AMT): 4.0 - 4.2 , xx00xx --> 4.0 , xx20xx --> 4.1 or 4.2
             sku_bits = {0: 'Reserved', 1: 'IDT', 2: 'TPM', 3: 'AMT Lite', 4: 'AMT', 5: 'ASF', 6: 'QST', 7: 'Reserved'}
             
@@ -12840,7 +12854,7 @@ for file_in in source :
                     else : fw_type = 'Stock'
             
             platform = 'ICH9M'
-            
+        
         elif major == 5 : # ICH10D or ICH10DO
             sku_bits = {3: 'Standard Manageability', 4: 'AMT', 5: 'ASF', 6: 'QST', 8: 'Level III Manageability Upgrade', 9: 'Corporate', 10: 'Anti-Theft', 15: 'Remote PC Assist'}
             
@@ -12866,7 +12880,7 @@ for file_in in source :
                     rel_db = 'BYP'
             
             platform = 'ICH10'
-    
+        
         elif major == 6 :
             platform = 'IBX'
             
@@ -12902,7 +12916,7 @@ for file_in in source :
             
             # ME6-Only Fix 2 : Ignore errors at ROMB (Region present, FTPR tag & size missing)
             if release == 'ROM-Bypass' : eng_size_text = ['', False]
-            
+        
         elif major == 7 :
             sku_bits = {3: 'Standard Manageability', 4: 'AMT', 8: 'Local Wakeup Timer', 9: 'KVM', 10: 'Anti-Theft', 15: 'Remote PC Assist'}
             
@@ -12937,7 +12951,7 @@ for file_in in source :
             if me7_blist_2_build != 0 : me7_blist_2 = '<= 7.%d.%d.%d' % (me7_blist_2_minor, me7_blist_2_hotfix, me7_blist_2_build)
             
             platform = ['CPT','CPT/PBG'][is_patsburg]
-            
+        
         elif major == 8 :
             sku_bits = {3: 'Standard Manageability', 4: 'AMT', 8: 'Local Wakeup Timer', 9: 'KVM', 10: 'Anti-Theft', 15: 'Remote PC Assist', 23: 'Small Business'}
             
@@ -12971,7 +12985,7 @@ for file_in in source :
             elif minor in [5,6] : platform = 'LPT-LP'
             
             # 9.6 --> Intel Harris Beach Ultrabook, HSW developer preview (https://bugs.freedesktop.org/show_bug.cgi?id=90002)
-            
+        
         elif major == 10 :
             sku_bits = {3: 'Standard Manageability', 4: 'AMT', 8: 'Local Wakeup Timer', 9: 'KVM', 10: 'Anti-Theft', 15: 'Remote PC Assist', 23: 'Small Business'}
             
@@ -12986,6 +13000,9 @@ for file_in in source :
                 sku_db = 'SLM'
             
             if minor == 0 : platform = 'WPT-LP'
+       
+        else :
+            is_unsupported = True
     
     elif variant == 'CSME' : # Converged Security Management Engine
         
@@ -13151,13 +13168,16 @@ for file_in in source :
             
             if minor == 0 and not pch_init_final : platform = 'TGP' # Tiger Point
             elif minor == 40 and not pch_init_final : platform = 'MCC' # Mule Creek Canyon (Elkhart Lake)
+            
+            if minor not in [0, 40]:
+                is_unsupported = True
         
         elif major == 16 :
             
             if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
             elif minor == 1 and not pch_init_final : platform = 'ADP/RPP' # Raptor Point
             
-            if minor not in [0,1] : is_unsupported = True
+            is_unsupported = True
         
         else :
             
@@ -13175,7 +13195,7 @@ for file_in in source :
             
             sku_attrib = get_struct(reading, start_sku_match, SKU_Attributes)
             _,_,_,_,_,_,_,_,_,_,_,sku_size,_ = sku_attrib.get_flags()
-            
+        
         if major in [0,1] :
             
             if sku_size * 0.5 == 1.0 :
@@ -13199,7 +13219,7 @@ for file_in in source :
             elif rsa_key_hash == '613421A156443F1C038DDE342FF6564513A1818E8CC23B0E1D7D7FB0612E04AC' :
                 sku += ' I/T'
                 sku_db += '_IT'
-                
+        
         elif major == 2 :
             if sku_size * 0.5 == 1.5 :
                 sku = '1.375MB'
@@ -13208,6 +13228,9 @@ for file_in in source :
                 sku = col_r + 'Unknown' + col_e
             
             platform = 'BSW/CHT'
+        
+        else :
+            is_unsupported = True
     
     elif variant == 'CSTXE' : # Converged Security Trusted Execution Engine
         
@@ -13278,10 +13301,11 @@ for file_in in source :
         
     elif variant == 'SPS' : # Server Platform Services
         
-        if major == 1 and not rgn_exist :
-            sps1_rec_match = re.compile(br'EpsRecovery').search(reading[start_man_match:]) # EpsRecovery detection
-            if sps1_rec_match : fw_type = 'Recovery'
-            else : fw_type = 'Operational'
+        if major == 1 :
+            if not rgn_exist :
+                sps1_rec_match = re.compile(br'EpsRecovery').search(reading[start_man_match:]) # EpsRecovery detection
+                if sps1_rec_match : fw_type = 'Recovery'
+                else : fw_type = 'Operational'
         
         elif major in [2,3] :
             sps_platform = {'GR':'Grantley', 'GP':'Grantley-EP', 'GV':'Grangeville', 'DE':'Denlow', 'BR':'Bromolow', 'RO':'Romley', 'BK':'Brickland'}
@@ -13300,7 +13324,9 @@ for file_in in source :
                     sku = (reading[start_man_match + rec_sku_match.start() + 0x8:start_man_match + rec_sku_match.start() + 0xA]).decode('utf-8')
                     sku_db = sku
                     platform = sps_platform[sku] if sku in sps_platform else 'Unknown ' + sku
-
+        else :
+            is_unsupported = True
+    
     elif variant == 'CSSPS' : # Converged Security Server Platform Services
         
         # Firmware Unpacking for all CSSPS
@@ -13383,12 +13409,6 @@ for file_in in source :
             
             if sku_plat not in ['XX','ME'] : is_unsupported = True
         
-        elif major == 6 :
-            
-            if platform == 'Unknown' : platform = 'TGP-H' # Tiger Point
-            
-            if sku_plat not in ['XX','TA'] : is_unsupported = True
-        
         else :
             
             is_unsupported = True
@@ -13444,6 +13464,8 @@ for file_in in source :
         elif major == 101 :
             
             if minor == 0 and not gsc_info and not pch_init_final : sku,sku_db,platform = ['DG02'] * 3 # Dedicated Xe Graphics 2
+            
+            is_unsupported = True
         
         else :
             
@@ -13469,6 +13491,9 @@ for file_in in source :
         
         if orom_match and orom_match[0].start() == 0x0 : # OROM 1st Image POR Start Offset is 0x0
             eng_size_text = chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) # Check OROM IUP Size
+        
+        if not platform.startswith('DG1'):
+            is_unsupported = True
     
     elif variant.startswith('PMC') : # Power Management Controller
         
@@ -13483,7 +13508,8 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PMC',-1,-1,-1,-1,-1,-1,'PMC'], None, [[],''], [[],-1,-1,-1])
         
-        pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,pmc_name_db = pmc_anl(cpd_mn2_info)
+        pmc_fw_ver,pmc_pch_gen,sku,sku_stp,pmc_fw_rel,release,rel_db,platform,date,svn,pvbit, \
+        mn2_meu_ver,pmc_name_db,is_unsupported = pmc_anl(cpd_mn2_info)
         
         if sku_stp != 'Unknown' : sku_stp = sku_stp[0]
         sku_db = '%s_%s' % (sku, sku_stp)
@@ -13505,7 +13531,8 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PCHC',-1,-1,-1,-1,-1,-1,'PCHC'], None, [[],''], [[],-1,-1,-1])
         
-        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,pchc_name_db = pchc_anl(cpd_mn2_info)
+        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,release,rel_db,platform,date,svn,pvbit, \
+        mn2_meu_ver,pchc_name_db,is_unsupported = pchc_anl(cpd_mn2_info)
         
         eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PCHC firmware size
         
@@ -13524,11 +13551,15 @@ for file_in in source :
         ext_iunit_val,ext15_info,pch_init_final,gmf_blob_info,fwi_iup_hashes,gsc_info \
         = ext_anl(reading, '$CPD', 0, file_end, ['PHY',-1,-1,-1,-1,-1,-1,'PHY'], None, [[],''], [[],-1,-1,-1])
         
-        phy_fw_ver,sku,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,phy_fw_rel,phy_name_db = phy_anl(cpd_mn2_info)
+        phy_fw_ver,sku,release,rel_db,platform,date,svn,pvbit,mn2_meu_ver,phy_fw_rel,phy_name_db,is_unsupported = phy_anl(cpd_mn2_info)
         
         eng_fw_end = cpd_size_calc(reading, 0, 0x1000) # Get PHY firmware size
         
         eng_size_text = chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) # Check PHY firmware size
+    
+    else:
+        
+        is_unsupported = True
     
     # Create Firmware Type DB entry
     if variant.startswith(('PMC','PCHC','PHY','OROM')) : fw_type = 'Independent'
@@ -13601,7 +13632,7 @@ for file_in in source :
         continue # Next input file
     
     # Search Database for Firmware
-    if not variant.startswith(('PMC','PCHC','PHY')) : # Not PMC, PCHC and PHY
+    if not is_unsupported and not variant.startswith(('PMC','PCHC','PHY')) : # Not PMC, PCHC and PHY
         for line in mea_db_lines :
             # Search the re-created file name without extension at the database
             if name_db in line : fw_in_db_found = True # Known firmware, nothing new
@@ -13614,10 +13645,8 @@ for file_in in source :
                 rgn_over_extr_found = True # Same RGN/EXTR firmware found at database, UPD disregarded
             if rsa_sig_hash in line and (variant,type_db,sku_stp) == ('CSSPS','REC','Unknown') :
                 fw_in_db_found = True # REC w/o $FPT are not POR for CSSPS, notify only if REC w/ $FPT does not exist
-            if rsa_sig_hash in line and variant == 'CSSPS' and (major, minor) in [(6, 0), (4, 4)]:
-                fw_in_db_found = True # For CSSPS 4.4 (WH) and 6.0 (TA), search for RSA Signature only
     else :
-        can_search_db = False # Do not search DB for PMC, PCHC and PHY
+        can_search_db = False # Do not search DB for Unsupported and IUP
     
     if can_search_db and not rgn_over_extr_found and not fw_in_db_found and not sps_extr_ignore : note_new_fw(variant_p)
     
@@ -13701,6 +13730,7 @@ for file_in in source :
     
     msg_pt.title = variant_p_fw
     msg_pt.add_row(['MEA Database Name', name_db.rsplit('_', 1)[0]])
+    msg_pt.add_row(['MEA Support Status', ['Yes','No'][is_unsupported]])
     msg_pt.add_row(['RSA Signature Hash', rsa_sig_hash])
     
     if param.check : # Debug/Research
@@ -13718,8 +13748,11 @@ for file_in in source :
         msg_pmc_pt = ext_table(['Field', 'Value'], False, 1)
         msg_pmc_pt.title = 'Power Management Controller'
         
-        pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db,pmc_platform, \
-        pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmc_size,pmc_name_db = pmc_val
+        pmc_fw_ver,pmc_pch_gen,pmc_pch_sku,pmc_pch_rev,pmc_fw_rel,pmc_mn2_signed,pmc_mn2_signed_db, \
+        pmc_platform,pmc_date,pmc_svn,pmc_pvbit,pmc_meu_ver,pmc_vcn,pmc_mn2_ver,pmc_ext15_info, \
+        pmc_size,pmc_name_db,pmc_unsupported = pmc_val
+        
+        is_unsupported |= pmc_unsupported
         
         msg_pmc_pt.add_row(['Family', 'PMC'])
         msg_pmc_pt.add_row(['Version', pmc_fw_ver])
@@ -13740,6 +13773,7 @@ for file_in in source :
         print(msg_pmc_pt)
         
         msg_pmc_pt.add_row(['MEA Database Name', pmc_name_db.rsplit('_', 1)[0]])
+        msg_pmc_pt.add_row(['MEA Support Status', ['Yes','No'][pmc_unsupported]])
         msg_pmc_pt.add_row(['RSA Signature Hash', pmc_mn2_ver[6]])
         
         if param.write_html:
@@ -13756,8 +13790,11 @@ for file_in in source :
         msg_pchc_pt = ext_table(['Field', 'Value'], False, 1)
         msg_pchc_pt.title = 'Platform Controller Hub Configuration'
         
-        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db,pchc_platform, \
-        pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size,pchc_name_db = pchc_val
+        pchc_fw_ver,pchc_fw_major,pchc_fw_minor,pchc_fw_rel,pchc_mn2_signed,pchc_mn2_signed_db, \
+        pchc_platform,pchc_date,pchc_svn,pchc_pvbit,pchc_meu_ver,pchc_vcn,pchc_mn2_ver,pchc_ext15_info, \
+        pchc_size,pchc_name_db,pchc_unsupported = pchc_val
+        
+        is_unsupported |= pchc_unsupported
         
         msg_pchc_pt.add_row(['Family', 'PCHC'])
         msg_pchc_pt.add_row(['Version', pchc_fw_ver])
@@ -13775,6 +13812,7 @@ for file_in in source :
         print(msg_pchc_pt)
         
         msg_pchc_pt.add_row(['MEA Database Name', pchc_name_db.rsplit('_', 1)[0]])
+        msg_pchc_pt.add_row(['MEA Support Status', ['Yes','No'][pchc_unsupported]])
         msg_pchc_pt.add_row(['RSA Signature Hash', pchc_mn2_ver[6]])
         
         if param.write_html:
@@ -13792,7 +13830,9 @@ for file_in in source :
         msg_phy_pt.title = 'USB Type C Physical'
         
         phy_fw_ver,phy_sku,phy_mn2_signed,phy_mn2_signed_db,phy_platform,phy_date,phy_svn,phy_pvbit,phy_meu_ver, \
-        phy_fw_rel,phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size,phy_name_db = phy_val
+        phy_fw_rel,phy_vcn,phy_mn2_ver,phy_ext15_info,phy_size,phy_name_db,phy_unsupported = phy_val
+        
+        is_unsupported |= phy_unsupported
         
         msg_phy_pt.add_row(['Family', 'PHY'])
         msg_phy_pt.add_row(['Version', phy_fw_ver])
@@ -13811,6 +13851,7 @@ for file_in in source :
         print(msg_phy_pt)
         
         msg_phy_pt.add_row(['MEA Database Name', phy_name_db.rsplit('_', 1)[0]])
+        msg_phy_pt.add_row(['MEA Support Status', ['Yes','No'][phy_unsupported]])
         msg_phy_pt.add_row(['RSA Signature Hash', phy_mn2_ver[6]])
         
         if param.write_html:
@@ -13824,7 +13865,7 @@ for file_in in source :
             mea_json[file_in][msg_phy_pt.title].extend(list(pt_json(msg_phy_pt).values())[0])
     
     # Print Messages which must be at the end of analysis
-    if is_unsupported : err_stor.append([col_r + 'Error: Detected unsupported input Intel Engine/Graphics firmware!' + col_e, True])
+    if is_unsupported : err_stor.append([col_r + 'Error: Unsupported Intel Engine, Graphics and/or Independent firmware!' + col_e, True])
     
     if eng_size_text != ['', False] : warn_stor.append(['%s' % eng_size_text[0], eng_size_text[1]])
     

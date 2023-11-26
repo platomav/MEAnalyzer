@@ -9,7 +9,7 @@
 
 [Intel Engine/Graphics/Independent Firmware Repositories](https://winraid.level1techs.com/t/intel-cs-me-cs-txe-cs-sps-gsc-pmc-pchc-phy-orom-firmware-repositories/30869)
 
-![](https://i.imgur.com/PoUD96g.png)
+![](https://i.imgur.com/0HRnDAh.png)
 
 ## **A. About ME Analyzer**
 
@@ -17,23 +17,23 @@ ME Analyzer is a tool which parses Intel Engine, Intel Graphics and their Indepe
 
 - (Converged Security) Management Engine - CS(ME)
     - ME 2-10
-    - CSME 11-16.1
+    - CSME 11-15
 - (Converged Security) Trusted Execution Engine - (CS)TXE
     - TXE 0-2
     - CSTXE 3-4
 - (Converged Security) Server Platform Services - (CS)SPS
     - SPS 1-3
-    - CSSPS 4-6 (BA, HA, ME, PU, TA)
+    - CSSPS 4-5 (BA, HA, ME, PU)
 - Graphics System Controller - GSC
-    - GSC 100-101
+    - GSC 100 (DG1)
 - Power Management Controller - PMC
-    - PMC APL-ADP
+    - PMC APL-MCC
 - Platform Controller Hub Configuration - PCHC
-    - PCHC ICP-ADP
+    - PCHC ICP-MCC
 - USB Type C Physical - PHY
-    - PHY ICP-ADP
+    - PHY ICP-TGP
 - Graphics Option ROM - OROM
-    - OROM 19-20
+    - OROM DG1
 
 It can be used by end-users who are looking for all relevant firmware information such as Family, Version, Release, Type, Date, SKU, Platform, Size, Health Status etc. ME Analyzer is also a powerful Engine / Graphics / Independent firmware research analysis tool with multiple structures which allow, among others, full parsing and unpacking of Converged Security Engine (CSE) & Graphics System Controller (GSC) Code and File Systems such as:
 
@@ -48,9 +48,8 @@ Moreover, with the help of its extensive databases, ME Analyzer is capable of un
 
 #### **A1. ME Analyzer Features**
 
-- Supports Engine firmware Families ME 2-16.1, TXE 0-4 and SPS 1-6
-- Supports Graphics firmware Families GSC DG1 (100) and DG2 (101)
-- Supports CSE/GSC Independent (IUP) firmware Families PMC, PCHC, PHY and OROM
+- Supports Engine/Graphics firmware Families ME 2-15, TXE 0-4, SPS 1-5 and GSC 100
+- Supports CSE/GSC Independent (IUP) firmware Families PMC, PCHC, PHY and OROM/VBT
 - Detection of Firmware Details (Family, Version, SKU, Date, Platform etc)
 - Detection of Firmware Release (Production, Pre-Production, ROM-Bypass etc)
 - Detection of Firmware Type (Region, Extracted, Update etc)
@@ -81,23 +80,22 @@ ME Analyzer allows end-users and/or researchers to quickly analyze and/or report
 
 |   **(CS)ME**   | **(CS)TXE** |   **(CS)SPS**  | **GSC** | **PMC** | **PCHC** | **PHY** | **OROM** |
 |:--------------:|:-----------:|:--------------:|:-------:|:-------:|:--------:|:-------:|:--------:|
-|        2       |      0      |        1       |   100   |   APL   |    ICP   |   ICP   |    19    |
-|        3       |      1      |        2       |   101   |   BXT   |    LKF   |   LKF   |    20    |
+|        2       |      0      |        1       |   100   |   APL   |    ICP   |   ICP   |    DG1   |
+|        3       |      1      |        2       |    -    |   BXT   |    LKF   |   LKF   |     -    |
 |        4       |      2      |        3       |    -    |   GLK   |    JSP   |   CMP   |     -    |
 |        5       |      3      | 4 (BA, HA, PU) |    -    |   CNP   |    CMP   |   TGP   |     -    |
-|        6       |      4      |     5 (ME)     |    -    |   ICP   |    TGP   |   ADP   |     -    |
-|        7       |      -      |     6 (TA)     |    -    |   LKF   |    MCC   |   DG1   |     -    |
-|        8       |      -      |        -       |    -    |   JSP   |    ADP   |   DG2   |     -    |
+|        6       |      4      |     5 (ME)     |    -    |   ICP   |    TGP   |   DG1   |     -    |
+|        7       |      -      |        -       |    -    |   LKF   |    MCC   |    -    |     -    |
+|        8       |      -      |        -       |    -    |   JSP   |     -    |    -    |     -    |
 |        9       |      -      |        -       |    -    |   CMP   |     -    |    -    |     -    |
 |       10       |      -      |        -       |    -    |   TGP   |     -    |    -    |     -    |
 |       11       |      -      |        -       |    -    |   MCC   |     -    |    -    |     -    |
-|       12       |      -      |        -       |    -    |   ADP   |     -    |    -    |     -    |
-| 13 (0, 30, 50) |      -      |        -       |    -    |   DG1   |     -    |    -    |     -    |
-|  14 (0, 1, 5)  |      -      |        -       |    -    |   DG2   |     -    |    -    |     -    |
+|       12       |      -      |        -       |    -    |   DG1   |     -    |    -    |     -    |
+| 13 (0, 30, 50) |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
+|  14 (0, 1, 5)  |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
 |   15 (0, 40)   |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
-|    16 (0, 1)   |      -      |        -       |    -    |    -    |     -    |    -    |     -    |
 
-**Any Intel Engine family and/or version which is not listed above, is not supported. There are no plans to add support for other Intel Engine firmware at this point.**
+**Any Intel Engine/Graphics/Independent family and/or version which is not listed above, is not supported. There are no plans to add support for other Intel Engine/Graphics/Independent firmware at this point.**
 
 ## **B. How to use ME Analyzer**
 
@@ -151,9 +149,9 @@ To run ME Analyzer, you need to install [Python >= 3.7](https://www.python.org/d
 
 ## **D. Pictures**
 
-**Note:** Some pictures may be outdated and depict older ME Analyzer versions.
+**Note:** Some pictures may be outdated and depict older ME Analyzer versions/features.
 
-![](https://i.imgur.com/PoUD96g.png)
+![](https://i.imgur.com/0HRnDAh.png)
 
 ![](https://i.imgur.com/Sns8rtN.png)
 
