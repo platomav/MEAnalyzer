@@ -4,10 +4,10 @@
 """
 ME Analyzer
 Intel Engine & Graphics Firmware Analysis Tool
-Copyright (C) 2014-2023 Plato Mavropoulos
+Copyright (C) 2014-2024 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.304.4'
+title = 'ME Analyzer v1.304.5'
 
 import sys
 
@@ -95,7 +95,7 @@ def mea_help() :
           '-json  : Writes parsable JSON info files during MEA operation'
           )
     
-    print(col_g + '\nCopyright (C) 2014-2023 Plato Mavropoulos' + col_e)
+    print(col_g + '\nCopyright (C) 2014-2024 Plato Mavropoulos' + col_e)
     
     if getattr(sys, 'frozen', False) : print(col_c + '\nRunning in frozen state!' + col_e)
     
@@ -2045,14 +2045,15 @@ class UTFL_Header(ctypes.LittleEndianStructure) : # Unlock Token Flags (DebugTok
     ]
     
     def hdr_print(self) :
-        Reserved = '%0.*X' % (0x1B * 2, int.from_bytes(self.Reserved, 'little'))
+        DelayedAuthMode = {0:'No', 1:'Yes'}.get(self.DelayedAuthMode, f'Unknown ({self.DelayedAuthMode})')
+        Reserved = '0x%0.*X' % (0x1B * 2, int.from_bytes(self.Reserved, 'little'))
         
         pt = ext_table(['Field', 'Value'], False, 1)
         
         pt.title = col_y + 'Unlock Token Flags' + col_e
         pt.add_row(['Tag', self.Tag.decode('utf-8')])
-        pt.add_row(['Delayed Authentication Mode', ['No','Yes'][self.DelayedAuthMode]])
-        pt.add_row(['Reserved', '0x' + '00/FF * 27' if Reserved in ('00' * 27,'FF' * 27) else Reserved])
+        pt.add_row(['Delayed Authentication Mode', DelayedAuthMode])
+        pt.add_row(['Reserved', Reserved])
         
         return pt
         
