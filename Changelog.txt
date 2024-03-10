@@ -1,3 +1,7 @@
+r344
+
+CSTXE 4.0.50.2083_B_PRD_RGN
+
 v1.304.5
 
 Improved unknown UTOK > UTFL value handling
