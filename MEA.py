@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2024 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.304.5'
+title = 'ME Analyzer v1.307.0'
 
 import sys
 
@@ -5323,8 +5323,11 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     if reading_msg : print('%s\n' % reading_msg)
     
     # CSSPS 4.4 (WTL) is simply too terrible of a firmware to waste time and effort in order to add "proper" MEA parsing & unpacking
-    if (variant,major,minor) == ('CSSPS',4,4) :
-        input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only, errors are expected!\n' + col_e)
+    if (variant,major,minor) == ('CSSPS',4,4):
+        if param.cse_pause:
+            input_col(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only, errors are expected!\n' + col_e) # Debug
+        else:
+            print(col_m + 'Warning: CSE SPS 4.4 (Whitley) is partially supported only, errors are expected!\n' + col_e)
     
     # Show & Validate Flash Descriptor RSA Signature & Hash
     if fdv_status[0] :
@@ -5813,9 +5816,10 @@ def cse_unpack(variant, fpt_part_all, bpdt_part_all, file_end, fpt_start, fpt_ch
     if param.bypass :
         for l_hash in [l_hash for l_hash in rbe_pm_met_hashes if l_hash not in rbe_pm_met_valid] : print(l_hash) # Debug/Research
     
-    for cse_unpack_json_path, cse_unpack_json_lists in cse_unpack_jsons.items():
-        with open(cse_unpack_json_path, 'w', encoding='utf-8') as jo:
-            json.dump(cse_unpack_json_lists, jo, indent=4)
+    if param.write_json:
+        for cse_unpack_json_path, cse_unpack_json_lists in cse_unpack_jsons.items():
+            with open(cse_unpack_json_path, 'w', encoding='utf-8') as jo:
+                json.dump(cse_unpack_json_lists, jo, indent=4)
 
 # Analyze CSE Extensions
 # noinspection PyUnusedLocal
@@ -7013,10 +7017,10 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
                     # Store Golden Measurements File (GMF) Blobs from RBEP.man > CSE_Ext_1E & CSE_Ext_1F
                     if gmf_blob_info and (gmf_blob_info[0],gmf_blob_info[1],gmf_blob_info[2]) == (cpd_pname,ext_inid,cpd_poffset) :
                         if gmf_blob_info[3][0] :
-                            gmf_cert_path = os.path.join(out_dir, folder_name, 'GMF_Certificate.crt')
+                            gmf_cert_path = os.path.join(folder_name, 'GMF_Certificate.crt')
                             with open(gmf_cert_path, 'wb') as gmf_cert : gmf_cert.write(gmf_blob_info[3][0])
                         if gmf_blob_info[3][1] :
-                            gmf_body_path = os.path.join(out_dir, folder_name, 'GMF_Body.bin')
+                            gmf_body_path = os.path.join(folder_name, 'GMF_Body.bin')
                             with open(gmf_body_path, 'wb') as gmf_body : gmf_body.write(gmf_blob_info[3][1])
                 
                 # Metadata
@@ -7063,7 +7067,7 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
                 elif mod_name in ('intl.cfg','fitc.cfg') :
                     mfs_file_no = 6 if mod_name == 'intl.cfg' else 7
                     if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file_no, mfs_dict[mfs_file_no]) + col_e)
-                    rec_folder = os.path.join(out_dir, folder_name, mfs_dict[mfs_file_no], '')
+                    rec_folder = os.path.join(folder_name, mfs_dict[mfs_file_no], '')
                     try :
                         pch_init_info = mfs_cfg_anl(mfs_file_no, mod_data, rec_folder, rec_folder, config_rec_size, [], vol_ftbl_id, vol_ftbl_pl) # Parse MFS Configuration Records
                         # noinspection PyUnusedLocal
@@ -7612,7 +7616,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (entry_file, mfs_dict[entry_file]) + col_e)
             
             if entry_file in (6,7) :
-                rec_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
+                rec_folder = os.path.join(mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
                 root_folder = rec_folder # Store File Root Folder for Local Path printing
                 mfs_parsed_idx.append(entry_file) # Set MFS Backup Low Level File as Parsed
                 
@@ -7622,7 +7626,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
                 if entry_file == 6 : intel_cfg_hash_mfs = [get_hash(file_data, 0x20), get_hash(file_data, 0x30)] # Store MFSB Intel Configuration Hashes
                 
             elif entry_file == 9 and man_pat.search(file_data[:0x20]) :
-                file_9_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
+                file_9_folder = os.path.join(mfs_folder, '%0.3d %s' % (entry_file, mfs_dict[entry_file]), '')
                 file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
                 mfs_write(file_9_folder, file_9_data_path, file_data) # Store MFS Manifest Backup Contents
                 mfs_parsed_idx.append(entry_file) # Set MFS Backup Low Level File as Parsed
@@ -7887,7 +7891,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         if mfs_file[1] and mfs_file[0] == 0 :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-            file_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+            file_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
             file_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Path
             mfs_write(file_folder, file_path, mfs_file[1]) # Store MFS Low Level File
         
@@ -7897,7 +7901,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             mfs_file_name = 'Unknown' if mfs_is_afs and mfs_file[0] in (6,7) else mfs_dict[mfs_file[0]]
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-            file_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
+            file_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
             file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Contents Path
             
             # MFS Low Level File 5 Integrity is present only at CSME >= 12
@@ -7998,7 +8002,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             if mfs_file[0] == 6 : intel_cfg_hash_mfs = [get_hash(mfs_file[1], 0x20), get_hash(mfs_file[1], 0x30)] # Store MFS Intel Configuration Hashes
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level Files 6,7 as Parsed
-            rec_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+            rec_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
             root_folder = rec_folder # Store File Root Folder for Local Path printing
             
             pch_init_info = mfs_cfg_anl(mfs_file[0], mfs_file[1], rec_folder, root_folder, config_rec_size, pch_init_info, vol_ftbl_id, vol_ftbl_pl) # Parse MFS Config Records
@@ -8008,8 +8012,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         elif mfs_file[1] and mfs_file[0] == 8 :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File 8 (Home Directory) ...' + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 8 as Parsed
-            root_folder = os.path.join(out_dir, mfs_folder, '008 Home Directory', 'home', '') # MFS Home Directory Root/Start folder is called "home"
-            init_folder = os.path.join(out_dir, mfs_folder, '008 Home Directory', '') # MFS Home Directory Parent folder for printing
+            root_folder = os.path.join(mfs_folder, '008 Home Directory', 'home', '') # MFS Home Directory Root/Start folder is called "home"
+            init_folder = os.path.join(mfs_folder, '008 Home Directory', '') # MFS Home Directory Parent folder for printing
             
             # Detect MFS Home Directory Record Size
             home_rec_patt = list(re.compile(br'\x2E[\x00\xAA]{10}').finditer(mfs_file[1][:])) # Find the first Current (.) & Parent (..) directory markers
@@ -8046,7 +8050,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         elif mfs_file[1] and mfs_file[0] == 9 and man_pat.search(mfs_file[1][:0x20]) :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
-            file_9_folder = os.path.join(out_dir, mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '') # MFS Manifest Backup root folder
+            file_9_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '') # MFS Manifest Backup root folder
             file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
             mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
             # noinspection PyTypeChecker
@@ -8110,8 +8114,8 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         else :
             mfs_pt = None
         
-        if vfs_starts_at_0 : mfs_home13_dir = os.path.join(out_dir, mfs_folder, '')
-        else : mfs_home13_dir = os.path.join(out_dir, mfs_folder, 'VFS Home Directory', '')
+        if vfs_starts_at_0 : mfs_home13_dir = os.path.join(mfs_folder, '')
+        else : mfs_home13_dir = os.path.join(mfs_folder, 'VFS Home Directory', '')
         
         for mfs_file in mfs_files :
             if mfs_file[1] and mfs_file[0] not in mfs_parsed_idx : # Check if MFS Low Level File has Contents but it has not been Parsed
@@ -8591,7 +8595,7 @@ def fitc_anl(mod_f_path, part_start, part_end, config_rec_size, vol_ftbl_id, vol
                 print(col_r + '\n    Error: Data at FITC padding, possibly unknown Header revision %d!' % fitc_rev + col_e)
     
     try :
-        rec_folder = os.path.join(out_dir, os.path.join(mod_f_path[:-4]), 'OEM Configuration', '')
+        rec_folder = os.path.join(mod_f_path[:-4], 'OEM Configuration', '')
         # noinspection PyUnusedLocal
         _ = mfs_cfg_anl(7, fitc_cfg_data, rec_folder, rec_folder, config_rec_size, [], vol_ftbl_id, vol_ftbl_pl) # Parse MFS Configuration Records
     except :
@@ -8620,7 +8624,7 @@ def efs_anl(mod_f_path, part_start, part_end, vol_ftbl_id, vol_ftbl_pl) :
     page_hdr_size = ctypes.sizeof(EFS_Page_Header)
     page_ftr_size = ctypes.sizeof(EFS_Page_Footer)
     ftbl_json = os.path.join(mea_dir, 'FileTable.dat')
-    efs_folder = os.path.join(out_dir, os.path.join(mod_f_path[:-4]), '')
+    efs_folder = os.path.join(os.path.join(mod_f_path[:-4]), '')
     
     # Verify that EFS Partition can be parsed by efs_anl
     if not re.compile(br'\x00.\x00.\x00{3}.{8}\x00\x01\x02\x03\x04\x05', re.DOTALL).search(efs_part[0x1:0x16]) :

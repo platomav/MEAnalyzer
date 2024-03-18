@@ -1,3 +1,9 @@
+v1.307.0
+
+Fixed custom output directory unpacking paths (#54)
+Fixed unexpected empty JSON files during unpacking
+Fixed unexpected pause on error during unpacking
+
 r345
 
 CSME 15.40.32.2910_SVR_LP_B_SPI_PRD_EXTR
