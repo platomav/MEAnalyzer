@@ -45,6 +45,26 @@ import traceback
 import subprocess
 import urllib.request
 import importlib.util
+import importlib
+
+#ensure_package("colorama")
+def ensure_package(package_name, pip_name=None):
+    pip_name = pip_name or package_name
+    try:
+        importlib.import_module(package_name)
+        print(f"{package_name} already installed")
+    except ImportError:
+        print(f"Installation {pip_name}...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", pip_name])
+            print(f"{pip_name} successfully installed")
+        except subprocess.CalledProcessError:
+            print(f"Error during installation {pip_name}")
+            sys.exit(1)
+
+for depend in ['colorama','crccheck','pltable'] :
+    if not importlib.util.find_spec(depend) :
+        ensure_package(depend)
 
 # Check code dependency installation
 for depend in ['colorama','crccheck','pltable'] :
