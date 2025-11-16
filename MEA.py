@@ -4,10 +4,10 @@
 """
 ME Analyzer
 Intel Engine & Graphics Firmware Analysis Tool
-Copyright (C) 2014-2024 Plato Mavropoulos
+Copyright (C) 2014-2025 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.307.0'
+title = 'ME Analyzer v1.309.0'
 
 import sys
 
@@ -95,7 +95,7 @@ def mea_help() :
           '-json  : Writes parsable JSON info files during MEA operation'
           )
     
-    print(col_g + '\nCopyright (C) 2014-2024 Plato Mavropoulos' + col_e)
+    print(col_g + '\nCopyright (C) 2014-2025 Plato Mavropoulos' + col_e)
     
     if getattr(sys, 'frozen', False) : print(col_c + '\nRunning in frozen state!' + col_e)
     
@@ -12104,7 +12104,7 @@ for file_in in source :
             if part[1] + (part[2] - part[1]) <= file_end :
                 rec_man_match = man_pat.search(reading[part[1]:part[1] + (part[2] - part[1])])
                 
-                if rec_man_match :
+                if rec_man_match and part[0] not in ['MFTP'] :
                     (start_man_match, end_man_match) = rec_man_match.span()
                     start_man_match += part[1] + 0xB # Add CSE_BUP offset and 8680.{9} sanity check before .$MN2
                     end_man_match += part[1]
@@ -13042,7 +13042,7 @@ for file_in in source :
         # from CSE_Ext_0C, MEA should ignore the placeholder "Corporate" SKU at CSE_Ext_0F_R2 and use the actual value from CSE_Ext_0C.
         # Generally, due to CSE_Ext_0F_R2 confusion, CSE_Ext_0C should be prefered when CSE_Ext_0F_R2 SKU is CON,COR,ALL,NA or missing.
         # There are plans for another (seriously ?) SKU Type extension, CSE_Ext_23. Support for CSE_Ext_23 can be added once it's used.
-        if fw_0C_sku1[1] != 'UNK' and ext15_info[2][1] in ['','NA','ALL','CON','COR'] :
+        if fw_0C_sku1[1] != 'UNK' and ext15_info[2][1] in ['','NA','ALL','CON','COR','ATM'] :
             sku_init = fw_0C_sku1[0]
             sku_init_db = fw_0C_sku1[1]
         elif ext15_info[2][1] not in ['','NA','ALL'] :
