@@ -4,10 +4,10 @@
 """
 ME Analyzer
 Intel Engine & Graphics Firmware Analysis Tool
-Copyright (C) 2014-2025 Plato Mavropoulos
+Copyright (C) 2014-2026 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.309.0'
+title = 'ME Analyzer v1.311.0'
 
 import sys
 
@@ -95,7 +95,7 @@ def mea_help() :
           '-json  : Writes parsable JSON info files during MEA operation'
           )
     
-    print(col_g + '\nCopyright (C) 2014-2025 Plato Mavropoulos' + col_e)
+    print(col_g + '\nCopyright (C) 2014-2026 Plato Mavropoulos' + col_e)
     
     if getattr(sys, 'frozen', False) : print(col_c + '\nRunning in frozen state!' + col_e)
     
@@ -6194,7 +6194,7 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
                         
                         ext_phval = [True, ext_phash == mea_phash, ext_phash, mea_phash]
                         if not ext_phval[1] and int(ext_phval[2], 16) != 0 :
-                            if (variant,major,minor,ext_psize) == ('CSME',11,8,0x88000) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSME 11.8 Slim Partition Hash is always wrong, ignore
+                            if (variant,major,ext_psize) == ('CSME',11,0x88000) and minor in [8,9] : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSME 11.8-9 Slim Partition Hash is always wrong, ignore
                             elif (variant,major) == ('CSSPS',1) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 1/IGN Partition Hash is always wrong, ignore
                             elif (variant,major,minor) == ('CSSPS',4,2) : (ext_phash, mea_phash) = ('IGNORE', 'IGNORE') # CSSPS 4.2/IGN Partition Hash is always wrong, ignore
                             cse_anl_err(col_r + 'Error: Detected CSE Extension 0x%0.2X with wrong Partition Hash at %s > %s!' % (ext_tag, cpd_name, cpd_entry_name.decode('utf-8')) + col_e, [ext_phash,mea_phash])
@@ -7000,8 +7000,8 @@ def mod_anl(cpd_offset, cpd_mod_attr, cpd_ext_attr, fw_name, ext_print, ext_phva
                         print(col_m + '\n    Hash of partition "%s" is UNKNOWN' % cpd_pname + col_e)
                     elif ext_phval[0] and ext_phval[1] : # Hash exists and is Valid
                         print(col_g + '\n    Hash of partition "%s" is VALID' % cpd_pname + col_e)
-                    elif ext_phval[0] : # Hash exists but is Invalid (CSME 11.8 SLM, CSSPS 5-6 & PHYP EBG Hashes are always wrong)
-                        if (variant,major,minor,ext12_info[1][1]) == ('CSME',11,8,'SLM') :
+                    elif ext_phval[0] : # Hash exists but is Invalid (CSME 11.8-9 SLM, CSSPS 5-6 & PHYP EBG Hashes are always wrong)
+                        if (variant,major,ext12_info[1][1]) == ('CSME',11,'SLM') and minor in [8,9] :
                             print(col_r + '\n    Hash of partition "%s" is INVALID (CSME 11.8 Slim Ignore)' % cpd_pname + col_e)
                         elif (variant,major) in [('CSSPS',1),('CSSPS',5),('CSSPS',6)] or (variant,major,minor) in [('CSSPS',4,4),('CSSPS',4,2)] :
                             print(col_r + '\n    Hash of partition "%s" is INVALID (%s %d.%d Ignore)' % (cpd_pname,variant,major,minor) + col_e)
@@ -7891,9 +7891,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         if mfs_file[1] and mfs_file[0] == 0 :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-            file_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+            file_name = '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]])
+            file_folder = os.path.join(mfs_folder, file_name, '')
             file_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Path
+            file_path_raw = f'{os.path.join(mfs_folder, file_name)}.bin'
             mfs_write(file_folder, file_path, mfs_file[1]) # Store MFS Low Level File
+            mfs_write(mfs_folder, file_path_raw, mfs_file[1])
         
         # Parse MFS Low Level Files 1 (Unknown), 2-3 (Anti-Replay), 4 (SVN Migration) and 5 (Quota Storage)
         # At AFSP (CSTXE > AFS), MFS/AFS Low Level Files 6 & 7 are not Intel & OEM Configurations (Unknown)
@@ -7901,8 +7904,10 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             mfs_file_name = 'Unknown' if mfs_is_afs and mfs_file[0] in (6,7) else mfs_dict[mfs_file[0]]
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_file_name) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File as Parsed
-            file_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_file_name), '')
+            file_name = '%0.3d %s' % (mfs_file[0], mfs_file_name)
+            file_folder = os.path.join(mfs_folder, file_name, '')
             file_data_path = os.path.join(file_folder, 'Contents.bin') # MFS Low Level File Contents Path
+            file_raw_path = f'{os.path.join(mfs_folder, file_name)}.bin'
             
             # MFS Low Level File 5 Integrity is present only at CSME >= 12
             # MFS Low Level File 4 Integrity is present only at non-CSTXE
@@ -7921,6 +7926,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
                 mfs_txt(file_sec_hdr.mfs_print(), file_folder, file_sec_path, 'w', False) # Store/Print MFS Low Level File Integrity Info
             
             mfs_write(file_folder, file_data_path, file_data) # Store MFS Low Level File Contents
+            mfs_write(mfs_folder, file_raw_path, mfs_file[1])
         
         # Parse MFS Low Level File 6 (Intel Configuration) and 7 (OEM Configuration)
         elif mfs_file[1] and mfs_file[0] in (6,7) :
@@ -8002,11 +8008,15 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             if mfs_file[0] == 6 : intel_cfg_hash_mfs = [get_hash(mfs_file[1], 0x20), get_hash(mfs_file[1], 0x30)] # Store MFS Intel Configuration Hashes
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level Files 6,7 as Parsed
-            rec_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '')
+            rec_name = '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]])
+            rec_path = f'{os.path.join(mfs_folder, rec_name)}.bin'
+            rec_folder = os.path.join(mfs_folder, rec_name, '')
             root_folder = rec_folder # Store File Root Folder for Local Path printing
             
             pch_init_info = mfs_cfg_anl(mfs_file[0], mfs_file[1], rec_folder, root_folder, config_rec_size, pch_init_info, vol_ftbl_id, vol_ftbl_pl) # Parse MFS Config Records
             pch_init_final = pch_init_anl(pch_init_info) # Parse MFS Initialization Tables and store their Platforms/Steppings
+            
+            mfs_write(mfs_folder, rec_path, mfs_file[1])
         
         # Parse MFS Low Level File 8 (Home Directory)
         elif mfs_file[1] and mfs_file[0] == 8 :
@@ -8050,9 +8060,12 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
         elif mfs_file[1] and mfs_file[0] == 9 and man_pat.search(mfs_file[1][:0x20]) :
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
-            file_9_folder = os.path.join(mfs_folder, '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]]), '') # MFS Manifest Backup root folder
+            file_9_name = '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]])
+            file_9_path = os.path.join(mfs_folder, file_9_name)
+            file_9_folder = os.path.join(mfs_folder, file_9_name, '') # MFS Manifest Backup root folder
             file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
             mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
+            mfs_write(mfs_folder, file_9_path, mfs_file[1])
             # noinspection PyTypeChecker
             ext_print,mn2_signs,_ = ext_anl(mfs_file[1], '$MN2', 0x1B, file_end, [variant,major,minor,hotfix,build,year,month,variant_p], 'FTPR.man', [mfs_parsed_idx,intel_cfg_hash_mfs],
                                                   [pch_init_final,config_rec_size,vol_ftbl_id,vol_ftbl_pl]) # Get Manifest Backup Extension Info
