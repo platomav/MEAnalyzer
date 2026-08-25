@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 #coding=utf-8
 
 """
@@ -637,6 +637,105 @@ class CSE_Layout_Table_17_GetFlags(ctypes.Union):
         ('b', CSE_Layout_Table_17_Flags),
         ('asbytes', uint8_t)
     ]
+
+class CSE_Layout_Table_18(ctypes.LittleEndianStructure) : # CSME 18+ Layout Pointers Table (CseLayoutPointersTableHeader + RegionPointerEntry)
+    _pack_ = 1
+    _fields_ = [
+        ('ROMBInstr0',        uint32_t),        # 0x00 ROM-Bypass Vector 0
+        ('ROMBInstr1',        uint32_t),        # 0x04
+        ('ROMBInstr2',        uint32_t),        # 0x08
+        ('ROMBInstr3',        uint32_t),        # 0x0C
+        ('Size',            uint16_t),        # 0x10 0x58 (MTL/LNL, 10 Pointers) or 0x60 (PTL+, 11 Pointers)
+        ('Flags',            uint8_t),        # 0x12 0 Redundant CSE Pointers, 1-7 Reserved
+        ('Reserved',        uint8_t),        # 0x13
+        ('Checksum',        uint32_t),        # 0x14 CRC-32 of LT (Header w/ Checksum = 0 + all Pointer Entries)
+        ('DataOffset',        uint32_t),        # 0x18 pDATA_PARTITION Base Address ($FPT lives here)
+        ('DataSize',        uint32_t),        # 0x1C
+        ('BP1Offset',        uint32_t),        # 0x20 pBPDT1 Base Address
+        ('BP1Size',            uint32_t),        # 0x24
+        ('BP2Offset',        uint32_t),        # 0x28 pBPDT2 (Boot Partition 2, Redundancy copy of BPDT1)
+        ('BP2Size',            uint32_t),        # 0x2C
+        ('BP3Offset',        uint32_t),        # 0x30 pBPDT3
+        ('BP3Size',            uint32_t),        # 0x34
+        ('RSVD1Offset',        uint32_t),        # 0x38 pRSVD1
+        ('RSVD1Size',        uint32_t),        # 0x3C
+        ('RSVD2Offset',        uint32_t),        # 0x40 pRSVD2
+        ('RSVD2Size',        uint32_t),        # 0x44
+        ('RSVD3Offset',        uint32_t),        # 0x48 pRSVD3
+        ('RSVD3Size',        uint32_t),        # 0x4C
+        ('ELogOffset',        uint32_t),        # 0x50 pELOG_SUBPARTITION External Fatal Error Log
+        ('ELogSize',        uint32_t),        # 0x54
+        ('UTOKOffset',        uint32_t),        # 0x58 pUTOK Unlock Token (CSME 18+)
+        ('UTOKSize',        uint32_t),        # 0x5C
+        ('FLOGOffset',        uint32_t),        # 0x60 pFLOG Fault Log (CSME 18+)
+        ('FLOGSize',        uint32_t),        # 0x64
+        ('FLOG2Offset',        uint32_t),        # 0x68 pFLOG2 Fault Log 2 (CSME 21+ only)
+        ('FLOG2Size',        uint32_t),        # 0x6C
+        # 0x70
+    ]
+    
+    # When Redundant CSE Pointers is set, a backup of the Layout Pointers Table is kept at 0x1000
+    # Replaces CSE_Layout_Table_17 at CSME 18+ (MTL): BP4/pDEFAULT_DATA/TempPages pointers removed,
+    # RSVD1-3, UTOK & FLOG (+ FLOG2 at PTL) pointers added
+    
+    def hdr_print(self) :
+        f1,f2 = self.get_flags()
+        NA = [0,0xFFFFFFFF] # Non-ROMB or IFWI EXTR
+        
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        pt.title = col_y + 'CSE Layout Table 18+' + col_e
+        pt.add_row(['ROMB Instruction 0', 'N/A' if self.ROMBInstr0 in NA else '0x%0.8X' % self.ROMBInstr0])
+        pt.add_row(['ROMB Instruction 1', 'N/A' if self.ROMBInstr1 in NA else '0x%0.8X' % self.ROMBInstr1])
+        pt.add_row(['ROMB Instruction 2', 'N/A' if self.ROMBInstr2 in NA else '0x%0.8X' % self.ROMBInstr2])
+        pt.add_row(['ROMB Instruction 3', 'N/A' if self.ROMBInstr3 in NA else '0x%0.8X' % self.ROMBInstr3])
+        pt.add_row(['Size', '0x%X (%d Pointers)' % (self.Size,(self.Size - 0x8) // 0x8)])
+        pt.add_row(['Redundant CSE Pointers', ['No','Yes'][f1]])
+        pt.add_row(['Flags Reserved', '0x%X' % f2])
+        pt.add_row(['Reserved', '0x%X' % self.Reserved])
+        pt.add_row(['Checksum', '0x%X' % self.Checksum])
+        pt.add_row(['Data Partition Offset', '0x%X' % self.DataOffset])
+        pt.add_row(['Data Partition Size', '0x%X' % self.DataSize])
+        pt.add_row(['Boot Partition 1 Offset', '0x%X' % self.BP1Offset])
+        pt.add_row(['Boot Partition 1 Size', '0x%X' % self.BP1Size])
+        pt.add_row(['Boot Partition 2 Offset', '0x%X' % self.BP2Offset])
+        pt.add_row(['Boot Partition 2 Size', '0x%X' % self.BP2Size])
+        pt.add_row(['Boot Partition 3 Offset', '0x%X' % self.BP3Offset])
+        pt.add_row(['Boot Partition 3 Size', '0x%X' % self.BP3Size])
+        pt.add_row(['RSVD 1 Offset', '0x%X' % self.RSVD1Offset])
+        pt.add_row(['RSVD 1 Size', '0x%X' % self.RSVD1Size])
+        pt.add_row(['RSVD 2 Offset', '0x%X' % self.RSVD2Offset])
+        pt.add_row(['RSVD 2 Size', '0x%X' % self.RSVD2Size])
+        pt.add_row(['RSVD 3 Offset', '0x%X' % self.RSVD3Offset])
+        pt.add_row(['RSVD 3 Size', '0x%X' % self.RSVD3Size])
+        pt.add_row(['External Fatal Error Log Offset', '0x%X' % self.ELogOffset])
+        pt.add_row(['External Fatal Error Log Size', '0x%X' % self.ELogSize])
+        if self.Size >= 0x58 : pt.add_row(['Unlock Token Offset', '0x%X' % self.UTOKOffset])
+        if self.Size >= 0x58 : pt.add_row(['Unlock Token Size', '0x%X' % self.UTOKSize])
+        if self.Size >= 0x58 : pt.add_row(['Fault Log Offset', '0x%X' % self.FLOGOffset])
+        if self.Size >= 0x58 : pt.add_row(['Fault Log Size', '0x%X' % self.FLOGSize])
+        if self.Size >= 0x60 : pt.add_row(['Fault Log 2 Offset', '0x%X' % self.FLOG2Offset])
+        if self.Size >= 0x60 : pt.add_row(['Fault Log 2 Size', '0x%X' % self.FLOG2Size])
+        
+        return pt
+        
+    def get_flags(self) :
+        flags = CSE_Layout_Table_18_GetFlags()
+        flags.asbytes = self.Flags
+        
+        return flags.b.Redundancy, flags.b.Reserved
+        
+class CSE_Layout_Table_18_Flags(ctypes.LittleEndianStructure):
+    _fields_ = [
+        ('Redundancy', uint8_t, 1),
+        ('Reserved', uint8_t, 7),
+    ]
+
+class CSE_Layout_Table_18_GetFlags(ctypes.Union):
+    _fields_ = [
+        ('b', CSE_Layout_Table_18_Flags),
+        ('asbytes', uint8_t)
+    ]
     
 class BPDT_Header_1(ctypes.LittleEndianStructure) : # Boot Partition Descriptor Table 1.6 & 2.0 (PrimaryBootPartition, SecondaryBootPartition, PrimaryBootPartitionNC, BootPartitionLayout)
     _pack_ = 1
@@ -1040,7 +1139,104 @@ class MN2_Manifest_GetFlags(ctypes.Union):
         ('b', MN2_Manifest_Flags),
         ('asbytes', uint32_t)
     ]
+
+class MN2_Manifest_R2_4K(ctypes.LittleEndianStructure) : # Manifest $MN2 CSE R2 with RSA-4096 (CSME 18+, modulus_size = 128 DWords)
+    _pack_ = 1
+    _fields_ = [
+        ('HeaderType',        uint16_t),        # 0x00
+        ('HeaderSubType',    uint16_t),        # 0x02
+        ('HeaderLength',    uint32_t),        # 0x04 dwords (0x121 for RSA-4096, larger w/ PQ Block)
+        ('HeaderVersion',    uint32_t),        # 0x08 0x21000, PQ: 0x41002 RSA+XMSS / 0x91118700 RSA+LMS H15 / 0x91119700 RSA+LMS H20
+        ('Flags',            uint32_t),        # 0x0C
+        ('VEN_ID',            uint32_t),        # 0x10 0x8086
+        ('Day',                uint8_t),        # 0x14
+        ('Month',            uint8_t),        # 0x15
+        ('Year',            uint16_t),        # 0x16
+        ('Size',            uint32_t),        # 0x18 dwords
+        ('Tag',                char*4),        # 0x1C
+        ('BuildTag',        uint32_t),        # 0x20 Internal Info of FTPR/RBEP > kernel or IGMF
+        ('Major',            uint16_t),        # 0x24
+        ('Minor',            uint16_t),        # 0x26
+        ('Hotfix',            uint16_t),        # 0x28
+        ('Build',            uint16_t),        # 0x2A
+        ('SVN',                uint32_t),        # 0x2C LS Byte derives keys
+        ('MEU_Major',        uint16_t),        # 0x30
+        ('MEU_Minor',        uint16_t),        # 0x32
+        ('MEU_Hotfix',        uint16_t),        # 0x34
+        ('MEU_Build',        uint16_t),        # 0x36
+        ('MEU_Man_Ver',        uint16_t),        # 0x38
+        ('MEU_Man_Res',        uint16_t),        # 0x3A
+        ('GeneralData',        uint32_t),        # 0x3C General Data of RBE/IDLM (Kernel CA SN/Date)
+        ('IPSpecific0',        uint32_t),        # 0x40 IP Specific Data
+        ('IPSpecific1',        uint32_t),        # 0x44
+        ('IPSpecific2',        uint32_t),        # 0x48
+        ('IPSpecific3',        uint32_t),        # 0x4C
+        ('IPSpecific4',        uint32_t),        # 0x50
+        ('IPSpecific5',        uint32_t),        # 0x54
+        ('Reserved',        uint32_t*8),    # 0x58
+        ('PublicKeySize',    uint32_t),        # 0x78 dwords (0x80 for SSA-PSS-4096)
+        ('ExponentSize',    uint32_t),        # 0x7C dwords
+        ('RSAPublicKey',    uint32_t*128),    # 0x80
+        ('RSAExponent',        uint32_t),        # 0x280
+        ('RSASignature',    uint32_t*128),    # 0x284 4096-bit (SSA-PSS)
+        # 0x484, optional Post-Quantum Block (XMSS/LMS) follows when HeaderVersion is a PQ Type
+    ]
     
+    def hdr_print_cse(self) :
+        fvalue = ['No','Yes']
+        f1,f2,f3,f4,f5 = self.get_flags()
+        
+        version = '%d.%d.%d.%d' % (self.Major,self.Minor,self.Hotfix,self.Build)
+        meu_version = '%d.%d.%d.%d' % (self.MEU_Major,self.MEU_Minor,self.MEU_Hotfix,self.MEU_Build)
+        
+        PublicKeySize = self.PublicKeySize * 4
+        RSAPublicKey = '%0.*X' % (PublicKeySize * 2, int.from_bytes(self.RSAPublicKey, 'little'))
+        RSASignature = '%0.*X' % (PublicKeySize * 2, int.from_bytes(self.RSASignature, 'little'))
+        
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        pt.title = col_y + 'Manifest Header (RSA-4096)' + col_e
+        pt.add_row(['Header Type', '%d' % self.HeaderType])
+        pt.add_row(['Header Sub Type', '%d' % self.HeaderSubType])
+        pt.add_row(['Header Size', '0x%X' % (self.HeaderLength * 4)])
+        pt.add_row(['Header Version', '0x%X' % self.HeaderVersion])
+        pt.add_row(['Production Ready', fvalue[f1]])
+        pt.add_row(['Flags Reserved', '0x%X' % f2])
+        pt.add_row(['PID Bound', fvalue[f3]])
+        pt.add_row(['Intel Owned', fvalue[f4]])
+        pt.add_row(['Debug Signed', fvalue[f5]])
+        pt.add_row(['Vendor ID', '0x%X' % self.VEN_ID])
+        pt.add_row(['Date', '%0.4X-%0.2X-%0.2X' % (self.Year,self.Month,self.Day)])
+        pt.add_row(['Manifest Size', '0x%X' % (self.Size * 4)])
+        pt.add_row(['Manifest Tag', '%s' % self.Tag.decode('utf-8')])
+        pt.add_row(['Unique Build Tag', '0x%X' % self.BuildTag])
+        pt.add_row(['Version', 'N/A' if self.Major in [0,0xFFFF] else version])
+        pt.add_row(['TCB Security Version Number', '%d' % self.SVN])
+        pt.add_row(['MEU Version', 'N/A' if self.MEU_Major in [0,0xFFFF] else meu_version])
+        pt.add_row(['MEU Manifest Version', '%d' % self.MEU_Man_Ver])
+        pt.add_row(['MEU Manifest Reserved', '0x%X' % self.MEU_Man_Res])
+        pt.add_row(['General Data', '0x%0.8X' % self.GeneralData])
+        pt.add_row(['IP Specific Data 0', '0x%0.8X' % self.IPSpecific0])
+        pt.add_row(['IP Specific Data 1', '0x%0.8X' % self.IPSpecific1])
+        pt.add_row(['IP Specific Data 2', '0x%0.8X' % self.IPSpecific2])
+        pt.add_row(['IP Specific Data 3', '0x%0.8X' % self.IPSpecific3])
+        pt.add_row(['IP Specific Data 4', '0x%0.8X' % self.IPSpecific4])
+        pt.add_row(['IP Specific Data 5', '0x%0.8X' % self.IPSpecific5])
+        pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+        pt.add_row(['RSA Public Key Size', '0x%X' % PublicKeySize])
+        pt.add_row(['RSA Exponent Size', '0x%X' % (self.ExponentSize * 4)])
+        pt.add_row(['RSA Public Key', '%s [...]' % RSAPublicKey[:8]])
+        pt.add_row(['RSA Exponent', '0x%X' % self.RSAExponent])
+        pt.add_row(['RSA Signature', '%s [...]' % RSASignature[:8]])
+        
+        return pt
+    
+    def get_flags(self) :
+        flags = MN2_Manifest_GetFlags()
+        flags.asbytes = self.Flags
+        
+        return flags.b.PVBit, flags.b.Reserved, flags.b.PIDBound, flags.b.IntelOwned, flags.b.DebugSigned
+
 class SKU_Attributes(ctypes.LittleEndianStructure) : # Pre-CSE $SKU
     _pack_ = 1
     _fields_ = [
@@ -4981,6 +5177,43 @@ class CSE_Ext_22_Mod(ctypes.LittleEndianStructure) : # R1 - (KEY_MANIFEST_EXT_EN
         
         return flags.b.IPIPolicy, flags.b.Reserved
 
+class CSE_Ext_22_Mod_R2(ctypes.LittleEndianStructure) : # R2 - CSME 18+ Key Manifest Entry with embedded SHA-384 Public Key Hash (56 Bytes per Entry)
+    _pack_ = 1
+    _fields_ = [
+        ('Usage',            uint16_t),        # 0x00
+        ('Flags',            uint8_t),        # 0x02
+        ('HashAlgorithm',    uint8_t),        # 0x03
+        ('MinimalSVN',        uint8_t),        # 0x04
+        ('Reserved',        uint8_t*3),        # 0x05
+        ('KeyHash',            uint8_t*48),    # 0x08 SHA-384
+        # 0x38
+    ]
+    
+    def ext_print(self) :
+        f1,f2 = self.get_flags()
+        
+        HashAlgorithm = cse_hash_alg[self.HashAlgorithm] if self.HashAlgorithm in cse_hash_alg else 'Unknown (%d)' % self.HashAlgorithm
+        KeyHash = '%0.*X' % (0x30 * 2, int.from_bytes(self.KeyHash, 'little'))
+        
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        pt.title = col_y + 'Extension 34, Entry' + col_e
+        pt.add_row(['Hash Usage', key_dict[self.Usage] if self.Usage in key_dict else 'Unknown (%d)' % self.Usage])
+        pt.add_row(['IPI Policy', ['OEM or Intel','Intel Only'][f1]])
+        pt.add_row(['Flags Reserved', '0x%X' % f2])
+        pt.add_row(['Hash Algorithm', HashAlgorithm])
+        pt.add_row(['Minimal SVN', self.MinimalSVN])
+        pt.add_row(['Reserved', '0x%X' % int.from_bytes(self.Reserved, 'little')])
+        pt.add_row(['Key Hash (SHA-384)', '%s [...]' % KeyHash[:16]])
+        
+        return pt
+    
+    def get_flags(self) :
+        flags = CSE_Ext_0E_GetFlags()
+        flags.asbytes = self.Flags
+        
+        return flags.b.IPIPolicy, flags.b.Reserved
+
 class CSE_Ext_23(ctypes.LittleEndianStructure) : # R1 - Signed Package Information v2 (SIGNED_PACKAGE_INFO_EXT, SignedPackageInfoV2)
     _pack_ = 1
     _fields_ = [
@@ -6114,6 +6347,9 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
                 if (variant,major) in [('GSC',100),('GSC',101)] or (variant_p,anl_meu_major) in [('PMC',100),('OROM',100),('PMC',101),('OROM',101)] :
                     if ext_tag in ext_tag_rev_hdr_gsc100 : hdr_rev_tag = ext_tag_rev_hdr_gsc100[ext_tag]
                     if ext_tag in ext_tag_rev_mod_gsc100 : mod_rev_tag = ext_tag_rev_mod_gsc100[ext_tag]
+                elif (variant,major) in [('CSME',17),('CSME',18),('CSME',19),('CSME',20),('CSME',21)] :
+                    if ext_tag in ext_tag_rev_hdr_csme18 : hdr_rev_tag = ext_tag_rev_hdr_csme18[ext_tag]
+                    if ext_tag in ext_tag_rev_mod_csme18 : mod_rev_tag = ext_tag_rev_mod_csme18[ext_tag]
                 elif (variant,major) in [('CSME',15),('CSME',16),('CSSPS',6)] or (variant_p,anl_major) in [('PMC',150),('PMC',160),('PCHC',15),('PCHC',16)] or mn2_rsa_key_len == 0x180 :
                     if ext_tag in ext_tag_rev_hdr_csme15 : hdr_rev_tag = ext_tag_rev_hdr_csme15[ext_tag]
                     if ext_tag in ext_tag_rev_mod_csme15 : mod_rev_tag = ext_tag_rev_mod_csme15[ext_tag]
@@ -6154,8 +6390,31 @@ def ext_anl(buffer, input_type, input_offset, file_end, ftpr_var_ver, single_man
                 if ext_struct_name and ext_dict_name not in ext_hdr_extra :
                     ext_hdr = get_struct(buffer, cpd_ext_offset, ext_struct_name) # Get Extension Structure for non ext_hdr_extra Extensions
                     ext_print_temp.append(ext_hdr.ext_print()) # Store Extension Info for non ext_hdr_extra Extensions
+                
+                    if ext_tag == 0x27 and cpd_ext_size >= 0x10 : # CSME 18+ Target Platform List, parse all Hardware ID Entries
+                        hw_id_count = (cpd_ext_size - 0x8) // 0x8
+                        hw_id_pt = ext_table(['Field', 'Value'], False, 1)
+                        hw_id_pt.title = col_y + 'Extension 39, Target Platform Hardware IDs' + col_e
+                        for hw_idx in range(hw_id_count) :
+                            hw_entry = get_struct(buffer, cpd_ext_offset + 0x8 + hw_idx * 0x8, CSE_Hardware_ID)
+                            hw_step = chr(0x41 + hw_entry.Step) if hw_entry.Step < 0x1A else '0x%0.2X' % hw_entry.Step # 0 = A
+                            hw_id_pt.add_row(['Hardware ID %d' % hw_idx, 'Family 0x%0.4X, SKU %d, Step %s, Die %d, Sub Type %d%s' % \
+                                             (hw_entry.Family,hw_entry.SKU,hw_step,hw_entry.Die,hw_entry.SubType,
+                                             ', Full Compare' if hw_entry.Identifier else '')])
+                        ext_print_temp.append(hw_id_pt)
                 else :
                     ext_hdr = None # Get Extension Structure for ext_hdr_extra Extensions later
+                
+                if ext_tag == 0x23 and ext15_info[2][1] == '' : # CSME 18+ Signed Package Info v2, replaces CSE_Ext_0F (prefer 0x0F when present)
+                    if ext_pname == '' : ext_pname = ext_hdr.PartitionName.decode('utf-8') # Partition Name
+                    if vcn == -1 : vcn = ext_hdr.VCN # Version Control Number
+                    arb_svn = ext_hdr.ARBSVN # FPF Anti-Rollback Security Version Number
+                    ext15_info[0] = arb_svn
+                    
+                    f1_23,f2_23,f3_23,f4_23 = ext_hdr.get_flags()
+                    ext15_type = ext15_fw_type[f1_23] if f1_23 in ext15_fw_type else 'Unknown' # Firmware Type
+                    ext15_sku = ext15_fw_sku[f3_23] if f3_23 in ext15_fw_sku else ('Unknown','UNK') # Firmware SKU
+                    ext15_info[1:4] = ext15_type, ext15_sku, '' # No NVM Compatibility field at CSME 18+ Ext 35
                 
                 special_mod_anl = False # Mark all Extension Modules which require special/unique processing
                 
@@ -7450,7 +7709,7 @@ def get_sec_hdr_size(variant,major,minor,hotfix,vol_ftbl_pl) :
     if (variant,major,minor) == ('CSME',14,5) : return 0x34
     if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,vol_ftbl_pl) == ('CSSPS',5,10) : return 0x28
     if (variant,major) in [('CSME',11),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : return 0x34
-    if (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15)] : return 0x28
+    if (variant,major) in [('CSME',12),('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSME',17),('CSME',18),('CSME',19),('CSME',20),('CSME',21)] : return 0x28
     
     return 0x28
 
@@ -7458,7 +7717,7 @@ def get_sec_hdr_size(variant,major,minor,hotfix,vol_ftbl_pl) :
 def get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl) :
     if (variant,major,minor) == ('CSSPS',4,4) or (variant,major,vol_ftbl_pl) == ('CSSPS',5,10) : return 0xC
     if (variant,major) in [('CSME',11),('CSME',12),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5)] : return 0x1C
-    if (variant,major) in [('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSSPS',6)] : return 0xC
+    if (variant,major) in [('CSME',13),('CSME',14),('CSME',15),('CSME',16),('CSME',17),('CSME',18),('CSME',19),('CSME',20),('CSME',21),('CSSPS',6)] : return 0xC
     
     return 0xC
 
@@ -7466,7 +7725,7 @@ def get_cfg_rec_size(variant,major,minor,hotfix,vol_ftbl_pl) :
 # noinspection PyUnusedLocal
 def get_vfs_start_0(variant,major,minor,hotfix) : # pylint: disable=W0613
     if (variant,major,minor) in [('CSME',13,30)] : return True
-    if (variant,major) in [('CSME',15),('CSME',16)] : return True
+    if (variant,major) in [('CSME',15),('CSME',16),('CSME',17),('CSME',18),('CSME',19),('CSME',20),('CSME',21)] : return True
     if (variant,major) in [('CSME',11),('CSME',12),('CSME',13),('CSME',14),('CSTXE',3),('CSTXE',4),('CSSPS',4),('CSSPS',5),('CSSPS',6)] : return False
     
     return True
@@ -9239,14 +9498,19 @@ def pmc_anl(mn2_info) :
         pmc_name_db = '%s_%s_%s_%s_%s_%s' % (pmc_platform[:3], pmc_fw_ver, pmc_pch_sku, pmc_pch_rev_p, pmc_mn2_signed_db, mn2_info[6])
     
     # Search DB for PMC firmware
-    if pmc_platform.startswith(('MCC','TGP','CMP','JSP','LKF','ICP','CNP','GLK','BXT','APL','DG1')):
+    if pmc_platform.startswith(('MCC','TGP','CMP','JSP','LKF','ICP','CNP','GLK','BXT','APL','DG1','ADP','MTL','ARL','LNL','PTL')):
         for line in mea_db_lines :
             if pmc_name_db in line :
                 break # Break loop at 1st name match
         else :
             note_new_fw('PMC %s' % pmc_platform)
-    else:
-        pmc_unsupported = True
+    elif major >= 17 :
+        pass # CSME 18+ IUP with unlabeled platform, keep Supported until variant is mapped
+    else :
+        if major >= 17 :
+            pass # CSME 18+ IUP with unlabeled platform, keep Supported until variant is mapped
+        else :
+            pmc_unsupported = True
     
     # Detect PMC RSA Public Key Recognition
     for line in mea_db_lines :
@@ -9304,14 +9568,19 @@ def pchc_anl(mn2_info) :
     pchc_name_db = '%s_%s_%s_%s' % (pchc_platform[:3], pchc_fw_ver, pchc_mn2_signed_db, mn2_info[6])
     
     # Search DB for PCHC firmware
-    if pchc_platform.startswith(('MCC','TGP','CMP','JSP','LKF','ICP')):
+    if pchc_platform.startswith(('MCC','TGP','CMP','JSP','LKF','ICP','ADP','MTL','ARL','LNL','PTL')):
         for line in mea_db_lines :
             if pchc_name_db in line :
                 break # Break loop at 1st name match
         else :
             note_new_fw('PCHC %s' % pchc_platform)
-    else:
-        pchc_unsupported = True
+    elif major >= 17 :
+        pass # CSME 18+ IUP with unlabeled platform, keep Supported until variant is mapped
+    else :
+        if major >= 17 :
+            pass # CSME 18+ IUP with unlabeled platform, keep Supported until variant is mapped
+        else :
+            pchc_unsupported = True
     
     # Detect PCHC RSA Public Key Recognition
     for line in mea_db_lines :
@@ -9375,14 +9644,19 @@ def phy_anl(mn2_info) :
         phy_name_db = '%s_%s_%s_%s_%s' % (phy_platform[:3], phy_sku, phy_fw_ver, phy_mn2_signed_db, mn2_info[6])
     
     # Search DB for PHY firmware
-    if phy_platform.startswith(('TGP','CMP','LKF','ICP','DG1')):
+    if phy_platform.startswith(('TGP','CMP','LKF','ICP','DG1','ADP','MTL','ARL','LNL','PTL')):
         for line in mea_db_lines :
             if phy_name_db in line :
                 break # Break loop at 1st name match
         else :
             note_new_fw('PHY %s %s' % (phy_platform, phy_sku))
-    else:
-        phy_unsupported = True
+    elif major >= 17 :
+        pass # CSME 18+ IUP with unlabeled platform, keep Supported until variant is mapped
+    else :
+        if major >= 17 :
+            pass # CSME 18+ IUP with unlabeled platform, keep Supported until variant is mapped
+        else :
+            phy_unsupported = True
     
     # Detect PHY RSA Public Key Recognition
     for line in mea_db_lines :
@@ -9671,9 +9945,11 @@ def chk_iup_size(eng_size_text, file_end, eng_fw_end, variant_p, platform) :
 def get_manifest(buffer, offset) :
     man_ver = int.from_bytes(buffer[offset + 0x8:offset + 0xC], 'little') # $MAN/$MN2 Version Tag
     num_info = int.from_bytes(buffer[offset + 0x20:offset + 0x24], 'little') # $MAN/$MN2 NumModules/BuildTag
+    mod_size = int.from_bytes(buffer[offset + 0x78:offset + 0x7C], 'little') # Modulus Size in DWords (0x60 RSA-3072, 0x80 RSA-4096)
     
     if man_ver == 0x10000 and (0x0 < num_info < 0x50) : return MN2_Manifest_R0
     if man_ver == 0x10000 : return MN2_Manifest_R1
+    if man_ver in [0x21000,0x41002,0x91118700,0x91119700] and mod_size == 0x80 : return MN2_Manifest_R2_4K # RSA-4096 (PQ Block may follow at PQ Types)
     if man_ver == 0x21000 : return MN2_Manifest_R2
     
     return MN2_Manifest_R2
@@ -10240,6 +10516,9 @@ def rsa_sig_val(man_hdr_struct, buffer, check_start) :
         elif (man_tag,man_key_size) == ('$MN2',0x180) : # SHA-384
             rsa_hash, dec_hash = pss_verify(dec_sign, hash_data, 0x180, hashlib.sha384)
             rsa_hash, dec_hash = rsa_hash.hex().upper(), dec_hash.hex().upper()
+        elif (man_tag,man_key_size) == ('$MN2',0x200) : # SHA-384, RSA-4096 (CSME 18+)
+            rsa_hash, dec_hash = pss_verify(dec_sign, hash_data, 0x200, hashlib.sha384)
+            rsa_hash, dec_hash = rsa_hash.hex().upper(), dec_hash.hex().upper()
         else :
             rsa_hash, dec_hash = pss_verify(dec_sign, hash_data, 0x180, hashlib.sha384)
             rsa_hash, dec_hash = rsa_hash.hex().upper(), dec_hash.hex().upper()
@@ -10361,6 +10640,10 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'pphy' and major == 12 and is_meu and mn2_struct.MEU_Major == 0 : variant = 'PHYPEBG' # PPHY (EBG)
                 elif mod == 'pphy' and major in (12,0) : variant = 'PHYPCMP' # PPHY (CMP)
                 elif mod == 'IntelRec' and major == 16 : variant = 'PCHCADP' # ADP
+                elif mod == 'IntelRec' and major == 1800 : variant = 'PCHCMTL' # MTL (CSME 18, SOCC/PCHC)
+                elif mod == 'IntelRec' and major == 1900 : variant = 'PCHARL' # ARL-S (CSME 19)
+                elif mod == 'IntelRec' and major == 2000 : variant = 'PCHCLNL' # LNL (CSME 20)
+                elif mod == 'IntelRec' and major == 2100 : variant = 'PCHCPTL' # PTL (CSME 21)
                 elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 40 : variant = 'PCHCMCC' # MCC
                 elif mod == 'IntelRec' and major == 15 and is_meu and mn2_struct.MEU_Minor == 0 : variant = 'PCHCTGP' # TGP
                 elif mod == 'IntelRec' and (major,minor) == (14,5) : variant = 'PCHCCMPV' # CMP-V
@@ -10377,6 +10660,10 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'PMCC000' and major == 150 : variant = 'PMCTGP' # 0 TGP
                 elif mod == 'PMCC000' and major == 154 : variant = 'PMCMCC' # 0 MCC
                 elif mod == 'PMCC000' and major == 160 : variant = 'PMCADP' # 0 ADP
+                elif mod == 'PMCC000' and major == 1800 : variant = 'PMCMTL' # 0 MTL (CSME 18, x100 versioning)
+                elif mod == 'PMCC000' and major == 1900 : variant = 'PMCARL' # 0 ARL-S (CSME 19)
+                elif mod == 'PMCC000' and major == 2000 : variant = 'PMCLNL' # 0 LNL (CSME 20)
+                elif mod == 'PMCC000' and major == 2100 : variant = 'PMCPTL' # 0 PTL (CSME 21)
                 elif mod == 'PMCC000' and major == 1 and not is_meu : variant = 'PMCWTL' # 0 WTL
                 elif mod == 'PMCC000' and major == 14 : variant = 'PMCIDV' # 0 IDV
                 elif mod == 'PMCC002' : variant = 'PMCAPLA' # 2 APL A
@@ -10386,10 +10673,28 @@ def get_variant(buffer, mn2_struct, mn2_match_start, mn2_match_end, mn2_rsa_hash
                 elif mod == 'PMCC006' : variant = 'PMCGLKB' # 6 GLK B
                 elif mod in ['gfx_srv','chassis'] : variant = 'GSC' # GSC
                 elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 100 : variant = 'PMCDG1' # DG1
-                elif mod.startswith('PCOD') and is_meu and (major in (4,2) or mn2_struct.MEU_Major == 101) : variant = 'PMCDG2' # DG2
+                elif mod.startswith('PCOD') and is_meu and major in (4,2) and not (is_meu and mn2_struct.MEU_Major >= 17) : variant = 'PMCDG2' # DG2 (Legacy, avoid new-gen PMC collisions)
+                elif mod.startswith('PCOD') and is_meu and mn2_struct.MEU_Major == 101 : variant = 'PMCDG2' # DG2
                 elif mod == 'VBT' and major == 19 : variant = 'OROMDG1' # DG1
                 elif mod == 'VBT' and major == 20 : variant = 'OROMDG2' # DG2
                 elif mod == 'VBT' : variant = 'OROM' # Unknown
+            
+            # CSME Engine Manifest via .man Owner Marker (CSME 18+/MTL+ has no FTPR 'fwupdate' Module, NFTP/RBEP carry the Engine Version)
+            if variant.startswith(('Unknown','TBD')) and major >= 11 and \
+            re.compile(rb'(RBEP|NFTP|FTPR)\.man').search(buffer[max(0,mn2_match_start - 0x4200):mn2_match_end]) :
+                variant = 'CSME'
+            
+            # New-Gen IUP Identification via CPD Partition Name (module markers changed at CSME 18+, versions use x100 scheme)
+            if variant.startswith(('Unknown','TBD')) :
+                cpd_bgn = buffer.rfind(b'$CPD', max(0x0, mn2_match_start - 0x5000), mn2_match_end)
+                cpd_pname = buffer[cpd_bgn + 0x0C:cpd_bgn + 0x10] if cpd_bgn != -1 else b''
+                
+                if cpd_pname in [b'PMCP', b'PCOD'] and major in [1800,1900,2000,2100] :
+                    variant = ['PMCMTL','PMCARL','PMCLNL','PMCPTL'][[1800,1900,2000,2100].index(major)]
+                elif cpd_pname in [b'PCHC', b'SOCC'] and major in [1800,1900,2000,2100] :
+                    variant = ['PCHCMTL','PCHARL','PCHCLNL','PCHCPTL'][[1800,1900,2000,2100].index(major)]
+                elif cpd_pname in [b'NPHY', b'SPHY', b'SSPH'] and major in [18,19,20,21] :
+                    variant = 'PHY%s%s' % (cpd_pname[:1].decode(),['MTL','ARL','LNL','PTL'][[18,19,20,21].index(major)])
             
             if variant.startswith(('Unknown','TBD')) and (major,minor) in [(4,0),(3,0)] : variant = 'CSTXE' # CSTXE
         
@@ -10485,7 +10790,7 @@ def mass_scan(f_path) :
 ansi_escape = re.compile(r'\x1b[^m]*m')
 
 # CSE Extensions 0x00-0x1B, 0x1E-0x1F, 0x22, 0x23, 0x32, 0x544F4F46
-ext_tag_all = list(range(0x1C)) + list(range(0x1E,0x20)) + [0x22,0x23,0x25,0x32,0x37,0x544F4F46]
+ext_tag_all = list(range(0x1D)) + list(range(0x1E,0x20)) + [0x22,0x23,0x25,0x27,0x28,0x32,0x37,0x544F4F46]
 
 # CSME 12-14 Revised Extensions
 ext_tag_rev_hdr_csme12 = {0xF:'_R2', 0x14:'_R2'}
@@ -10499,6 +10804,13 @@ ext_tag_rev_hdr_csme15 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2'
 
 # CSME 15 Revised Extension Modules
 ext_tag_rev_mod_csme15 = {0x1:'_R2', 0xD:'_R2', 0xE:'_R2', 0xF:'_R3', 0x10:'_R2', 0x18:'_R2', 0x19:'_R2', 0x1A:'_R2'}
+
+# CSME 18 Revised Extensions (Meteor Lake+, layouts match CSME 15/16 R2/R3 except where overridden)
+ext_tag_rev_hdr_csme18 = dict(ext_tag_rev_hdr_csme15)
+
+# CSME 18 Revised Extension Modules (Key Manifest v2 entries embed SHA-384 Public Key Hash)
+ext_tag_rev_mod_csme18 = dict(ext_tag_rev_mod_csme15)
+ext_tag_rev_mod_csme18[0x22] = '_R2'
 
 # GSC/OROM 100 Revised Extensions
 ext_tag_rev_hdr_gsc100 = {0x0:'_R2', 0x3:'_R2', 0xA:'_R2', 0xF:'_R2', 0x11:'_R2', 0x13:'_R2', 0x14:'_R3', 0x16:'_R2',
@@ -10521,7 +10833,7 @@ ext_tag_rev_mod_cssps503 = {0x0:'_R2'}
 
 # CSE Extensions without Modules (exclude 0x1E, 0x1F, 0x544F4F46)
 ext_tag_mod_none = [(0x4,''), (0xA,''), (0xA,'_R2'), (0xC,''), (0x11,''), (0x11,'_R2'), (0x13,''), (0x13,'_R2'),
-                    (0x16,''), (0x16,'_R2'), (0x17,''), (0x17,'_R2'), (0x1B,''), (0x1B,'_R2'), (0x32,'')]
+                    (0x16,''), (0x16,'_R2'), (0x17,''), (0x17,'_R2'), (0x32,'')] # 0x1B Revocation dropped: variable entry count at CSME 18+
 
 # CSE Extensions with Module Count
 ext_tag_mod_count = [(0x1,''), (0x2,''), (0x12,''), (0x22,''), (0x23,'')]
@@ -10602,6 +10914,70 @@ cssps_platform = {
             'TA' : 'Tatlow',
             }
 
+# CSE Extension 39 Hardware ID Entry (CSME 18+, not in XML, Reverse Engineered from Intel MFIT)
+class CSE_Hardware_ID(ctypes.LittleEndianStructure) : # CSME 18+ Target Platform Hardware ID Entry
+    _pack_ = 1
+    _fields_ = [
+        ('Family',        uint16_t),        # 0x0 Platform Family
+        ('SKU',            uint8_t),        # 0x2 SKU
+        ('Step',            uint8_t),        # 0x3 Stepping (0 = A, 1 = B, etc)
+        ('Die',            uint8_t),        # 0x4 Die
+        ('SubType',        uint8_t),        # 0x5 Sub Type
+        ('Reserved',    uint8_t),            # 0x6
+        ('Identifier',    uint8_t),        # 0x7 Full Comparison indicator when set
+        # 0x8
+    ]
+
+# CSE Extension 39 Target Platform List (CSME 18+, not in XML, Reverse Engineered from Intel MFIT)
+class CSE_Ext_27(ctypes.LittleEndianStructure) : # CSME 18+ Target Platform List Extension (MFT_EXP_TYPE_TARGET_PLATFORM)
+    _pack_ = 1
+    _fields_ = [
+        ('ExtensionType',    uint32_t),        # 0x0 0x27
+        ('Length',            uint32_t),        # 0x4 Bytes, includes Header. Max 16 Hardware ID Entries
+        ('HWID',            CSE_Hardware_ID*3),# 0x8 First 3 Entries inline (full list parsed separately via Length)
+        # 0x20
+    ]
+    
+    def ext_print(self) :
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        pt.title = col_y + 'Extension 39, Target Platform List' + col_e
+        pt.add_row(['Extension Type', '0x%X' % self.ExtensionType])
+        pt.add_row(['Extension Length', '0x%X (%d Hardware ID(s))' % (self.Length,(self.Length - 0x8) // 0x8)])
+        
+        return pt
+
+# CSE Extension 28 Sub-Binary Info (CSME 18+, not in XML, Reverse Engineered from Intel MFIT)
+class CSE_Ext_1C(ctypes.LittleEndianStructure) : # CSME 18+ Sub Binary Info Extension (MFT_EXT_TYPE_SUB_BINARY_INFO)
+    _pack_ = 1
+    _fields_ = [
+        ('ExtensionType',    uint32_t),        # 0x0 0x1C
+        ('Length',            uint32_t),        # 0x4 Bytes, includes Header (0x14 + 0x18 * Modules)
+        ('ModuleCount',        uint32_t),        # 0x8 Number of Sub Binaries
+        ('Reserved',        uint64_t),        # 0xC
+        ('SubBin0Name',        char*12),        # 0x14 First Entry: Binary Name
+        ('SubBin0Ver',        uint16_t*4),    # 0x20 Major, Minor, Hotfix, Build
+        ('SubBin0Meta',        uint32_t),        # 0x28 Metadata
+        ('SubBin1Name',        char*12),        # 0x2C Second Entry inline (full list parsed separately via ModuleCount)
+        ('SubBin1Ver',        uint16_t*4),    # 0x38
+        ('SubBin1Meta',        uint32_t),        # 0x40
+        # 0x44
+    ]
+    
+    def ext_print(self) :
+        pt = ext_table(['Field', 'Value'], False, 1)
+        
+        v0 = '%d.%d.%d.%d' % (self.SubBin0Ver[0],self.SubBin0Ver[1],self.SubBin0Ver[2],self.SubBin0Ver[3]) if self.ModuleCount > 0 else 'N/A'
+        
+        pt.title = col_y + 'Extension 28, Sub Binary Info' + col_e
+        pt.add_row(['Extension Type', '0x%X' % self.ExtensionType])
+        pt.add_row(['Extension Length', '0x%X' % self.Length])
+        pt.add_row(['Module Count', self.ModuleCount])
+        pt.add_row(['Reserved', '0x%X' % self.Reserved])
+        if self.ModuleCount > 0 : pt.add_row(['Sub Binary 0', '%s, Version %s' % (self.SubBin0Name.decode('utf-8'), v0)])
+        
+        return pt
+
 # CSE Extension Structures
 ext_dict = {
             'CSE_Ext_00' : CSE_Ext_00,
@@ -10650,6 +11026,9 @@ ext_dict = {
             'CSE_Ext_1F' : CSE_Ext_1F,
             'CSE_Ext_22' : CSE_Ext_22,
             'CSE_Ext_23' : CSE_Ext_23,
+            'CSE_Ext_27' : CSE_Ext_27,
+            'CSE_Ext_1C' : CSE_Ext_1C,
+            'CSE_Ext_22_Mod_R2' : CSE_Ext_22_Mod_R2,
             'CSE_Ext_25' : CSE_Ext_25,
             'CSE_Ext_32' : CSE_Ext_32,
             'CSE_Ext_37' : CSE_Ext_37,
@@ -10800,6 +11179,17 @@ bpdt_dict = {
             43 : 'GBST', # GBST Partition
             44 : 'TCCP', # USB Type C Controller Partition (a.k.a. TPCC)
             45 : 'PSEP', # Programmable Services Engine Partition
+            46 : 'ESEPKG', # ESE Package (Nested Logical Boot Partition, CSME 18+)
+            47 : 'ESEP', # ESE Code Partition (a.k.a. SSE, OSSE ROM Bypass capable)
+            48 : 'DMUP', # ESE DMU Partition
+            49 : 'PUNIT', # ESE PUnit Partition
+            50 : 'ACEP', # ACE Partition
+            54 : 'SSPH', # SoC SPHY Partition (ESE handled, CSME 21+)
+            56 : 'AUNIT', # AUNIT Partition (Arrow Lake only)
+            57 : 'CNViP', # CNVi Partition (CSME 21+)
+            2048 : 'OSSE SROM', # OSSE Soft ROM Partition (CSME 20+)
+            2049 : 'OSSE KM', # OSSE Key Manifest Partition (CSME 20+)
+            2050 : 'OSSE RT', # OSSE Runtime Partition (CSME 20+)
             }
             
 # CSE Extension 12 SKU Capabilities (ConfigRuleSettings)
@@ -10894,6 +11284,7 @@ ftbl_efst_plat = {
             0x0B : 'WTL',
             0x10 : 'ADP',
             0x11 : 'JSP',
+            0x12 : 'MTL+', # CSME 18+ Client (Meteor Lake and newer, single generic ID)
             0x13 : 'EBG', # TGP-H (Tatlow)
             }
 
@@ -11027,6 +11418,7 @@ fd_pat = re.compile(br'\x5A\xA5\xF0\x0F[\x01-\x10].{171}\xFF{16}', re.DOTALL)
 pr_man_08_pat = re.compile(br'FTPR\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_09_pat = re.compile(br'OROM\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_10_pat = re.compile(br'grtos\.met\x00{3}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
+pr_man_11_pat = re.compile(br'(RBEP|NFTP)\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL) # CSME 18+ (MTL+): RBEP replaces FTPR as BUP Partition
 
 pr_cpd_parts = ['PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY']
 pr_man_cpd_pats = {part: re.compile(cpd_pat.pattern + b'.' + part.encode(), re.DOTALL) for part in pr_cpd_parts}
@@ -11431,6 +11823,7 @@ for file_in in source :
         pr_man_08 = pr_man_08_pat.search(reading_4K) # FTPR.man (CSME 15.0.35 +)
         pr_man_09 = pr_man_09_pat.search(reading_4K) # OROM.man (GSC)
         pr_man_10 = pr_man_10_pat.search(reading_4K) # grtos.met (Ignore CSSPS IE)
+        pr_man_11 = pr_man_11_pat.search(reading_4K) # RBEP.man/NFTP.man (CSME 18+ / MTL+, only reached when no FTPR/BUP markers exist anywhere before)
         
         pr_man_cpd = {name: pr_man_cpd_pats[name].search(reading_16) for name in pr_cpd_parts}
 
@@ -11444,6 +11837,7 @@ for file_in in source :
         or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
         or pr_man_08 and not pr_man_10 \
         or pr_man_09 \
+        or pr_man_11 \
         or any(pr_man_cpd.values()):
             if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
             break
@@ -11506,20 +11900,41 @@ for file_in in source :
     else :
         cse_lt_pos_16 = reading[:0x1000].find(b'\x00' * 0x18 + b'\x22' + b'\x00' * 7 + b'\xFF' * 0xFB8) # At IFWI 1.6, try static "Checksum" field
         cse_lt_pos_17 = re.compile(br'\x40\x00[\x00\x01]\x00.{4}(.{3}\x00){14}', re.DOTALL).search(reading[:0x1000]) # At IFWI 1.7, try struct pattern
+        cse_lt_pos_18 = re.compile(br'[\x58\x60]\x00[\x00\x01]\x00.{4}(.{3}\x00){20}', re.DOTALL).search(reading[:0x1000]) # At CSME 18+, try struct pattern (0x58 MTL/LNL or 0x60 PTL)
         if cse_lt_pos_16 != -1 : cse_lt_off = cse_lt_pos_16 - 0x28
         elif cse_lt_pos_17 : cse_lt_off = cse_lt_pos_17.start() - 0x10
-        else : cse_lt_off = 0x0 # Assume 0x0 on cse_lt_pos_16/cse_lt_pos_17 miss (risky)
+        elif cse_lt_pos_18 : cse_lt_off = cse_lt_pos_18.start() - 0x10
+        else :
+            cse_lt_off = -0x1
+            osse_pat = re.compile(br'[\x28-\x60]\x00[\x00\x01]\x00', re.DOTALL) # Length/Flags/Reserved header pattern
+            for osse_match in osse_pat.finditer(reading) : # CSME 18+/PTL+ New Format Flash Descriptor (0FF0A55A) or Descriptor-less image, locate CSE LT via internal CRC-32 (collision proof)
+                cse_candidate = osse_match.start() - 0x10 # Adjust for ROMB Vector prefix
+                if cse_candidate < 0x0 : continue
+                
+                cse_candidate_size = int.from_bytes(reading[cse_candidate + 0x10:cse_candidate + 0x12], 'little')
+                if cse_candidate_size < 0x28 or cse_candidate_size > 0x60 or cse_candidate_size % 0x8 != 0x0 : continue # Layout Pointers Table Size bounds
+                
+                cse_pointers = reading[cse_candidate + 0x10:cse_candidate + 0x14] + b'\x00' * 4 + reading[cse_candidate + 0x18:cse_candidate + 0x10 + cse_candidate_size]
+                if crccheck.crc.Crc32.calc(cse_pointers) == int.from_bytes(reading[cse_candidate + 0x14:cse_candidate + 0x18], 'little') :
+                    cse_lt_off = cse_candidate
+                    break
+            
+            if cse_lt_off < 0x0 : cse_lt_off = 0x0 # Assume 0x0 on total miss (risky)
     
     cse_lt_size = 0x1000 # CSE LT Size is usually 0x1000 (4KB)
     cse_lt_bp = [b'\xAA\x55\x00\x00',b'\xAA\x55\xAA\x00'] # IFWI BPDT Signatures
     cse_lt_16 = get_struct(reading, cse_lt_off, CSE_Layout_Table_16) # IFWI 1.6 Structure
     cse_lt_17 = get_struct(reading, cse_lt_off, CSE_Layout_Table_17) # IFWI 1.7 Structure
+    cse_lt_18 = get_struct(reading, cse_lt_off, CSE_Layout_Table_18) # CSME 18+ Structure
     cse_lt_16_hdr_pad = reading[cse_lt_off + ctypes.sizeof(CSE_Layout_Table_16):cse_lt_off + cse_lt_size] # IFWI 1.6 Header Padding
     cse_lt_17_hdr_pad = reading[cse_lt_off + ctypes.sizeof(CSE_Layout_Table_17):cse_lt_off + cse_lt_size] # IFWI 1.7 Header Padding
+    cse_lt_18_hdr_pad = reading[cse_lt_off + 0x10 + cse_lt_18.Size:cse_lt_off + cse_lt_size] if cse_lt_18.Size in [0x58,0x60] else b'' # CSME 18+ Header Padding, starts after variable-size Pointers Table
     cse_lt_16_fpt_sig = reading[cse_lt_off + cse_lt_16.DataOffset:cse_lt_off + cse_lt_16.DataOffset + 0x4] # IFWI 1.6 FPT Signature
     cse_lt_17_fpt_sig = reading[cse_lt_off + cse_lt_17.DataOffset:cse_lt_off + cse_lt_17.DataOffset + 0x4] # IFWI 1.7 FPT Signature
+    cse_lt_18_fpt_sig = reading[cse_lt_off + cse_lt_18.DataOffset:cse_lt_off + cse_lt_18.DataOffset + 0x4] # CSME 18+ FPT Signature
     cse_lt_16_bp1_sig = reading[cse_lt_off + cse_lt_16.BP1Offset:cse_lt_off + cse_lt_16.BP1Offset + 0x4] # IFWI 1.6 BP1 Signature
     cse_lt_17_bp1_sig = reading[cse_lt_off + cse_lt_17.BP1Offset:cse_lt_off + cse_lt_17.BP1Offset + 0x4] # IFWI 1.7 BP1 Signature
+    cse_lt_18_bp1_sig = reading[cse_lt_off + cse_lt_18.BP1Offset:cse_lt_off + cse_lt_18.BP1Offset + 0x4] # CSME 18+ BP1 Signature
     
     # If $FPT exists, verify CSE LT via Data, BP1 & Padding. Otherwise, only via BP1 & Padding (risky)
     if reading[cse_lt_off:cse_lt_off + 0x4] in cse_lt_bp :
@@ -11532,22 +11947,23 @@ for file_in in source :
         cse_lt_struct = cse_lt_17 # CSE LT IFWI 1.7 with Data
         fpt_pat_bgn = cse_lt_off + cse_lt_17.DataOffset # Adjust $FPT Starting Offset based on CSE LT IFWI 1.7 Data
         fpt_pat_end = cse_lt_off + cse_lt_17.DataOffset + 0x4 # Adjust $FPT End Offset based on CSE LT IFWI 1.7 Data
+    elif cse_lt_18_fpt_sig == b'$FPT' and cse_lt_18_bp1_sig in cse_lt_bp and cse_lt_18_hdr_pad == len(cse_lt_18_hdr_pad) * b'\xFF' :
+        cse_lt_struct = cse_lt_18 # CSE LT CSME 18+ with Data
+        fpt_pat_bgn = cse_lt_off + cse_lt_18.DataOffset # Adjust $FPT Starting Offset based on CSE LT CSME 18+ Data
+        fpt_pat_end = cse_lt_off + cse_lt_18.DataOffset + 0x4 # Adjust $FPT End Offset based on CSE LT CSME 18+ Data
     elif cse_lt_16_bp1_sig in cse_lt_bp and cse_lt_16_hdr_pad == len(cse_lt_16_hdr_pad) * b'\xFF' :
         cse_lt_struct = cse_lt_16 # CSE LT IFWI 1.6 without Data
     elif cse_lt_17_bp1_sig in cse_lt_bp and cse_lt_17_hdr_pad == len(cse_lt_17_hdr_pad) * b'\xFF' :
         cse_lt_struct = cse_lt_17 # CSE LT IFWI 1.7 without Data
+    elif cse_lt_18.Size in [0x58,0x60] and cse_lt_18_bp1_sig in cse_lt_bp and cse_lt_18_hdr_pad == len(cse_lt_18_hdr_pad) * b'\xFF' :
+        cse_lt_struct = cse_lt_18 # CSE LT CSME 18+ without Data
     
     # Analyze CSE Layout Table
     if cse_lt_struct :
         NA = [0,0xFFFFFFFF]
         
-        cse_lt_hdr_info = [['Data',cse_lt_struct.DataOffset,cse_lt_struct.DataSize],['Boot 1',cse_lt_struct.BP1Offset,cse_lt_struct.BP1Size],
-                           ['Boot 2',cse_lt_struct.BP2Offset,cse_lt_struct.BP2Size],['Boot 3',cse_lt_struct.BP3Offset,cse_lt_struct.BP3Size],
-                           ['Boot 4',cse_lt_struct.BP4Offset,cse_lt_struct.BP4Size],['Boot 5',cse_lt_struct.BP5Offset,cse_lt_struct.BP5Size]]
-        
-        # Perform IFWI 1.7 specific CSE LT actions
-        if cse_lt_struct == cse_lt_17 :
-            # Validate IFWI 1.7 CSE LT CRC-32
+        if cse_lt_struct == cse_lt_18 :
+            # Validate CSME 18+ CSE LT CRC-32 (same layout as IFWI 1.7: Header w/ Checksum = 0 + all Pointer Entries)
             cse_lt_pointers = reading[cse_lt_off + 0x10:cse_lt_off + 0x14] + b'\x00' * 4 + reading[cse_lt_off + 0x18:cse_lt_off + 0x10 + cse_lt_struct.Size]
             cse_lt_chk_int = cse_lt_struct.Checksum
             cse_lt_chk_mea = crccheck.crc.Crc32.calc(cse_lt_pointers)
@@ -11558,14 +11974,50 @@ for file_in in source :
                     with open('__FCCLT__' + os.path.basename(file_in), 'wb') as o :
                         o.write(reading[:cse_lt_off + 0x14] + struct.pack('<I', cse_lt_chk_mea) + reading[cse_lt_off + 0x18:])
             
-            # Add IFWI 1.7 CSE LT Temp DRAM Cache Pages Offset & Size info
-            cse_lt_hdr_info.append(['Temp',cse_lt_struct.TempPagesOffset,cse_lt_struct.TempPagesSize])
-            
-            # Add IFWI 1.7 CSE LT ELog Offset & Size info (0x58-0x5C at CSE_Layout_Table_17, Size field starts after ROMB at 0x10)
-            if cse_lt_struct.Size >= 0x48 : cse_lt_hdr_info.append(['ELog',cse_lt_struct.ELogOffset,cse_lt_struct.ELogSize])
-            
-            # Get IFWI 1.7 CSE LT Flags Info (CSE Redundancy, Reserved)
+            # Get CSME 18+ CSE LT Flags Info (Redundant CSE Pointers, Reserved)
             cse_lt_flags_red, _ = cse_lt_struct.get_flags()
+            
+            # Build CSME 18+ CSE LT info via Intel Region Pointer naming (pDATA/pBPDT/pRSVD/pELOG/pUTOK/pFLOG)
+            cse_lt_hdr_info = [['Data',cse_lt_struct.DataOffset,cse_lt_struct.DataSize],['Boot 1',cse_lt_struct.BP1Offset,cse_lt_struct.BP1Size],
+                               ['Boot 2',cse_lt_struct.BP2Offset,cse_lt_struct.BP2Size],['Boot 3',cse_lt_struct.BP3Offset,cse_lt_struct.BP3Size],
+                               ['RSVD 1',cse_lt_struct.RSVD1Offset,cse_lt_struct.RSVD1Size],['RSVD 2',cse_lt_struct.RSVD2Offset,cse_lt_struct.RSVD2Size],
+                               ['RSVD 3',cse_lt_struct.RSVD3Offset,cse_lt_struct.RSVD3Size],['ELog',cse_lt_struct.ELogOffset,cse_lt_struct.ELogSize]]
+            
+            # Add CSME 18+ CSE LT Unlock Token & Fault Log Offset & Size info
+            if cse_lt_struct.Size >= 0x58 :
+                cse_lt_hdr_info.append(['UTOK',cse_lt_struct.UTOKOffset,cse_lt_struct.UTOKSize])
+                cse_lt_hdr_info.append(['FLOG',cse_lt_struct.FLOGOffset,cse_lt_struct.FLOGSize])
+            
+            # Add CSME 21+ CSE LT second Fault Log Offset & Size info
+            if cse_lt_struct.Size >= 0x60 :
+                cse_lt_hdr_info.append(['FLOG2',cse_lt_struct.FLOG2Offset,cse_lt_struct.FLOG2Size])
+        
+        else :
+            cse_lt_hdr_info = [['Data',cse_lt_struct.DataOffset,cse_lt_struct.DataSize],['Boot 1',cse_lt_struct.BP1Offset,cse_lt_struct.BP1Size],
+                               ['Boot 2',cse_lt_struct.BP2Offset,cse_lt_struct.BP2Size],['Boot 3',cse_lt_struct.BP3Offset,cse_lt_struct.BP3Size],
+                               ['Boot 4',cse_lt_struct.BP4Offset,cse_lt_struct.BP4Size],['Boot 5',cse_lt_struct.BP5Offset,cse_lt_struct.BP5Size]]
+            
+            # Perform IFWI 1.7 specific CSE LT actions
+            if cse_lt_struct == cse_lt_17 :
+                # Validate IFWI 1.7 CSE LT CRC-32
+                cse_lt_pointers = reading[cse_lt_off + 0x10:cse_lt_off + 0x14] + b'\x00' * 4 + reading[cse_lt_off + 0x18:cse_lt_off + 0x10 + cse_lt_struct.Size]
+                cse_lt_chk_int = cse_lt_struct.Checksum
+                cse_lt_chk_mea = crccheck.crc.Crc32.calc(cse_lt_pointers)
+                if cse_lt_chk_mea != cse_lt_chk_int :
+                    cse_lt_chk_fail = True
+                    warn_stor.append([col_m + 'Warning: Wrong CSE Layout Table CRC 0x%0.8X, expected 0x%0.8X!' % (cse_lt_chk_int,cse_lt_chk_mea) + col_e, True])
+                    if param.check : # Fix CSE LT CRC-32, when applicable (Debug/Research)
+                        with open('__FCCLT__' + os.path.basename(file_in), 'wb') as o :
+                            o.write(reading[:cse_lt_off + 0x14] + struct.pack('<I', cse_lt_chk_mea) + reading[cse_lt_off + 0x18:])
+                
+                # Add IFWI 1.7 CSE LT Temp DRAM Cache Pages Offset & Size info
+                cse_lt_hdr_info.append(['Temp',cse_lt_struct.TempPagesOffset,cse_lt_struct.TempPagesSize])
+                
+                # Add IFWI 1.7 CSE LT ELog Offset & Size info (0x58-0x5C at CSE_Layout_Table_17, Size field starts after ROMB at 0x10)
+                if cse_lt_struct.Size >= 0x48 : cse_lt_hdr_info.append(['ELog',cse_lt_struct.ELogOffset,cse_lt_struct.ELogSize])
+                
+                # Get IFWI 1.7 CSE LT Flags Info (CSE Redundancy, Reserved)
+                cse_lt_flags_red, _ = cse_lt_struct.get_flags()
         
         # Calculate CSE LT Data Partition Total Size (w/o Boot, Temp & ELog)
         cse_lt_dp_size = cse_lt_struct.DataSize
@@ -11610,6 +12062,86 @@ for file_in in source :
         # Detect ROMB code within CSE LT (IFWI 1.6 & 1.7, must be after cse_lt_size adjustment)
         if b'Non-Intel Root Key' in reading[cse_lt_off:cse_lt_off + cse_lt_size] :
             note_stor.append([col_y + 'Note: CSE LT seems to include ROM-Bypass code!' + col_e, True])
+
+    # Detect optional OSSE Region Layout Table (CSME 20+ / LNL+, Partner Security Engine, PseEnable strap)
+    # The OSSE Region uses the same Layout Pointers Table format as CSME 18+ CSE (ROMB Vector + Header @0x10 + Pointers),
+    # it is placed after the CSE Region and its sub-partitions use BPDT Types >= 0x800. Validation via internal CRC-32.
+    osse_lt_off = -1
+    osse_lt_struct = None
+    if fd_me_rgn_exist or cse_lt_struct :
+        osse_pat = re.compile(br'[\x28-\x60]\x00[\x00\x01]\x00', re.DOTALL) # Length/Flags/Reserved header pattern, variable Pointer count
+        osse_scan_bgn = me_fd_start + me_fd_size if fd_me_rgn_exist else cse_lt_off + cse_lt_size
+        for osse_match in osse_pat.finditer(reading[osse_scan_bgn:]) :
+            osse_candidate = osse_scan_bgn + osse_match.start() - 0x10 # Adjust for ROMB Vector prefix
+            if cse_lt_off <= osse_candidate < cse_lt_off + cse_lt_size : continue # Skip the primary CSE LT itself
+            
+            osse_struct = get_struct(reading, osse_candidate, CSE_Layout_Table_18)
+            if osse_struct.Size < 0x28 or osse_struct.Size > 0x60 : continue # Layout Pointers Table Size bounds
+            if osse_struct.Size % 0x8 != 0x0 : continue # Size must account 8-byte Pointer Entries
+            
+            # Validate via internal CRC-32 (Header w/ Checksum = 0 + all Pointer Entries), essentially collision proof
+            osse_pointers = reading[osse_candidate + 0x10:osse_candidate + 0x14] + b'\x00' * 4 + reading[osse_candidate + 0x18:osse_candidate + 0x10 + osse_struct.Size]
+            if crccheck.crc.Crc32.calc(osse_pointers) != osse_struct.Checksum : continue
+            
+            # Skip redundant copies of the primary CSE LT (Code/Data Resiliency backup at next page)
+            if cse_lt_struct and reading[osse_candidate:min(len(reading), osse_candidate + 0x10 + osse_struct.Size)] \
+            == reading[cse_lt_off:min(len(reading), cse_lt_off + 0x10 + osse_struct.Size)] :
+                continue
+            
+            osse_lt_off = osse_candidate
+            osse_lt_struct = osse_struct
+            break
+        
+        if osse_lt_struct :
+            note_stor.append([col_y + 'Note: OSSE (Partner Security Engine) Region detected!' + col_e, False])
+            
+            NA = [0,0xFFFFFFFF]
+            f_osse_red,_ = osse_lt_struct.get_flags()
+            osse_hdr_info = [['Data',osse_lt_struct.DataOffset,osse_lt_struct.DataSize],['Boot 1',osse_lt_struct.BP1Offset,osse_lt_struct.BP1Size],
+                             ['Boot 2',osse_lt_struct.BP2Offset,osse_lt_struct.BP2Size],['Boot 3',osse_lt_struct.BP3Offset,osse_lt_struct.BP3Size],
+                             ['RSVD 1',osse_lt_struct.RSVD1Offset,osse_lt_struct.RSVD1Size],['RSVD 2',osse_lt_struct.RSVD2Offset,osse_lt_struct.RSVD2Size],
+                             ['RSVD 3',osse_lt_struct.RSVD3Offset,osse_lt_struct.RSVD3Size],['ELog',osse_lt_struct.ELogOffset,osse_lt_struct.ELogSize]]
+            if osse_lt_struct.Size >= 0x58 :
+                osse_hdr_info.append(['UTOK',osse_lt_struct.UTOKOffset,osse_lt_struct.UTOKSize])
+                osse_hdr_info.append(['FLOG',osse_lt_struct.FLOGOffset,osse_lt_struct.FLOGSize])
+            if osse_lt_struct.Size >= 0x60 :
+                osse_hdr_info.append(['FLOG2',osse_lt_struct.FLOG2Offset,osse_lt_struct.FLOG2Size])
+            
+            pt_osseelt = ext_table([col_y + 'Name' + col_e, col_y + 'Start' + col_e, col_y + 'Size' + col_e, col_y + 'End' + col_e, col_y + 'Empty' + col_e], True, 1)
+            pt_osseelt.title = col_y + 'OSSE Region Layout Table [0x%0.6X]%s' % (osse_lt_off,', Redundant Pointers' if f_osse_red else '')
+            
+            for entry in osse_hdr_info :
+                osse_entry_name = entry[0]
+                osse_entry_spi = osse_lt_off + entry[1]
+                osse_entry_end = osse_entry_spi + entry[2]
+                osse_entry_data = reading[osse_entry_spi:osse_entry_end]
+                osse_entry_empty = bool(entry[1] in NA or entry[2] in NA or osse_entry_data in [b'\x00' * entry[2],b'\xFF' * entry[2]])
+                
+                pt_osseelt.add_row([osse_entry_name,'0x%0.6X' % osse_entry_spi,'0x%0.6X' % entry[2],'0x%0.6X' % osse_entry_end,osse_entry_empty])
+                
+                # Parse OSSE Boot Partition BPDT Headers & Sub-Partitions (Types >= 0x800)
+                if osse_entry_name.startswith('Boot') and not osse_entry_empty and reading[osse_entry_spi:osse_entry_spi + 0x4] in cse_lt_bp :
+                    osse_bpdt_hdr = get_struct(reading, osse_entry_spi, BPDT_Header_2)
+                    
+                    if osse_bpdt_hdr.DescCount <= 0x40 : # Sanity Bound (OSSE uses <= ~6 Sub-Partitions)
+                        pt_ossebpdt = ext_table([col_y + 'Name' + col_e, col_y + 'Type' + col_e, col_y + 'Start' + col_e, col_y + 'Size' + col_e, col_y + 'End' + col_e, col_y + 'Empty' + col_e], True, 1)
+                        pt_ossebpdt.title = col_y + 'OSSE Boot Partition Descriptor Table [0x%0.6X]' % osse_entry_spi + col_e
+                        
+                        for osse_idx in range(osse_bpdt_hdr.DescCount) :
+                            osse_entry_base = osse_entry_spi + 0x18 + osse_idx * 0xC
+                            osse_type = int.from_bytes(reading[osse_entry_base:osse_entry_base + 0x4], 'little')
+                            osse_part_off = int.from_bytes(reading[osse_entry_base + 0x4:osse_entry_base + 0x8], 'little')
+                            osse_part_size = int.from_bytes(reading[osse_entry_base + 0x8:osse_entry_base + 0xC], 'little')
+                            osse_part_start = osse_entry_spi + osse_part_off
+                            osse_part_data = reading[osse_part_start:osse_part_start + osse_part_size]
+                            osse_part_empty = bool(osse_part_size in NA or osse_part_data in [b'\x00' * osse_part_size,b'\xFF' * osse_part_size])
+                            
+                            pt_ossebpdt.add_row([bpdt_dict[osse_type] if osse_type in bpdt_dict else 'Unknown','0x%0.3X' % osse_type,
+                                                '0x%0.6X' % osse_part_start,'0x%0.6X' % osse_part_size,'0x%0.6X' % (osse_part_start + osse_part_size),osse_part_empty])
+                        
+                        if param.fpt_disp : print('\n%s\n' % pt_ossebpdt)
+            
+            if param.fpt_disp : print('%s\n' % pt_osseelt)
     
     # Detect all $FPT and/or BPDT starting offsets (both allowed/needed)
     if fd_me_rgn_exist :
@@ -12241,6 +12773,11 @@ for file_in in source :
         rsa_check = bool([man_valid[1],man_valid[2]] not in cse_known_bad_hashes) # Ignore known bad RSA Signatures
         err_stor.append([col_r + 'Error: Invalid %s %d.%d RSA Signature!' % (variant, major, minor) + col_e, rsa_check])
     
+    # Detect Post-Quantum Cryptography Manifest (CSME 18+ / MTL+)
+    if mn2_ftpr_hdr.HeaderVersion in [0x41002,0x91118700,0x91119700] :
+        pq_type = {0x41002 : 'RSA + XMSS', 0x91118700 : 'RSA + LMS (H15)', 0x91119700 : 'RSA + LMS (H20)'}[mn2_ftpr_hdr.HeaderVersion]
+        note_stor.append([col_y + 'Note: Post-Quantum Cryptography (%s) detected at Manifest!' % pq_type + col_e, False])
+    
     if rgn_exist :
         
         # Multiple Backup $FPT header bypass at SPS1/SPS4 (DFLT/FPTB)
@@ -12433,7 +12970,8 @@ for file_in in source :
                 pmc_all_init.append([pmc_vcn,pmc_mn2_ver,pmc_ext15_info,pmcp_size])
                 
             # Detect if firmware has Platform Controller Hub Configuration (PCHC) partition
-            if part[0] == 'PCHC' and not part[6] :
+            # SOCC is the PCHC successor at CSME 18+ (SoC Configuration)
+            if part[0] in ('PCHC','SOCC') and not part[6] :
                 pchc_fwu_found = True
                 pchc_size = part[2] - part[1]
                 
@@ -12443,7 +12981,8 @@ for file_in in source :
                 pchc_all_init.append([pchc_vcn,pchc_mn2_ver,pchc_ext15_info,pchc_size])
                 
             # Detect if firmware has USB Type C Physical (PHY) partition
-            if part[0] in ('PPHY','NPHY','SPHY','PHYP') and not part[6] :
+            # SSPH is the SoC SPHY at CSME 21+ (ESE handled)
+            if part[0] in ('PPHY','NPHY','SPHY','PHYP','SSPH') and not part[6] :
                 phy_fwu_found = True
                 phy_size = part[2] - part[1]
                 
@@ -12693,8 +13232,8 @@ for file_in in source :
                         nvkr_size = int.from_bytes(reading[end_nvkr_match + 0x4:end_nvkr_match + 0x8], 'little')
                         nvkr_data = reading[fpt_start + nvkr_start:fpt_start + nvkr_start + nvkr_size]
                         # NVKR sections : Name[0xC] + Size[0x3] + Data[Size]
-                        prat_match = (re.compile(br'Pra Table\xFF\xFF\xFF')).search(nvkr_data) # "Pra Table" detection (2.5/2.6)
-                        maxk_match = (re.compile(br'MaxUsedKerMem\xFF\xFF\xFF')).search(nvkr_data) # "MaxUsedKerMem" detection
+                        prat_match = (re.compile(br'Pra Table\xFF\xFF\xFF')).search(nvkr_data) # "Pra Tableï£»ï£»ï£»" detection (2.5/2.6)
+                        maxk_match = (re.compile(br'MaxUsedKerMem\xFF\xFF\xFF')).search(nvkr_data) # "MaxUsedKerMemï£»ï£»ï£»" detection
                         if prat_match is not None :
                             (start_prat_match, end_prat_match) = prat_match.span()
                             prat_start = fpt_start + nvkr_start + end_prat_match + 0x3
@@ -12710,7 +13249,7 @@ for file_in in source :
                 elif sku == 'AMT' and minor < 5 :
                     nvsh_match = (re.compile(br'NVSHOSID')).search(reading) # NVSHOSID detection
                     if nvsh_match is not None :
-                        netip_match = (re.compile(br'net\.ip\xFF\xFF\xFF')).search(reading) # "net.ip" detection (2.0-2.2)
+                        netip_match = (re.compile(br'net\.ip\xFF\xFF\xFF')).search(reading) # "net.ipï£»ï£»ï£»" detection (2.0-2.2)
                         if netip_match is not None :
                             (start_netip_match, end_netip_match) = netip_match.span()
                             netip_size = int.from_bytes(reading[end_netip_match + 0x0:end_netip_match + 0x3], 'little')
@@ -13054,8 +13593,9 @@ for file_in in source :
         # was adjusted with actual values 0+ and 1 now means Corporate (COR). To avoid confusion when comparing against the SKU value
         # from CSE_Ext_0C, MEA should ignore the placeholder "Corporate" SKU at CSE_Ext_0F_R2 and use the actual value from CSE_Ext_0C.
         # Generally, due to CSE_Ext_0F_R2 confusion, CSE_Ext_0C should be prefered when CSE_Ext_0F_R2 SKU is CON,COR,ALL,NA or missing.
-        # There are plans for another (seriously ?) SKU Type extension, CSE_Ext_23. Support for CSE_Ext_23 can be added once it's used.
-        if fw_0C_sku1[1] != 'UNK' and ext15_info[2][1] in ['','NA','ALL','CON','COR','ATM'] :
+        # CSE_Ext_23 (Signed Package Info v2) is used at CSME 18+ in place of CSE_Ext_0F and feeds ext15_info. Empty fw_0C (Ext 0x0C absent,
+        # common at CSME 18+) must not hijack selection, hence the explicit non-empty check.
+        if fw_0C_sku1[1] != 'UNK' and fw_0C_sku1[0] != '' and ext15_info[2][1] in ['','NA','ALL','CON','COR','ATM'] :
             sku_init = fw_0C_sku1[0]
             sku_init_db = fw_0C_sku1[1]
         elif ext15_info[2][1] not in ['','NA','ALL'] :
@@ -13194,9 +13734,26 @@ for file_in in source :
             
             if minor == 0 and not pch_init_final : platform = 'ADP' # Alder Point
             elif minor == 1 and not pch_init_final : platform = 'ADP/RPP' # Raptor Point
-            
-            is_unsupported = True
         
+        elif major == 17 :
+            pass # Reserved, no known shipping Intel platform
+            
+        elif major == 18 :
+            
+            if not pch_init_final : platform = 'MTL' # Meteor Point (Core Ultra Series 1, incl. ARL-P straps)
+            
+        elif major == 19 :
+            
+            if not pch_init_final : platform = 'ARL-S' # Arrow Point S via MTL-S FIT projects (Core Ultra 200S)
+            
+        elif major == 20 :
+            
+            if not pch_init_final : platform = 'LNL-M' # Lunar Lake M (Core Ultra 200V)
+            
+        elif major == 21 :
+            
+            if not pch_init_final : platform = 'PTL/WCL' # Panther/Wildcat Lake (Core Ultra Series 3)
+            
         else :
             
             is_unsupported = True
@@ -13928,3 +14485,4 @@ for file_in in source :
     if param.help_scr : mea_exit(0)
 
 mea_exit(0)
+
