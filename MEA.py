@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2026 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.311.0'
+title = 'ME Analyzer v1.312.0'
 
 import sys
 
@@ -8061,7 +8061,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
             file_9_name = '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]])
-            file_9_path = os.path.join(mfs_folder, file_9_name)
+            file_9_path = os.path.join(mfs_folder, f'{file_9_name}.bin')
             file_9_folder = os.path.join(mfs_folder, file_9_name, '') # MFS Manifest Backup root folder
             file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
             mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
@@ -11023,10 +11023,11 @@ orom_pat = re.compile(br'\x55\xAA.{22}\x1C\x00.{2}PCIR\x86\x80.{4}[\x18\x1C]\x00
 # Intel Flash Descriptor pattern (FD)
 fd_pat = re.compile(br'\x5A\xA5\xF0\x0F[\x01-\x10].{171}\xFF{16}', re.DOTALL)
 
-# Intel Engine/Graphics firmware Manifest probable patterns ($CPD + IUP, FTPR/OROM.man)
+# Intel Engine/Graphics firmware Manifest probable patterns ($CPD + IUP, FTPR/RBEP/OROM.man)
 pr_man_08_pat = re.compile(br'FTPR\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_09_pat = re.compile(br'OROM\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 pr_man_10_pat = re.compile(br'grtos\.met\x00{3}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
+pr_man_11_pat = re.compile(br'RBEP\.man\x00{4}.{2}\x00{2}.{2}\x00{6}.{19}\x00{5}', re.DOTALL)
 
 pr_cpd_parts = ['PMCP', 'PCOD', 'PCHC', 'SPHY', 'PPHY', 'PHYP', 'NPHY']
 pr_man_cpd_pats = {part: re.compile(cpd_pat.pattern + b'.' + part.encode(), re.DOTALL) for part in pr_cpd_parts}
@@ -11431,6 +11432,7 @@ for file_in in source :
         pr_man_08 = pr_man_08_pat.search(reading_4K) # FTPR.man (CSME 15.0.35 +)
         pr_man_09 = pr_man_09_pat.search(reading_4K) # OROM.man (GSC)
         pr_man_10 = pr_man_10_pat.search(reading_4K) # grtos.met (Ignore CSSPS IE)
+        pr_man_11 = pr_man_11_pat.search(reading_4K) # RBEP.man (CSME 18 +, FTPR replaced by RBEP)
         
         pr_man_cpd = {name: pr_man_cpd_pats[name].search(reading_16) for name in pr_cpd_parts}
 
@@ -11443,6 +11445,7 @@ for file_in in source :
         or pr_man_04 in (b'EpsRecovery', b'EpsFirmware') \
         or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
         or pr_man_08 and not pr_man_10 \
+        or pr_man_11 and not pr_man_10 \
         or pr_man_09 \
         or any(pr_man_cpd.values()):
             if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
