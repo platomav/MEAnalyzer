@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 #coding=utf-8
 
 """
@@ -7,7 +7,7 @@ Intel Engine & Graphics Firmware Analysis Tool
 Copyright (C) 2014-2026 Plato Mavropoulos
 """
 
-title = 'ME Analyzer v1.311.0'
+title = 'ME Analyzer v1.312.0'
 
 import sys
 
@@ -8320,7 +8320,7 @@ def mfs_anl(mfs_folder, mfs_start, mfs_end, variant, vol_ftbl_id, vol_ftbl_pl, m
             if param.cse_unpack : print(col_g + '\n    Analyzing MFS Low Level File %d (%s) ...' % (mfs_file[0], mfs_dict[mfs_file[0]]) + col_e)
             mfs_parsed_idx.append(mfs_file[0]) # Set MFS Low Level File 9 as Parsed
             file_9_name = '%0.3d %s' % (mfs_file[0], mfs_dict[mfs_file[0]])
-            file_9_path = os.path.join(mfs_folder, file_9_name)
+            file_9_path = os.path.join(mfs_folder, f'{file_9_name}.bin')
             file_9_folder = os.path.join(mfs_folder, file_9_name, '') # MFS Manifest Backup root folder
             file_9_data_path = os.path.join(file_9_folder, 'FTPR.man') # MFS Manifest Backup Contents Path
             mfs_write(file_9_folder, file_9_data_path, mfs_file[1]) # Store MFS Manifest Backup Contents
@@ -9517,7 +9517,7 @@ def pmc_anl(mn2_info) :
         if mn2_info[5] in line :
             break # Break loop at 1st hash match
     else :
-        err_msg = [col_r + 'Error: Unknown PMC %d.%d RSA Public Key!' % (mn2_info[0], mn2_info[1]) + col_e, True]
+        err_msg = [col_r + 'Error: Unknown PMC %d.%d RSA Public Key [%s]!' % (mn2_info[0], mn2_info[1], mn2_info[5]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PMC firmware
     
     return pmc_fw_ver, mn2_info[0], pmc_pch_sku, pmc_pch_rev, mn2_info[3], pmc_mn2_signed, pmc_mn2_signed_db, pmc_platform, \
@@ -9587,7 +9587,7 @@ def pchc_anl(mn2_info) :
         if mn2_info[5] in line :
             break # Break loop at 1st hash match
     else :
-        err_msg = [col_r + 'Error: Unknown PCHC %d.%d RSA Public Key!' % (mn2_info[0], mn2_info[1]) + col_e, True]
+        err_msg = [col_r + 'Error: Unknown PCHC %d.%d RSA Public Key [%s]!' % (mn2_info[0], mn2_info[1], mn2_info[5]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PCHC firmware
     
     return pchc_fw_ver, mn2_info[0], mn2_info[1], mn2_info[3], pchc_mn2_signed, pchc_mn2_signed_db, pchc_platform, mn2_info[7], \
@@ -9663,7 +9663,7 @@ def phy_anl(mn2_info) :
         if mn2_info[5] in line :
             break # Break loop at 1st hash match
     else :
-        err_msg = [col_r + 'Error: Unknown PHY %d.%d RSA Public Key!' % (mn2_info[0], mn2_info[1]) + col_e, True]
+        err_msg = [col_r + 'Error: Unknown PHY %d.%d RSA Public Key [%s]!' % (mn2_info[0], mn2_info[1], mn2_info[5]) + col_e, True]
         if err_msg not in err_stor : err_stor.append(err_msg) # Do not store message twice at bare/non-stitched PHY firmware
     
     return phy_fw_ver, phy_sku, phy_mn2_signed, phy_mn2_signed_db, phy_platform, mn2_info[7], mn2_info[8], mn2_info[9], \
@@ -10581,6 +10581,8 @@ def get_csme12_sku(sku_init, fw_0C_sku0, fw_0C_sku2, sku, sku_result, sku_stp, d
         
         if (variant,major,minor,sku_result) == ('CSME',14,5,'H') : sku_result = 'V' # Adjust CSME 14.5 SKU Platform from H to V
         elif (variant,major,sku_init,sku_result) == ('CSME',13,'Slim','LP') : sku_result = 'N' # Adjust CSME 13 SLM SKU Platform from LP to N
+        elif variant == 'CSME' and major in (20, 21) and sku_result == 'Unknown' : sku_result = 'LP'
+        elif variant == 'CSME' and major in (18, 19) and sku_result == 'Unknown' : sku_result = 'H'
     
     sku = '%s %s' % (sku_init, sku_result) # Adjust final SKU to add Platform
     
@@ -11837,7 +11839,7 @@ for file_in in source :
         or pr_man_05 + pr_man_06 == b'$MMEBUP$MMX' \
         or pr_man_08 and not pr_man_10 \
         or pr_man_09 \
-        or pr_man_11 \
+        or pr_man_11 and not pr_man_10 \
         or any(pr_man_cpd.values()):
             if pr_man_09 : is_orom_img = True # GSC Option ROM Image (OROM)
             break
@@ -12758,7 +12760,7 @@ for file_in in source :
         mn2_meu_ver = '%d.%d.%d.%0.4d' % (mn2_ftpr_hdr.MEU_Major,mn2_ftpr_hdr.MEU_Minor,mn2_ftpr_hdr.MEU_Hotfix,mn2_ftpr_hdr.MEU_Build)
     
     # Detect RSA Public Key Recognition
-    if not var_rsa_db : err_stor.append([col_r + 'Error: Unknown %s %d.%d RSA Public Key!' % (variant, major, minor) + col_e, True])
+    if not var_rsa_db : err_stor.append([col_r + 'Error: Unknown %s %d.%d RSA Public Key [%s]!' % (variant, major, minor, rsa_key_hash) + col_e, True])
     
     # Detect (CS)SPS Old/Initial RSA Signature Validity
     if variant.endswith('SPS') and old_mn2_hdr :
@@ -14333,7 +14335,7 @@ for file_in in source :
         msg_pmc_pt.add_row(['Version', pmc_fw_ver])
         msg_pmc_pt.add_row(['Release', pmc_mn2_signed + ', Engineering' if pmc_fw_rel >= 7000 else pmc_mn2_signed])
         msg_pmc_pt.add_row(['Type', 'Independent'])
-        if (variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) or not pmc_platform.startswith(('APL','BXT','GLK','DG')) :
+        if pmc_pch_sku != 'Unknown' and ((variant == 'CSME' and major >= 12) or (variant == 'CSSPS' and major >= 5) or not pmc_platform.startswith(('APL','BXT','GLK','DG'))) :
             msg_pmc_pt.add_row(['Chipset SKU', pmc_pch_sku])
         if not pmc_platform.startswith('DG') : msg_pmc_pt.add_row(['Chipset Stepping', 'Unknown' if pmc_pch_rev[0] == 'U' else pmc_pch_rev[0]])
         msg_pmc_pt.add_row(['TCB Security Version Number', pmc_svn])
